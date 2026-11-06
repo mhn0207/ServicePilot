@@ -26,6 +26,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from anthropic import AsyncAnthropic
 
 from core.llm_utils import create_message, extract_text_content
+from core.request_budget import can_start, limit_timeout, remaining, budget_degraded, observe
 from core.concurrency import KeyedLocks
 from core.performance import measure_stage, record_event
 
@@ -114,6 +115,13 @@ class CircuitBreaker:
             self.state     = CircuitState.OPEN
             self.opened_at = time.monotonic()
             logger.warning(f"熔断器打开（连续失败 {self.fail_count} 次）")
+
+    def release_probe(self, generation):
+        """A cancelled request says nothing about dependency health; allow a new probe."""
+        if generation == self.generation and self.state == CircuitState.HALF_OPEN:
+            self.generation += 1
+            self.state = CircuitState.OPEN
+            self.opened_at = time.monotonic() - self.recovery_s
 
 
 # ── 工具定义 ──────────────────────────────────────────────────────────────────
@@ -217,6 +225,8 @@ class MCPToolManager:
                     reranked=cached_reranked,
                 )
 
+        if not can_start('tool.' + name, .001):
+            return ToolResult(False, None, name, error='request_budget_exhausted')
         # 熔断检查
         if not tool.breaker.allow():
             error = f"工具熔断中: {name}，请稍后重试"
@@ -225,8 +235,11 @@ class MCPToolManager:
         generation = tool.breaker.generation
         t0 = time.monotonic()
         tool.stats.total += 1
+        effective_timeout = limit_timeout(tool.timeout_s)
+        tool_deadline = asyncio.timeout(effective_timeout)
         try:
-            data = await asyncio.wait_for(self._run_handler(tool, params, context), timeout=tool.timeout_s)
+            async with tool_deadline:
+                data = await self._run_handler(tool, params, context)
             latency = (time.monotonic() - t0) * 1000
 
             # 重排（针对返回列表的检索工具）
@@ -242,17 +255,20 @@ class MCPToolManager:
             tool.breaker.record_success(generation)
 
             # 写缓存：缓存最终返回结果，避免下次命中未重排的原始结果。
-            if use_cache and tool.cache_ttl > 0 and cache_version == self._cache_versions.get(name, 0):
+            if use_cache and tool.cache_ttl > 0 and cache_version == self._cache_versions.get(name, 0) and not budget_degraded():
                 self._set_cache(name, params, data, tool.cache_ttl, cache_rerank_top_k, reranked, context)
 
             return ToolResult(success=True, data=data, tool_name=name,
                               latency_ms=latency, reranked=reranked)
 
         except asyncio.CancelledError:
-            if tool.breaker.state == CircuitState.HALF_OPEN:
-                tool.breaker.record_failure(generation)
+            tool.breaker.release_probe(generation)
             raise
         except asyncio.TimeoutError:
+            if effective_timeout < tool.timeout_s and tool_deadline.expired():
+                tool.breaker.release_probe(generation)
+                observe('tool.' + name, 'timeout', reason='request_budget_exhausted')
+                return ToolResult(False, None, name, error='request_budget_exhausted')
             tool.stats.failed += 1
             tool.stats.consecutive_fails += 1
             tool.breaker.record_failure(generation)
@@ -322,6 +338,8 @@ class MCPToolManager:
           原始: "退款流程"
           改写: ["如何申请退款", "退款需要多少天", "退款政策是什么"]
         """
+        if not can_start('rag.rewrite', 18):
+            return [query]
         prompt = f"""将以下用户查询改写为 {n} 个不同角度的搜索子查询，用于检索知识库。
 要求：每个子查询角度不同，覆盖原始问题的不同方面。
 原始查询: "{query}"
@@ -378,7 +396,7 @@ class MCPToolManager:
                     return ToolResult(True, data, tool_name, cached=True, reranked=reranked)
                 record_event("rag_pipeline_cache_miss")
                 result = await self._search_uncached(tool_name, query, top_k, context)
-                if result.success and version == self._cache_versions.get(tool_name, 0):
+                if result.success and version == self._cache_versions.get(tool_name, 0) and not budget_degraded():
                     self._set_cache(cache_name, params, result.data, tool.cache_ttl,
                                     reranked=result.reranked, context=context)
                 return result
@@ -428,8 +446,8 @@ class MCPToolManager:
         解决问题：向量检索的相似度分数不等于"对用户有用"，
         LLM 能理解语义相关性，重排后 Top-K 质量显著提升。
         """
-        if len(items) <= top_k:
-            return items, False
+        if len(items) <= top_k or not can_start('rag.rerank', 18):
+            return items[:top_k], False
 
         # 将结果序列化为文本供 LLM 评分
         items_text = "\n".join(f"{i}. {json.dumps(item, ensure_ascii=False)[:200]}"

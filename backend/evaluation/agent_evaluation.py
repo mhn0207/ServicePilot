@@ -121,9 +121,17 @@ async def run_agents(progress=None,run_id=None):
     try:
         data,snapshot,manifest=load_suite(); fixtures=load(BASE/'evaluation/fixtures/agent.sdk.v1.json')
         report['identities']=dict(annotations=canonical_hash(data),knowledge=snapshot.knowledge_hash,freeze=manifest,fixture=canonical_hash(fixtures),strategy='experimental B synthetic; not business baseline',lexical='all-matches-bm25-before-top-k-v2',scoring='authored-scripted-judge-v1; sentence-units-v2',judge=judge_identity(),context='reject SDK request >64000 chars; top_k=3; no silent truncation',code=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
-        git=subprocess.run(['git','rev-parse','HEAD'],cwd=BASE,capture_output=True,text=True,check=False)
-        status=subprocess.run(['git','status','--porcelain'],cwd=BASE,capture_output=True,text=True,check=False)
-        report['identities'].update(git_head=git.stdout.strip(),workspace_dirty=bool(status.stdout),
+        git_head, workspace_dirty = None, None
+        try:
+            git=subprocess.run(['git','rev-parse','HEAD'],cwd=BASE,capture_output=True,text=True,check=False)
+            status=subprocess.run(['git','status','--porcelain'],cwd=BASE,capture_output=True,text=True,check=False)
+            if git.returncode == 0:
+                git_head = git.stdout.strip()
+            if status.returncode == 0:
+                workspace_dirty = bool(status.stdout)
+        except OSError:
+            pass  # Runtime images need not include Git; source module hashes remain available.
+        report['identities'].update(git_head=git_head,workspace_dirty=workspace_dirty,
             code_modules={p.relative_to(BASE).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (BASE/'agents/agent_orchestrator.py',BASE/'core/llm_utils.py',BASE/'evaluation/agent_scoring.py')})
         for name,value in [('snapshot.json',snapshot.model_dump()),('cases.json',data),('sdk.json',fixtures),('judge.json',load(BASE/'evaluation/fixtures/agent.judge.v1.json'))]:
             (target/name).write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf-8')

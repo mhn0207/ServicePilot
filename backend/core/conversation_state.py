@@ -1,5 +1,6 @@
 """会话中的业务字段；只继承已提取的信息，不把字段齐全视为身份核验。"""
 import re
+from core.amount_entities import amount_mentions, amount_key
 
 
 def merge_state(previous, entities, intent_group, message, request_id):
@@ -23,5 +24,10 @@ def merge_state(previous, entities, intent_group, message, request_id):
             origins[key] = request_id
         else:
             merged.setdefault(key, [])
+    _, rejected = amount_mentions(message)
+    if rejected:
+        merged['amount'] = [value for value in merged.get('amount', []) if amount_key(value) not in rejected]
+        if not merged['amount']:
+            origins.pop('amount', None)
     return {"domain": domain,
             "entities": merged, "sources": origins}

@@ -45,6 +45,12 @@ def record_event(name):
         trace["events"][name] = trace["events"].get(name, 0) + 1
 
 
+def record_budget_event(row):
+    trace = _current.get()
+    if trace is not None:
+        trace.setdefault('budget_events', []).append(row)
+
+
 def record_llm_call(stage, model, started, status, response=None):
     row = {"stage": stage, "model": model, "status": status,
            "latency_ms": round((time.monotonic() - started) * 1000, 1)}

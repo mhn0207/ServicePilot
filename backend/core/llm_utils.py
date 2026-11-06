@@ -4,6 +4,8 @@ from urllib.parse import urlsplit
 import time
 
 from core.performance import record_llm_call
+from core.request_budget import model_timeout, observe, mark_degraded
+import asyncio
 
 
 async def create_message(client: Any, *, stage: str = "unspecified", **kwargs: Any) -> Any:
@@ -19,15 +21,29 @@ async def create_message(client: Any, *, stage: str = "unspecified", **kwargs: A
         if "thinking" not in kwargs and "thinking" not in extra_body:
             extra_body["thinking"] = {"type": "disabled"}
             kwargs["extra_body"] = extra_body
+    allowance = model_timeout(stage)
+    if allowance is not None and allowance <= 0:
+        observe(stage, 'not_called', reason='budget_exhausted')
+        raise TimeoutError('request_budget_exhausted')
+    observe(stage, 'started', allowance_s=allowance)
     started, response, status = time.monotonic(), None, "error"
     try:
-        response = await client.messages.create(**kwargs)
+        call = client.messages.create(**kwargs)
+        response = await asyncio.wait_for(call, allowance) if allowance is not None else await call
         status = "success"
         observer = getattr(client, "evaluation_observer", None)
         if observer is not None:
             observer(stage, kwargs, response)
         return response
+    except TimeoutError:
+        mark_degraded(stage)
+        observe(stage, 'timeout', reason='stage_or_remaining_budget')
+        raise
+    except asyncio.CancelledError:
+        observe(stage, 'cancelled', reason='caller_cancelled')
+        raise
     finally:
+        observe(stage, status, elapsed_s=time.monotonic()-started)
         recorder = getattr(client, "evaluation_recorder", None)
         if recorder is not None:
             recorder(stage, kwargs.get("model", "unknown"), started, status, response)

@@ -352,6 +352,23 @@ async def test_batch4_http_chat_fixture_receipt_and_current_order(services, tmp_
     assert model.messages.create.await_args.kwargs['messages'][-1]['content']
     from pathlib import Path
     from uuid import uuid4
-    destination=Path(__file__).resolve().parents[1]/'data/eval/rag/http_chat_fixture'/uuid4().hex
+    destination=tmp_path/'http_chat_fixture'/uuid4().hex
     destination.mkdir(parents=True)
     (destination/'report.json').write_text(json.dumps({'scope':'http_chat_fixture','mode':'fixture', 'status':'completed', 'checks':{'receipt_retries':3,'current_order':'22222','user_isolation':True},'requests':[r['request_id'] for r in responses]},ensure_ascii=False),encoding='utf-8')
+
+@pytest.mark.asyncio
+async def test_budget_failure_keeps_retry_receipt_without_committing_history(services,monkeypatch):
+    from core.request_budget import chat_budget
+    memory,orch,model,http=services
+    async def slow(**kwargs):await asyncio.Event().wait()
+    model.messages.create.side_effect=slow
+    monkeypatch.setattr(api,'chat_budget',lambda seconds:chat_budget(.01))
+    payload=body('退款规则','budget-failure','budget-test')
+    response=await http.post('/chat',json=payload)
+    assert response.status_code==503 and response.json()['retryable']
+    assert await memory._redis.llen(memory._wm_key('u','budget-test'))==0
+    assert any(event['status'] in ('timeout','not_called') for event in response.json()['performance']['budget_events'])
+    monkeypatch.setattr(api,'chat_budget',chat_budget)
+    model.messages.create.side_effect=None
+    assert (await http.post('/chat',json=payload)).status_code==200
+    assert await memory._redis.llen(memory._wm_key('u','budget-test'))==2

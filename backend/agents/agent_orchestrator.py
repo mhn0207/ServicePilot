@@ -16,11 +16,13 @@
   - Agent 置信度低于阈值 → 自动升级到更高级 Agent 或转人工
 """
 import asyncio
+import copy
 from contextvars import ContextVar
 import inspect
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from collections import deque
@@ -41,6 +43,7 @@ from agents.tools import (
 )
 from core.intent_recognizer import IntentCategory, IntentRecognizer, UrgencyLevel
 from core.llm_utils import create_message, extract_text_content
+from core.request_budget import phase_budget, can_start, limit_timeout, observe, remaining
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +203,8 @@ class Request:
     before_unsafe_tool: Any = field(default=None, repr=False)
     unsafe_tool_calls: set = field(default_factory=set, repr=False)
     conversation_state: Optional[Dict[str, Any]] = None
+    retrieval_results: Dict[str, Any] = field(default_factory=dict, repr=False)
+    reuse_retrieval: bool = False
     tool_observer: Any = field(default=None, repr=False)
 
 
@@ -341,6 +346,25 @@ class BaseAgent:
         tools = self.get_tools()
         tools_used: List[str] = []
         tool_traces: List[Dict[str, Any]] = []
+        reused = False
+        if req.reuse_retrieval:
+            for saved in req.retrieval_results.values():
+                spec = tools.get(saved['name'])
+                if (spec is None or not spec.retry_safe or spec.handler is not saved['handler']
+                        or (spec.revision() if spec.revision else None) != saved['revision']):
+                    continue
+                reuse_id = 'reuse-' + uuid.uuid4().hex
+                messages.extend([
+                    {'role':'assistant', 'content':[{'type':'tool_use','id':reuse_id,'name':saved['name'],'input':copy.deepcopy(saved['args'])}]},
+                    {'role':'user','content':[{'type':'tool_result','tool_use_id':reuse_id,'content':json.dumps(saved['result'],ensure_ascii=False),'is_error':False}]},
+                ])
+                tools_used.append(saved['name'])
+                tool_traces.append(dict(agent_type=self.agent_type.value,tool_name=saved['name'],tool_use_id=reuse_id,
+                    input=copy.deepcopy(saved['args']),success=True,result_success=True,cached=True,source='request',
+                    event='retrieval_reuse',reused_from_tool_use_id=saved['tool_use_id'],retry_safe=True))
+                reused = True
+            if reused:
+                observe('agent.fallback', 'retrieval_reused')
         try:
             for _ in range(3):
                 request_kwargs: Dict[str, Any] = {
@@ -359,6 +383,15 @@ class BaseAgent:
                         }
                         for spec in tools.values()
                     ]
+                # Business policy must come from the current knowledge tool, rather
+                # than generic model knowledge or workflow-only Skills. Corrections
+                # and greetings alone do not require retrieval.
+                policy_question = (
+                    re.search(r'退款|续费|重复扣款|企业合同|套餐|登录|认证|\b401\b|\b403\b', req.message)
+                    and re.search(r'[?？]|是否|怎么|如何|什么|多少|多久|吗|请(?:说明|介绍|解释)|能否|能保证|政策|规则|流程|时效|资格|条件', req.message)
+                )
+                if _ == 0 and not reused and policy_question and 'search_knowledge_base' in tools:
+                    request_kwargs['tool_choice'] = {'type': 'tool', 'name': 'search_knowledge_base'}
                 resp = await asyncio.wait_for(
                     create_message(self._client, stage=f"agent.{self.agent_type.value}", **request_kwargs),
                     timeout=max(1, _env_float("ZHIYING_LLM_TIMEOUT_S", 15)),
@@ -384,6 +417,7 @@ class BaseAgent:
                     spec = tools.get(name)
                     tool_t0 = time.monotonic()
                     call_success = True
+                    request_reused = False
                     result_success: Optional[bool] = None
                     error_text = ""
                     if spec is None:
@@ -403,14 +437,28 @@ class BaseAgent:
                                 await req.before_unsafe_tool(name)
                             observation_token = tool_call_context.set({"role": self.agent_type.value, "tool_use_id": tool_use_id})
                             try:
-                                result = spec.handler(req, args)
-                                if inspect.isawaitable(result):
-                                    result = await result
+                                cache_key = json.dumps(args, sort_keys=True, ensure_ascii=False)
+                                saved = req.retrieval_results.get(cache_key)
+                                revision = spec.revision() if spec.revision else None
+                                if (req.reuse_retrieval and name == 'search_knowledge_base' and spec.retry_safe
+                                        and saved and saved['handler'] is spec.handler and saved['revision'] == revision):
+                                    result = copy.deepcopy(saved['result'])
+                                    result.update(cached=True)
+                                    request_reused = True
+                                else:
+                                    result = spec.handler(req, args)
+                                    if inspect.isawaitable(result):
+                                        timeout = limit_timeout(30)
+                                        result = await result if remaining() is None else await asyncio.wait_for(result, timeout=timeout)
                             finally:
                                 tool_call_context.reset(observation_token)
                             tools_used.append(name)
                             if isinstance(result, dict) and "success" in result:
                                 result_success = bool(result.get("success"))
+                            if name == 'search_knowledge_base' and spec.retry_safe and result_success is True and not request_reused:
+                                key = json.dumps(args,sort_keys=True,ensure_ascii=False)
+                                req.retrieval_results[key] = dict(name=name,handler=spec.handler,args=copy.deepcopy(args),
+                                    result=copy.deepcopy(result),tool_use_id=tool_use_id,revision=revision)
                         except Exception as ex:
                             call_success = False
                             logger.warning("Agent 工具 %s 执行失败: %s", name, ex)
@@ -437,6 +485,8 @@ class BaseAgent:
                             "retry_safe": spec.retry_safe if spec else True,
                         }
                     )
+                    if request_reused:
+                        tool_traces[-1].update(event='retrieval_reuse', source='request', reused_from_tool_use_id=saved['tool_use_id'])
                     if req.tool_observer is not None:
                         req.tool_observer(dict(tool_traces[-1], result=result))
                     tool_results.append({
@@ -718,6 +768,8 @@ class ResponseComposer:
             if skill:
                 prompt += f"\n\n[通用客服输出边界]\n{skill}"
         try:
+            if not can_start('composer', 2):
+                raise TimeoutError('insufficient_composer_budget')
             response = await asyncio.wait_for(create_message(self._client,
                 stage="composer",
                 model=self._model,
@@ -1249,7 +1301,8 @@ class AgentOrchestrator:
                 error_code="agent_unavailable",
             )
 
-        response = await agent.handle(req)
+        with phase_budget(28, reserve=5):
+            response = await agent.handle(req)
 
         # 已尝试副作用操作后，不让兜底 Agent 再次执行可能相同的业务动作。
         if not response.success and any(not attempt.get("retry_safe", False) for attempt in req.tool_attempts):
@@ -1257,11 +1310,14 @@ class AgentOrchestrator:
 
         # 专属 Agent 失败时降级到 GeneralAgent
         if not response.success and agent_type not in (AgentType.GENERAL, AgentType.ESCALATION):
+            if not can_start('agent.fallback', 11):
+                return response
             logger.warning(f"{agent_type.value} 失败，降级到 GeneralAgent")
             fallback = self._best_agent(AgentType.GENERAL)
             if fallback:
                 original = response
-                response = await fallback.handle(req)
+                with phase_budget(8, reserve=3):
+                    response = await fallback.handle(replace(req, reuse_retrieval=True))
                 response.tools_used = list(dict.fromkeys(original.tools_used + response.tools_used))
                 response.tool_traces = original.tool_traces + [{
                     "event": "agent_fallback", "from_agent": original.agent_type.value,

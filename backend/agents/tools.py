@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable, Dict, List, Optional, TYPE_CHECKING, Union, Tuple
 
 if TYPE_CHECKING:
@@ -38,6 +38,7 @@ class AgentToolSpec:
     handler: AgentToolHandler
     allowed_agents: Optional[Tuple[str, ...]] = None
     retry_safe: bool = True
+    revision: Optional[Callable[[], Any]] = None
 
 
 def make_tool(
@@ -211,7 +212,7 @@ def build_shared_rag_tools(tool_manager: Any) -> Dict[str, AgentToolSpec]:
         }
 
     return {
-        "search_knowledge_base": make_tool(
+        "search_knowledge_base": replace(make_tool(
             "search_knowledge_base",
             "检索知识库并返回最相关的文档片段；可用于通用、技术、账单和升级场景。",
             {
@@ -220,7 +221,7 @@ def build_shared_rag_tools(tool_manager: Any) -> Dict[str, AgentToolSpec]:
             },
             search_knowledge_base,
             required=["query"],
-        )
+        ), revision=lambda: getattr(tool_manager, '_cache_versions', {}).get('knowledge_search', 0))
     }
 
 
