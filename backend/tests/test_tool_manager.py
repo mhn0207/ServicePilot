@@ -4,6 +4,23 @@ from unittest.mock import patch
 from tooling.tool_manager import MCPToolManager, Tool, CircuitBreaker, CircuitState
 
 
+def test_search_pipeline_and_cache_preserve_evidence_identity():
+    from unittest.mock import AsyncMock
+    async def run():
+        manager = MCPToolManager(api_key='test')
+        manager.rewrite_query = AsyncMock(return_value=['query'])
+        item = {'title': '资料', 'content': '正文', 'document_id': 'doc', 'version': 'v',
+                'chunk': 0, 'chunk_id': 'doc:v:0'}
+        handler = AsyncMock(return_value=[item])
+        manager.register(Tool('knowledge_search', '', handler, {}, cache_ttl=30))
+        first = await manager.search_with_rewrite('knowledge_search', 'query', 3)
+        cached = await manager.search_with_rewrite('knowledge_search', 'query', 3)
+        assert first.success and cached.cached
+        assert first.data == cached.data == [item]
+        handler.assert_awaited_once()
+    asyncio.run(run())
+
+
 def test_half_open_allows_one_probe_and_failure_reopens():
     breaker = CircuitBreaker(failure_threshold=2, recovery_s=0)
     breaker.record_failure()

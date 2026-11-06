@@ -23,6 +23,7 @@ from collections import Counter
 from typing import Any, Dict, List, Optional
 
 import chromadb
+from tooling.knowledge_chunks import chunk_text, content_version, document_identity, evidence_id
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class KnowledgeBase:
             explicit_id = doc.get("document_id")
             if explicit_id is not None and (not isinstance(explicit_id, str) or not explicit_id.strip()):
                 raise ValueError("document_id 必须是非空字符串")
-            identity = json.dumps(["explicit", explicit_id] if explicit_id else ["title", title], ensure_ascii=True)
+            identity = document_identity(title, explicit_id)
             if not isinstance(identity, str):
                 raise ValueError("document_id 必须是字符串")
             prepared[identity] = (title, content, bool(doc.get("document_id")))
@@ -108,7 +109,7 @@ class KnowledgeBase:
             for identity, (title, content, explicit) in prepared.items():
                 document_id = hashlib.sha256(identity.encode()).hexdigest()
                 chunks = self._chunk_text(content, chunk_size=500)
-                version = hashlib.sha256(content.encode()).hexdigest()
+                version = content_version(content)
                 ids = [f"{document_id}:{i}" for i in range(len(chunks))]
                 existing = self._collection.get(where={"document_id": document_id}, include=["metadatas"])
                 old_ids = set(existing["ids"])
@@ -170,6 +171,7 @@ class KnowledgeBase:
                     "chunk":    meta.get("chunk_index", 0),
                     "document_id": meta.get("document_id", ""),
                     "version": meta.get("version", ""),
+                    "chunk_id": evidence_id(meta.get("document_id", ""), meta.get("version", ""), meta.get("chunk_index", 0)),
                 })
 
         if len(items) <= 1 and count <= 1:
@@ -192,7 +194,8 @@ class KnowledgeBase:
             meta = meta or {}
             key = (meta.get("document_id", ""), meta.get("title", ""), meta.get("chunk_index", 0), text)
             candidates.setdefault(key, {"title": key[1], "content": text, "chunk": key[2],
-                                        "document_id": key[0], "version": meta.get("version", "")})
+                                        "document_id": key[0], "version": meta.get("version", ""),
+                                        "chunk_id": evidence_id(key[0], meta.get("version", ""), key[2])})
         return self._hybrid_rank(query, list(candidates.values()), items)[:top_k]
 
     @staticmethod
@@ -269,31 +272,7 @@ class KnowledgeBase:
     # ── 内部方法 ──────────────────────────────────────────────────────────────
 
     def _chunk_text(self, text: str, chunk_size: int = 500) -> List[str]:
-        """将长文本按 chunk_size 切片，保留语义完整性（按句号/换行切分）。"""
-        if len(text) <= chunk_size:
-            return [text] if text.strip() else []
-
-        chunks = []
-        current = ""
-        # 按句子切分
-        sentences = text.replace("\n", "。").split("。")
-        sentences = [sent[i:i + chunk_size] for sent in sentences
-                     for i in range(0, len(sent), chunk_size)]
-        for sent in sentences:
-            sent = sent.strip()
-            if not sent:
-                continue
-            if len(current) + len(sent) + 1 > chunk_size:
-                if current:
-                    chunks.append(current)
-                current = sent
-            else:
-                current = f"{current}。{sent}" if current else sent
-
-        if current:
-            chunks.append(current)
-
-        return chunks
+        return chunk_text(text, chunk_size)
 
     def _load_default_docs(self) -> None:
         """导入企业服务协同示例知识（仅用于开发演示）。"""
