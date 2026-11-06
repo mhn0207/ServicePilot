@@ -1,0 +1,705 @@
+{
+  "protocol_version": "knowledge-snapshot-v1",
+  "chunk_size": 500,
+  "documents": [
+    {
+      "title": "Access tokens and authentication",
+      "content": "A missing bearer token produces HTTP 401 before tenant routing. The support operator checks whether the Authorization header reached the gateway and whether a proxy removed it. Collect only the request identifier and the token fingerprint; never request the raw credential in a ticket.\nAn expired bearer token also produces HTTP 401, but it requires renewal through the identity portal. A fresh token does not recover a disabled account. Compare the expiration time with gateway UTC time and record clock skew separately from missing credentials.\nA valid token for the wrong audience produces HTTP 401 with reason audience_mismatch. The audience must be servicepilot-api. Do not change tenant membership to fix this error. Reissuing a token for the correct audience requires the original authenticated identity.",
+      "document_id": "access-token"
+    },
+    {
+      "title": "Payment settlement and service activation",
+      "content": "The fictional business has separate payment and provisioning states. A payment receipt marked settled allows provisioning to begin but does not prove that a workspace is ready. The operator checks the provisioning job identifier and its most recent state transition.\nA provisioning job in awaiting_capacity is queued for an available workspace slot. Do not ask the customer to pay again. Collect the order identifier, settled receipt reference and job identifier for the provisioning team. No fixed activation deadline is guaranteed.\nA provisioning job in rejected_configuration requires correction of the requested region or plan combination before resubmission. Resubmitting provisioning under the existing paid order does not create another payment. Only the provisioning team may authorize the corrected request.",
+      "document_id": "activation"
+    },
+    {
+      "title": "Charge disputes and refund coordination",
+      "content": "A processor dispute and a merchant refund request are separate workflows for the same capture. If a dispute is open, finance places any new refund request on coordination hold to avoid duplicate compensation. The assistant must not promise that both paths will pay out.\nA withdrawn dispute does not by itself approve a merchant refund. Finance verifies the processor status and then resumes refund review. The handoff includes the dispute reference, capture reference and coordination hold status without unredacted bank evidence.\nA dispute fee is recorded separately from the captured order amount. Its treatment requires finance review under the fictional contract and is not automatically refunded with the order. Support cannot infer fee waiver eligibility from the outcome of the main dispute.",
+      "document_id": "dispute"
+    },
+    {
+      "title": "Duplicate payment reconciliation",
+      "content": "Two bank notifications with one captured ledger entry are not enough to establish a duplicate charge. Match currency, merchant reference and capture identifier. An authorization event followed by a capture event belongs to one payment lifecycle rather than two purchases.\nTwo distinct captured entries for the same order require reconciliation by finance. Collect both capture references and amounts, with card details redacted. The assistant records a suspected duplicate; it cannot declare a refund approved or execute either reversal.\nIf duplicate entries use different currencies, finance checks the order currency and conversion records before comparing values. Nominal amounts must not be added across currencies. The customer may receive a reconciliation summary only after finance confirms the matching events.",
+      "document_id": "duplicate"
+    },
+    {
+      "title": "Emergency access and incident closure",
+      "content": "Emergency administrative access requires an incident identifier, named approver and explicit expiration time. It is limited to the approved tenant and investigation scope. A production incident does not automatically grant access to billing exports or other tenants.\nAt expiry the emergency grant is revoked and the security reviewer inspects the actions performed. Extending access requires a new approval; leaving the browser open does not preserve the grant. The reviewer records whether any unrelated resources were accessed.\nIncident closure requires a verified resolution statement and the status of temporary grants. A closed reliability incident does not automatically close a finance dispute or approve a refund. Separate owners confirm those workflows before the combined handoff is marked resolved.",
+      "document_id": "emergency"
+    },
+    {
+      "title": "Human handoff and diagnostic summaries",
+      "content": "A reliability handoff includes the symptom, UTC timeline, request identifiers, affected endpoint and checks already performed. Summaries separate observed facts from hypotheses. Raw access tokens, complete card numbers and unrelated conversation history must be removed.\nA finance handoff includes the order reference, currency, captured amounts and relevant receipt references. It must explicitly distinguish a requested refund from an approved refund. The assistant can prepare this summary but cannot create a real queue entry or promise staff assignment.\nA combined incident uses one summary with separate technical and billing questions. Do not claim the outage caused a charge unless evidence establishes that relationship. A human owner verifies each question, and unresolved facts stay labeled unknown rather than filled by inference.",
+      "document_id": "handoff"
+    },
+    {
+      "title": "Authorization holds and captured charges",
+      "content": "An authorization hold reserves available funds but is not a captured charge. The payment ledger labels a hold authorized and a completed charge captured. A bank notification alone is insufficient to distinguish them; compare the merchant reference and ledger event type.\nA released hold is recorded as voided, not refunded. The release instruction can precede the bank display update. Support may provide the void reference after identity verification but cannot promise the bank posting date or create a refund for an uncaptured hold.\nA partial capture leaves the uncaptured remainder reserved until voided or expired. Reconciliation must separately list the captured amount and remaining authorization. Do not count their sum as two settled payments; refund eligibility is assessed only on the captured portion.",
+      "document_id": "holds"
+    },
+    {
+      "title": "Write receipts and idempotency",
+      "content": "A client retry with the same idempotency key and identical payload returns the original receipt. The key is scoped to the authenticated tenant and operation. Support compares the payload fingerprint, not raw sensitive request contents, when investigating a retry.\nReusing an idempotency key with a different payload returns HTTP 409 conflict. This is not an authentication failure and renewing a token cannot solve it. The client must retrieve the original operation receipt before deciding whether a distinct operation is intended.\nA receipt in processing means no final outcome is available yet. The client polls the receipt instead of sending another write with a new key. A missing receipt after an uncertain server response must be escalated, not interpreted as proof that nothing happened.",
+      "document_id": "idempotency"
+    },
+    {
+      "title": "Invoice identity and issuance",
+      "content": "A payment receipt confirms a payment event, while an invoice identifies the billed legal entity and taxable items. They are distinct records. To request an invoice, provide the order reference, verified company legal name and tax registration identifier through the billing portal.\nInvoices are issued only for captured billable amounts. An authorization hold cannot support an invoice request. A draft invoice is editable before issuance; an issued invoice requires the correction process and must not be silently replaced in a support attachment.\nInvoice delivery uses the verified billing contact for the tenant. A project reader cannot change that address by chat. A billing administrator must verify the new contact in the billing portal before any resend to a different address is approved.",
+      "document_id": "invoice"
+    },
+    {
+      "title": "Invoice correction and credit notes",
+      "content": "An issued invoice with a wrong legal name enters a correction review. The original invoice number remains in the audit trail. Billing staff decide whether a replacement invoice or credit note is required; the assistant cannot edit an issued PDF or invent a new invoice number.\nA credit note references the original invoice and records a billing reduction. It is not itself proof of a bank refund. The operator checks the related refund transaction separately before saying that money was returned. A zero balance invoice can still have no refund transaction.\nTax identifier changes require verified company evidence and approval by billing staff. The corrected document is delivered only to a verified billing contact. Private supporting documents are submitted through the portal rather than pasted into an assistant conversation.",
+      "document_id": "invoice-fix"
+    },
+    {
+      "title": "Permissions and forbidden requests",
+      "content": "HTTP 403 means the identity was authenticated but the requested action was denied. The project reader role may view project status but may not export audit records. An export requires the audit_export capability assigned inside the same tenant, not merely a fresh access token.\nTenant administrators can request capability grants but cannot approve their own audit_export grant. An independent tenant security approver must review the request identifier, requested scope and business reason. A grant becomes active only after approval is recorded.\nRemoving a capability takes effect on the next authorization check even if an access token is still valid. A cached interface button may remain visible until refresh. Support verifies the server denial and must not infer authorization from a button or browser state.",
+      "document_id": "permission"
+    },
+    {
+      "title": "Purchase orders and bank transfer matching",
+      "content": "A purchase order reference records a customer procurement commitment but is not proof of payment. A bank transfer is matched using the order reference, received currency and treasury receipt. Provisioning waits for treasury confirmation under this payment method.\nA transfer with a missing order reference enters unmatched_funds review. Treasury may request the payer legal name and redacted transfer reference through the secure portal. The assistant cannot assign unmatched money to a tenant based solely on a chat statement.\nAn overpayment remains an unapplied balance until treasury approves allocation or return. It does not automatically buy more seats or extend a term. Support records the matched invoice amount and excess separately, with currency preserved in the handoff.",
+      "document_id": "purchase-order"
+    },
+    {
+      "title": "Refund review and posting",
+      "content": "Refund review applies only to captured payments. A reviewer checks the capture reference, requested amount, currency and reason. Submission creates a review request, not an approved refund. The assistant must not promise approval, a fixed amount or a bank posting date.\nAn approved refund is first marked approved and later submitted_to_processor. Only a processor confirmation marks it completed. Customer account access does not automatically change when a refund status changes; subscription termination is handled by its own workflow.\nA partially refunded capture retains a remaining refundable balance equal to captured amount minus completed refunds. Pending refund requests must also be inspected to avoid overlapping approvals. Currency must match the original capture, and the assistant cannot calculate exchange compensation.",
+      "document_id": "refunds"
+    },
+    {
+      "title": "Workspace region migration",
+      "content": "A requested workspace region change requires a migration review with an inventory of stored resources and a destination compatibility check. Updating the billing address does not move data. The assistant may collect a request but cannot start the actual migration.\nA migration scheduled for a maintenance window requires an approved rollback plan and an owner for verification. Existing region identifiers remain authoritative until the completion receipt is issued. A scheduled status is not evidence that data already moved.\nIf the destination lacks a required feature, the migration is blocked pending a revised plan. Support must not promise equivalent availability or residency behavior without review. Billing currency changes, if needed, follow a separate finance process.",
+      "document_id": "region"
+    },
+    {
+      "title": "Renewal cancellation and paid access",
+      "content": "Canceling automatic renewal changes the next billing instruction but leaves access active until the current paid term ends. The effective cancellation record includes the tenant, subscription identifier and confirmation timestamp. It is not an instruction to refund the paid term.\nA cancellation requested after the next renewal capture does not reverse that capture. The customer must open a separate refund review for the captured renewal. Support should collect the cancellation confirmation and renewal capture timestamps to establish their ordering.\nA paused workspace and a subscription with automatic renewal disabled are different states. Pausing compute stops workload execution but does not change the renewal instruction. The operator checks the subscription renewal flag rather than treating paused compute as canceled billing.",
+      "document_id": "renewal"
+    },
+    {
+      "title": "Reseller billed subscriptions",
+      "content": "For a subscription billed by a reseller, the reseller issues the customer invoice and handles the customer payment review. The platform can verify workspace status but cannot correct a reseller invoice. Support first checks the billing_owner field on the subscription.\nDisabling renewal at the platform for a reseller managed plan records a request pending reseller confirmation. The effective renewal change requires the reseller acknowledgement reference. A platform request timestamp alone does not prove the reseller stopped billing.\nA reseller transfer request needs approval from the current reseller, destination reseller and tenant owner. Existing billing ownership remains in force until the transfer receipt is confirmed. The assistant must not tell the customer to pay both resellers during review.",
+      "document_id": "reseller"
+    },
+    {
+      "title": "Audit retention and deletion requests",
+      "content": "A tenant audit export contains authorization decisions and administrative changes. Export requires audit_export capability in that tenant. Ordinary project readers may view project status but cannot download the full audit history or another tenant audit bundle.\nA deletion request enters privacy review and does not immediately erase financial audit records. Required retention exceptions are assessed by the privacy reviewer. The assistant can describe the review process but must not promise deletion of all records at a chosen date.\nA completed deletion review includes a scope statement listing retained categories and reasons. The customer receives that statement through the verified privacy contact. A missing project in the interface is insufficient evidence that every retained record was erased.",
+      "document_id": "retention"
+    },
+    {
+      "title": "Sandbox orders and production separation",
+      "content": "Sandbox payment events use test ledger identifiers and never represent captured production funds. A sandbox success receipt cannot activate a production workspace. Support checks the environment label before reconciling any order or discussing financial consequences.\nProduction credentials must not be pasted into the sandbox console. A leaked production credential requires security rotation even if no real payment was attempted. The test environment has separate signing secrets and tenant identifiers from production.\nPromoting a configuration from sandbox requires a fresh production approval and validation of callback destinations. Test receipts and sample customer records are excluded from the promotion. The assistant cannot convert a sandbox order identifier into a paid production order.",
+      "document_id": "sandbox"
+    },
+    {
+      "title": "Seat assignments and billing quantity",
+      "content": "Purchasing seat capacity and assigning a member are separate actions. A tenant with available capacity can invite a member, but the member gains access only after accepting and receiving a role. An unaccepted invitation is not an active seat assignment.\nRemoving a member revokes access but does not automatically reduce contracted seat capacity. The billing administrator reviews the next renewal quantity separately. Support cannot promise an immediate prorated refund merely because the member list became shorter.\nA seat limit error is a capacity constraint, not a token expiration. The administrator can review pending invitations and purchased capacity. Deleting audit records does not free seats, and raising a technical incident does not authorize extra billable capacity.",
+      "document_id": "seats"
+    },
+    {
+      "title": "Server failures and retry limits",
+      "content": "HTTP 500 with reason internal_fault is a server failure, not proof that a payment failed. Capture the request identifier, endpoint and UTC time. For read requests, retry at most twice with increasing delay. Never include Authorization headers in diagnostic attachments.\nA write request that returns HTTP 500 may already have committed. Query its receipt using the same idempotency key before retrying. A new idempotency key represents a new operation and can cause a second charge. Support escalates if the receipt remains indeterminate.\nHTTP 503 with Retry-After indicates planned overload handling. Read clients wait for the indicated interval. A persistent failure after the retry budget is exhausted is handed to reliability staff with the observed timeline; the assistant must not promise a recovery deadline.",
+      "document_id": "server-errors"
+    },
+    {
+      "title": "Service account ownership and rotation",
+      "content": "A service account belongs to one tenant and has an assigned human owner. It cannot accept a personal invitation or inherit another account permissions. Before granting automation access, the owner specifies the minimal capability and approved resource scope.\nRotating a service account secret creates a replacement credential and a temporary overlap chosen by the security reviewer. The old credential is revoked at the end of that overlap. Support handles only fingerprints and cannot retrieve either secret from the account record.\nWhen the human owner leaves, the tenant security administrator assigns a new accountable owner before renewing automation access. Changing the display name alone does not transfer ownership. Unowned automation is suspended pending review rather than silently assigned to a reader.",
+      "document_id": "service-account"
+    },
+    {
+      "title": "Single sign on certificate rotation",
+      "content": "For a scheduled SSO signing certificate rotation, the identity administrator uploads the new public certificate while the previous certificate remains valid during an overlap window. Private signing keys never leave the identity provider. The assistant must not request them.\nDuring the overlap window either configured public certificate may verify an assertion. After the administrator closes the window, assertions signed only by the retired certificate are rejected. Reissuing an API token does not repair an SSO certificate mismatch.\nAn emergency certificate revocation ends the overlap immediately after security approval. The identity team documents the incident and verifies new assertions before restoring login. Support must not suggest disabling assertion signature verification as a workaround.",
+      "document_id": "sso"
+    },
+    {
+      "title": "Tenant isolation and resource ownership",
+      "content": "Every project lookup uses the authenticated tenant identifier and the project identifier together. A project belonging to another tenant is returned as HTTP 404 to avoid disclosing its existence. A user who belongs to both tenants must explicitly switch the active tenant.\nAn invitation to tenant Cedar does not transfer resources from tenant Birch. The invited member sees only resources granted in Cedar after accepting the invitation. Support must not copy documents between tenants to make an invitation appear successful.\nA resource transfer requires separate approvals from the source owner and destination owner plus a transfer inventory. This policy describes a manual review only; the assistant cannot execute transfers. Existing links remain bound to the original tenant until completion is confirmed.",
+      "document_id": "tenant"
+    },
+    {
+      "title": "Payment webhook verification",
+      "content": "A payment webhook is trusted only after signature verification and timestamp tolerance checks. A signature failure records a rejected event and does not update the ledger. Support collects the event identifier and rejection reason without exposing the signing secret.\nRepeated delivery of a verified webhook with the same event identifier is deduplicated. A successful acknowledgement confirms receipt of the event, not workspace activation. The provisioning state must be checked separately using the associated order reference.\nAn out of order event must not move a captured payment back to authorized. Reconciliation uses the processor event sequence and ledger rules rather than arrival time alone. A conflicting sequence is escalated to finance with the verified event identifiers.",
+      "document_id": "webhook"
+    }
+  ],
+  "chunks": [
+    {
+      "chunk_id": "0f3bffaa902fe56684fba5925cb67b5fbdb94afcca3c04f7d4b6bb201b04bced:2f57dd672afa6c82969d4be0e7e998838f0fe0777af483ff435c056001f42653:0",
+      "document_id": "0f3bffaa902fe56684fba5925cb67b5fbdb94afcca3c04f7d4b6bb201b04bced",
+      "version": "2f57dd672afa6c82969d4be0e7e998838f0fe0777af483ff435c056001f42653",
+      "chunk_index": 0,
+      "title": "Service account ownership and rotation",
+      "content": "A service account belongs to one tenant and has an assigned human owner. It cannot accept a personal invitation or inherit another account permissions. Before granting automation access, the owner specifies the minimal capability and approved resource scope."
+    },
+    {
+      "chunk_id": "0f3bffaa902fe56684fba5925cb67b5fbdb94afcca3c04f7d4b6bb201b04bced:2f57dd672afa6c82969d4be0e7e998838f0fe0777af483ff435c056001f42653:1",
+      "document_id": "0f3bffaa902fe56684fba5925cb67b5fbdb94afcca3c04f7d4b6bb201b04bced",
+      "version": "2f57dd672afa6c82969d4be0e7e998838f0fe0777af483ff435c056001f42653",
+      "chunk_index": 1,
+      "title": "Service account ownership and rotation",
+      "content": "Rotating a service account secret creates a replacement credential and a temporary overlap chosen by the security reviewer. The old credential is revoked at the end of that overlap. Support handles only fingerprints and cannot retrieve either secret from the account record."
+    },
+    {
+      "chunk_id": "0f3bffaa902fe56684fba5925cb67b5fbdb94afcca3c04f7d4b6bb201b04bced:2f57dd672afa6c82969d4be0e7e998838f0fe0777af483ff435c056001f42653:2",
+      "document_id": "0f3bffaa902fe56684fba5925cb67b5fbdb94afcca3c04f7d4b6bb201b04bced",
+      "version": "2f57dd672afa6c82969d4be0e7e998838f0fe0777af483ff435c056001f42653",
+      "chunk_index": 2,
+      "title": "Service account ownership and rotation",
+      "content": "When the human owner leaves, the tenant security administrator assigns a new accountable owner before renewing automation access. Changing the display name alone does not transfer ownership. Unowned automation is suspended pending review rather than silently assigned to a reader."
+    },
+    {
+      "chunk_id": "151e3cf937595c55aaf203bca0b3b0f79df25691b2e501e8b7ca111852d58426:5ce620844b9b10985424beb3d3fc33606600318bc0738b7f3cbe64b88a3a545d:0",
+      "document_id": "151e3cf937595c55aaf203bca0b3b0f79df25691b2e501e8b7ca111852d58426",
+      "version": "5ce620844b9b10985424beb3d3fc33606600318bc0738b7f3cbe64b88a3a545d",
+      "chunk_index": 0,
+      "title": "Permissions and forbidden requests",
+      "content": "HTTP 403 means the identity was authenticated but the requested action was denied. The project reader role may view project status but may not export audit records. An export requires the audit_export capability assigned inside the same tenant, not merely a fresh access token."
+    },
+    {
+      "chunk_id": "151e3cf937595c55aaf203bca0b3b0f79df25691b2e501e8b7ca111852d58426:5ce620844b9b10985424beb3d3fc33606600318bc0738b7f3cbe64b88a3a545d:1",
+      "document_id": "151e3cf937595c55aaf203bca0b3b0f79df25691b2e501e8b7ca111852d58426",
+      "version": "5ce620844b9b10985424beb3d3fc33606600318bc0738b7f3cbe64b88a3a545d",
+      "chunk_index": 1,
+      "title": "Permissions and forbidden requests",
+      "content": "Tenant administrators can request capability grants but cannot approve their own audit_export grant. An independent tenant security approver must review the request identifier, requested scope and business reason. A grant becomes active only after approval is recorded."
+    },
+    {
+      "chunk_id": "151e3cf937595c55aaf203bca0b3b0f79df25691b2e501e8b7ca111852d58426:5ce620844b9b10985424beb3d3fc33606600318bc0738b7f3cbe64b88a3a545d:2",
+      "document_id": "151e3cf937595c55aaf203bca0b3b0f79df25691b2e501e8b7ca111852d58426",
+      "version": "5ce620844b9b10985424beb3d3fc33606600318bc0738b7f3cbe64b88a3a545d",
+      "chunk_index": 2,
+      "title": "Permissions and forbidden requests",
+      "content": "Removing a capability takes effect on the next authorization check even if an access token is still valid. A cached interface button may remain visible until refresh. Support verifies the server denial and must not infer authorization from a button or browser state."
+    },
+    {
+      "chunk_id": "1ce796ac69d09714c9a39a0fdf32ba382f7c8656a455130151024d5cd989ec78:4dcc54a40400086a944c895d808ab52b7b155405d76ba504a2a2e6f5c57ff5d0:0",
+      "document_id": "1ce796ac69d09714c9a39a0fdf32ba382f7c8656a455130151024d5cd989ec78",
+      "version": "4dcc54a40400086a944c895d808ab52b7b155405d76ba504a2a2e6f5c57ff5d0",
+      "chunk_index": 0,
+      "title": "Renewal cancellation and paid access",
+      "content": "Canceling automatic renewal changes the next billing instruction but leaves access active until the current paid term ends. The effective cancellation record includes the tenant, subscription identifier and confirmation timestamp. It is not an instruction to refund the paid term."
+    },
+    {
+      "chunk_id": "1ce796ac69d09714c9a39a0fdf32ba382f7c8656a455130151024d5cd989ec78:4dcc54a40400086a944c895d808ab52b7b155405d76ba504a2a2e6f5c57ff5d0:1",
+      "document_id": "1ce796ac69d09714c9a39a0fdf32ba382f7c8656a455130151024d5cd989ec78",
+      "version": "4dcc54a40400086a944c895d808ab52b7b155405d76ba504a2a2e6f5c57ff5d0",
+      "chunk_index": 1,
+      "title": "Renewal cancellation and paid access",
+      "content": "A cancellation requested after the next renewal capture does not reverse that capture. The customer must open a separate refund review for the captured renewal. Support should collect the cancellation confirmation and renewal capture timestamps to establish their ordering."
+    },
+    {
+      "chunk_id": "1ce796ac69d09714c9a39a0fdf32ba382f7c8656a455130151024d5cd989ec78:4dcc54a40400086a944c895d808ab52b7b155405d76ba504a2a2e6f5c57ff5d0:2",
+      "document_id": "1ce796ac69d09714c9a39a0fdf32ba382f7c8656a455130151024d5cd989ec78",
+      "version": "4dcc54a40400086a944c895d808ab52b7b155405d76ba504a2a2e6f5c57ff5d0",
+      "chunk_index": 2,
+      "title": "Renewal cancellation and paid access",
+      "content": "A paused workspace and a subscription with automatic renewal disabled are different states. Pausing compute stops workload execution but does not change the renewal instruction. The operator checks the subscription renewal flag rather than treating paused compute as canceled billing."
+    },
+    {
+      "chunk_id": "321b757e425cd6c2fd7dba2cb636df4fd0833ab43a3989226e3bbbeb4af69224:0675d645c75f11ac5c4cc24f8541ba3cb9ee1a36b792c22b76ee64a61195ef77:0",
+      "document_id": "321b757e425cd6c2fd7dba2cb636df4fd0833ab43a3989226e3bbbeb4af69224",
+      "version": "0675d645c75f11ac5c4cc24f8541ba3cb9ee1a36b792c22b76ee64a61195ef77",
+      "chunk_index": 0,
+      "title": "Workspace region migration",
+      "content": "A requested workspace region change requires a migration review with an inventory of stored resources and a destination compatibility check. Updating the billing address does not move data. The assistant may collect a request but cannot start the actual migration."
+    },
+    {
+      "chunk_id": "321b757e425cd6c2fd7dba2cb636df4fd0833ab43a3989226e3bbbeb4af69224:0675d645c75f11ac5c4cc24f8541ba3cb9ee1a36b792c22b76ee64a61195ef77:1",
+      "document_id": "321b757e425cd6c2fd7dba2cb636df4fd0833ab43a3989226e3bbbeb4af69224",
+      "version": "0675d645c75f11ac5c4cc24f8541ba3cb9ee1a36b792c22b76ee64a61195ef77",
+      "chunk_index": 1,
+      "title": "Workspace region migration",
+      "content": "A migration scheduled for a maintenance window requires an approved rollback plan and an owner for verification. Existing region identifiers remain authoritative until the completion receipt is issued. A scheduled status is not evidence that data already moved."
+    },
+    {
+      "chunk_id": "321b757e425cd6c2fd7dba2cb636df4fd0833ab43a3989226e3bbbeb4af69224:0675d645c75f11ac5c4cc24f8541ba3cb9ee1a36b792c22b76ee64a61195ef77:2",
+      "document_id": "321b757e425cd6c2fd7dba2cb636df4fd0833ab43a3989226e3bbbeb4af69224",
+      "version": "0675d645c75f11ac5c4cc24f8541ba3cb9ee1a36b792c22b76ee64a61195ef77",
+      "chunk_index": 2,
+      "title": "Workspace region migration",
+      "content": "If the destination lacks a required feature, the migration is blocked pending a revised plan. Support must not promise equivalent availability or residency behavior without review. Billing currency changes, if needed, follow a separate finance process."
+    },
+    {
+      "chunk_id": "354b3a60e98a0ca151d4173361d03b2604f865f53ad702b6ce07d3fab8e13850:f77ab17a0ec6bc680ba8dcae2447a7c631b54da3382d458ea1aea2ec853d1050:0",
+      "document_id": "354b3a60e98a0ca151d4173361d03b2604f865f53ad702b6ce07d3fab8e13850",
+      "version": "f77ab17a0ec6bc680ba8dcae2447a7c631b54da3382d458ea1aea2ec853d1050",
+      "chunk_index": 0,
+      "title": "Write receipts and idempotency",
+      "content": "A client retry with the same idempotency key and identical payload returns the original receipt. The key is scoped to the authenticated tenant and operation. Support compares the payload fingerprint, not raw sensitive request contents, when investigating a retry."
+    },
+    {
+      "chunk_id": "354b3a60e98a0ca151d4173361d03b2604f865f53ad702b6ce07d3fab8e13850:f77ab17a0ec6bc680ba8dcae2447a7c631b54da3382d458ea1aea2ec853d1050:1",
+      "document_id": "354b3a60e98a0ca151d4173361d03b2604f865f53ad702b6ce07d3fab8e13850",
+      "version": "f77ab17a0ec6bc680ba8dcae2447a7c631b54da3382d458ea1aea2ec853d1050",
+      "chunk_index": 1,
+      "title": "Write receipts and idempotency",
+      "content": "Reusing an idempotency key with a different payload returns HTTP 409 conflict. This is not an authentication failure and renewing a token cannot solve it. The client must retrieve the original operation receipt before deciding whether a distinct operation is intended."
+    },
+    {
+      "chunk_id": "354b3a60e98a0ca151d4173361d03b2604f865f53ad702b6ce07d3fab8e13850:f77ab17a0ec6bc680ba8dcae2447a7c631b54da3382d458ea1aea2ec853d1050:2",
+      "document_id": "354b3a60e98a0ca151d4173361d03b2604f865f53ad702b6ce07d3fab8e13850",
+      "version": "f77ab17a0ec6bc680ba8dcae2447a7c631b54da3382d458ea1aea2ec853d1050",
+      "chunk_index": 2,
+      "title": "Write receipts and idempotency",
+      "content": "A receipt in processing means no final outcome is available yet. The client polls the receipt instead of sending another write with a new key. A missing receipt after an uncertain server response must be escalated, not interpreted as proof that nothing happened."
+    },
+    {
+      "chunk_id": "4657934697cdb4e0bf65b0314c4cdd61103c26343454a072845fba58af028c87:5d9c53aff80f052d935c61c5fec12eb94cddcbb50c6d665afac5f17dc6f36438:0",
+      "document_id": "4657934697cdb4e0bf65b0314c4cdd61103c26343454a072845fba58af028c87",
+      "version": "5d9c53aff80f052d935c61c5fec12eb94cddcbb50c6d665afac5f17dc6f36438",
+      "chunk_index": 0,
+      "title": "Emergency access and incident closure",
+      "content": "Emergency administrative access requires an incident identifier, named approver and explicit expiration time. It is limited to the approved tenant and investigation scope. A production incident does not automatically grant access to billing exports or other tenants."
+    },
+    {
+      "chunk_id": "4657934697cdb4e0bf65b0314c4cdd61103c26343454a072845fba58af028c87:5d9c53aff80f052d935c61c5fec12eb94cddcbb50c6d665afac5f17dc6f36438:1",
+      "document_id": "4657934697cdb4e0bf65b0314c4cdd61103c26343454a072845fba58af028c87",
+      "version": "5d9c53aff80f052d935c61c5fec12eb94cddcbb50c6d665afac5f17dc6f36438",
+      "chunk_index": 1,
+      "title": "Emergency access and incident closure",
+      "content": "At expiry the emergency grant is revoked and the security reviewer inspects the actions performed. Extending access requires a new approval; leaving the browser open does not preserve the grant. The reviewer records whether any unrelated resources were accessed."
+    },
+    {
+      "chunk_id": "4657934697cdb4e0bf65b0314c4cdd61103c26343454a072845fba58af028c87:5d9c53aff80f052d935c61c5fec12eb94cddcbb50c6d665afac5f17dc6f36438:2",
+      "document_id": "4657934697cdb4e0bf65b0314c4cdd61103c26343454a072845fba58af028c87",
+      "version": "5d9c53aff80f052d935c61c5fec12eb94cddcbb50c6d665afac5f17dc6f36438",
+      "chunk_index": 2,
+      "title": "Emergency access and incident closure",
+      "content": "Incident closure requires a verified resolution statement and the status of temporary grants. A closed reliability incident does not automatically close a finance dispute or approve a refund. Separate owners confirm those workflows before the combined handoff is marked resolved."
+    },
+    {
+      "chunk_id": "5313ed63740a82c84e60d2b890e423cc6a565694edf4ec3f72566b3541aa4035:f94314f5df027e751af39a8fbea6b61f561295644d2a7da7936e3ce74200076d:0",
+      "document_id": "5313ed63740a82c84e60d2b890e423cc6a565694edf4ec3f72566b3541aa4035",
+      "version": "f94314f5df027e751af39a8fbea6b61f561295644d2a7da7936e3ce74200076d",
+      "chunk_index": 0,
+      "title": "Audit retention and deletion requests",
+      "content": "A tenant audit export contains authorization decisions and administrative changes. Export requires audit_export capability in that tenant. Ordinary project readers may view project status but cannot download the full audit history or another tenant audit bundle."
+    },
+    {
+      "chunk_id": "5313ed63740a82c84e60d2b890e423cc6a565694edf4ec3f72566b3541aa4035:f94314f5df027e751af39a8fbea6b61f561295644d2a7da7936e3ce74200076d:1",
+      "document_id": "5313ed63740a82c84e60d2b890e423cc6a565694edf4ec3f72566b3541aa4035",
+      "version": "f94314f5df027e751af39a8fbea6b61f561295644d2a7da7936e3ce74200076d",
+      "chunk_index": 1,
+      "title": "Audit retention and deletion requests",
+      "content": "A deletion request enters privacy review and does not immediately erase financial audit records. Required retention exceptions are assessed by the privacy reviewer. The assistant can describe the review process but must not promise deletion of all records at a chosen date."
+    },
+    {
+      "chunk_id": "5313ed63740a82c84e60d2b890e423cc6a565694edf4ec3f72566b3541aa4035:f94314f5df027e751af39a8fbea6b61f561295644d2a7da7936e3ce74200076d:2",
+      "document_id": "5313ed63740a82c84e60d2b890e423cc6a565694edf4ec3f72566b3541aa4035",
+      "version": "f94314f5df027e751af39a8fbea6b61f561295644d2a7da7936e3ce74200076d",
+      "chunk_index": 2,
+      "title": "Audit retention and deletion requests",
+      "content": "A completed deletion review includes a scope statement listing retained categories and reasons. The customer receives that statement through the verified privacy contact. A missing project in the interface is insufficient evidence that every retained record was erased."
+    },
+    {
+      "chunk_id": "58fed1668b53cd0e23047ee43cec0474eb737e729bcb3b79230b7129b3ab7151:d510c96361a6f695247da76c1f04e71b184c23cce197dc2fc7ebec883f630cf8:0",
+      "document_id": "58fed1668b53cd0e23047ee43cec0474eb737e729bcb3b79230b7129b3ab7151",
+      "version": "d510c96361a6f695247da76c1f04e71b184c23cce197dc2fc7ebec883f630cf8",
+      "chunk_index": 0,
+      "title": "Refund review and posting",
+      "content": "Refund review applies only to captured payments. A reviewer checks the capture reference, requested amount, currency and reason. Submission creates a review request, not an approved refund. The assistant must not promise approval, a fixed amount or a bank posting date."
+    },
+    {
+      "chunk_id": "58fed1668b53cd0e23047ee43cec0474eb737e729bcb3b79230b7129b3ab7151:d510c96361a6f695247da76c1f04e71b184c23cce197dc2fc7ebec883f630cf8:1",
+      "document_id": "58fed1668b53cd0e23047ee43cec0474eb737e729bcb3b79230b7129b3ab7151",
+      "version": "d510c96361a6f695247da76c1f04e71b184c23cce197dc2fc7ebec883f630cf8",
+      "chunk_index": 1,
+      "title": "Refund review and posting",
+      "content": "An approved refund is first marked approved and later submitted_to_processor. Only a processor confirmation marks it completed. Customer account access does not automatically change when a refund status changes; subscription termination is handled by its own workflow."
+    },
+    {
+      "chunk_id": "58fed1668b53cd0e23047ee43cec0474eb737e729bcb3b79230b7129b3ab7151:d510c96361a6f695247da76c1f04e71b184c23cce197dc2fc7ebec883f630cf8:2",
+      "document_id": "58fed1668b53cd0e23047ee43cec0474eb737e729bcb3b79230b7129b3ab7151",
+      "version": "d510c96361a6f695247da76c1f04e71b184c23cce197dc2fc7ebec883f630cf8",
+      "chunk_index": 2,
+      "title": "Refund review and posting",
+      "content": "A partially refunded capture retains a remaining refundable balance equal to captured amount minus completed refunds. Pending refund requests must also be inspected to avoid overlapping approvals. Currency must match the original capture, and the assistant cannot calculate exchange compensation."
+    },
+    {
+      "chunk_id": "5ac2dd00c38ae0050a1e7baf31a330a759a7f5baa548d4a99b4f438692437bf4:894312d1ab8a594a021cb81864b0ab8a860def31c7e205d33eb5a71162c4f23a:0",
+      "document_id": "5ac2dd00c38ae0050a1e7baf31a330a759a7f5baa548d4a99b4f438692437bf4",
+      "version": "894312d1ab8a594a021cb81864b0ab8a860def31c7e205d33eb5a71162c4f23a",
+      "chunk_index": 0,
+      "title": "Sandbox orders and production separation",
+      "content": "Sandbox payment events use test ledger identifiers and never represent captured production funds. A sandbox success receipt cannot activate a production workspace. Support checks the environment label before reconciling any order or discussing financial consequences."
+    },
+    {
+      "chunk_id": "5ac2dd00c38ae0050a1e7baf31a330a759a7f5baa548d4a99b4f438692437bf4:894312d1ab8a594a021cb81864b0ab8a860def31c7e205d33eb5a71162c4f23a:1",
+      "document_id": "5ac2dd00c38ae0050a1e7baf31a330a759a7f5baa548d4a99b4f438692437bf4",
+      "version": "894312d1ab8a594a021cb81864b0ab8a860def31c7e205d33eb5a71162c4f23a",
+      "chunk_index": 1,
+      "title": "Sandbox orders and production separation",
+      "content": "Production credentials must not be pasted into the sandbox console. A leaked production credential requires security rotation even if no real payment was attempted. The test environment has separate signing secrets and tenant identifiers from production."
+    },
+    {
+      "chunk_id": "5ac2dd00c38ae0050a1e7baf31a330a759a7f5baa548d4a99b4f438692437bf4:894312d1ab8a594a021cb81864b0ab8a860def31c7e205d33eb5a71162c4f23a:2",
+      "document_id": "5ac2dd00c38ae0050a1e7baf31a330a759a7f5baa548d4a99b4f438692437bf4",
+      "version": "894312d1ab8a594a021cb81864b0ab8a860def31c7e205d33eb5a71162c4f23a",
+      "chunk_index": 2,
+      "title": "Sandbox orders and production separation",
+      "content": "Promoting a configuration from sandbox requires a fresh production approval and validation of callback destinations. Test receipts and sample customer records are excluded from the promotion. The assistant cannot convert a sandbox order identifier into a paid production order."
+    },
+    {
+      "chunk_id": "7969e05b0b411a99c11c85a0293f079a2f7855204e169760b8927c9e2686bf9d:946168e64b5eee680f4e0ee666fb8c33abf97a8c9887bcd83a2744e70666c9d3:0",
+      "document_id": "7969e05b0b411a99c11c85a0293f079a2f7855204e169760b8927c9e2686bf9d",
+      "version": "946168e64b5eee680f4e0ee666fb8c33abf97a8c9887bcd83a2744e70666c9d3",
+      "chunk_index": 0,
+      "title": "Payment webhook verification",
+      "content": "A payment webhook is trusted only after signature verification and timestamp tolerance checks. A signature failure records a rejected event and does not update the ledger. Support collects the event identifier and rejection reason without exposing the signing secret."
+    },
+    {
+      "chunk_id": "7969e05b0b411a99c11c85a0293f079a2f7855204e169760b8927c9e2686bf9d:946168e64b5eee680f4e0ee666fb8c33abf97a8c9887bcd83a2744e70666c9d3:1",
+      "document_id": "7969e05b0b411a99c11c85a0293f079a2f7855204e169760b8927c9e2686bf9d",
+      "version": "946168e64b5eee680f4e0ee666fb8c33abf97a8c9887bcd83a2744e70666c9d3",
+      "chunk_index": 1,
+      "title": "Payment webhook verification",
+      "content": "Repeated delivery of a verified webhook with the same event identifier is deduplicated. A successful acknowledgement confirms receipt of the event, not workspace activation. The provisioning state must be checked separately using the associated order reference."
+    },
+    {
+      "chunk_id": "7969e05b0b411a99c11c85a0293f079a2f7855204e169760b8927c9e2686bf9d:946168e64b5eee680f4e0ee666fb8c33abf97a8c9887bcd83a2744e70666c9d3:2",
+      "document_id": "7969e05b0b411a99c11c85a0293f079a2f7855204e169760b8927c9e2686bf9d",
+      "version": "946168e64b5eee680f4e0ee666fb8c33abf97a8c9887bcd83a2744e70666c9d3",
+      "chunk_index": 2,
+      "title": "Payment webhook verification",
+      "content": "An out of order event must not move a captured payment back to authorized. Reconciliation uses the processor event sequence and ledger rules rather than arrival time alone. A conflicting sequence is escalated to finance with the verified event identifiers."
+    },
+    {
+      "chunk_id": "7da7dc9fe3df8f998e7e4c50637d1f3fce4a5473db05ac5cad10d6ca0e0aa554:fee01cf2dfce65605fc95772243d0b25face7f98d5969b98e2769cb758a0b44a:0",
+      "document_id": "7da7dc9fe3df8f998e7e4c50637d1f3fce4a5473db05ac5cad10d6ca0e0aa554",
+      "version": "fee01cf2dfce65605fc95772243d0b25face7f98d5969b98e2769cb758a0b44a",
+      "chunk_index": 0,
+      "title": "Human handoff and diagnostic summaries",
+      "content": "A reliability handoff includes the symptom, UTC timeline, request identifiers, affected endpoint and checks already performed. Summaries separate observed facts from hypotheses. Raw access tokens, complete card numbers and unrelated conversation history must be removed."
+    },
+    {
+      "chunk_id": "7da7dc9fe3df8f998e7e4c50637d1f3fce4a5473db05ac5cad10d6ca0e0aa554:fee01cf2dfce65605fc95772243d0b25face7f98d5969b98e2769cb758a0b44a:1",
+      "document_id": "7da7dc9fe3df8f998e7e4c50637d1f3fce4a5473db05ac5cad10d6ca0e0aa554",
+      "version": "fee01cf2dfce65605fc95772243d0b25face7f98d5969b98e2769cb758a0b44a",
+      "chunk_index": 1,
+      "title": "Human handoff and diagnostic summaries",
+      "content": "A finance handoff includes the order reference, currency, captured amounts and relevant receipt references. It must explicitly distinguish a requested refund from an approved refund. The assistant can prepare this summary but cannot create a real queue entry or promise staff assignment."
+    },
+    {
+      "chunk_id": "7da7dc9fe3df8f998e7e4c50637d1f3fce4a5473db05ac5cad10d6ca0e0aa554:fee01cf2dfce65605fc95772243d0b25face7f98d5969b98e2769cb758a0b44a:2",
+      "document_id": "7da7dc9fe3df8f998e7e4c50637d1f3fce4a5473db05ac5cad10d6ca0e0aa554",
+      "version": "fee01cf2dfce65605fc95772243d0b25face7f98d5969b98e2769cb758a0b44a",
+      "chunk_index": 2,
+      "title": "Human handoff and diagnostic summaries",
+      "content": "A combined incident uses one summary with separate technical and billing questions. Do not claim the outage caused a charge unless evidence establishes that relationship. A human owner verifies each question, and unresolved facts stay labeled unknown rather than filled by inference."
+    },
+    {
+      "chunk_id": "7fa0a998273224dac5c733b8b573aedacdf5c97ec1c2c57262403452607ed4b7:58f754e089d6d55fd0fe733eee0b2ada4e4eb77a1e2b1bc8b6bea88c2d33047b:0",
+      "document_id": "7fa0a998273224dac5c733b8b573aedacdf5c97ec1c2c57262403452607ed4b7",
+      "version": "58f754e089d6d55fd0fe733eee0b2ada4e4eb77a1e2b1bc8b6bea88c2d33047b",
+      "chunk_index": 0,
+      "title": "Duplicate payment reconciliation",
+      "content": "Two bank notifications with one captured ledger entry are not enough to establish a duplicate charge. Match currency, merchant reference and capture identifier. An authorization event followed by a capture event belongs to one payment lifecycle rather than two purchases."
+    },
+    {
+      "chunk_id": "7fa0a998273224dac5c733b8b573aedacdf5c97ec1c2c57262403452607ed4b7:58f754e089d6d55fd0fe733eee0b2ada4e4eb77a1e2b1bc8b6bea88c2d33047b:1",
+      "document_id": "7fa0a998273224dac5c733b8b573aedacdf5c97ec1c2c57262403452607ed4b7",
+      "version": "58f754e089d6d55fd0fe733eee0b2ada4e4eb77a1e2b1bc8b6bea88c2d33047b",
+      "chunk_index": 1,
+      "title": "Duplicate payment reconciliation",
+      "content": "Two distinct captured entries for the same order require reconciliation by finance. Collect both capture references and amounts, with card details redacted. The assistant records a suspected duplicate; it cannot declare a refund approved or execute either reversal."
+    },
+    {
+      "chunk_id": "7fa0a998273224dac5c733b8b573aedacdf5c97ec1c2c57262403452607ed4b7:58f754e089d6d55fd0fe733eee0b2ada4e4eb77a1e2b1bc8b6bea88c2d33047b:2",
+      "document_id": "7fa0a998273224dac5c733b8b573aedacdf5c97ec1c2c57262403452607ed4b7",
+      "version": "58f754e089d6d55fd0fe733eee0b2ada4e4eb77a1e2b1bc8b6bea88c2d33047b",
+      "chunk_index": 2,
+      "title": "Duplicate payment reconciliation",
+      "content": "If duplicate entries use different currencies, finance checks the order currency and conversion records before comparing values. Nominal amounts must not be added across currencies. The customer may receive a reconciliation summary only after finance confirms the matching events."
+    },
+    {
+      "chunk_id": "8063eb93852f7f1490d1c451c5d4bfcd25fdccf24cebdc2d45d33d96c21923f7:7c323d4e186b79a2fef36c376b88fee0edf40523e8a325e889ec588a88dd3a24:0",
+      "document_id": "8063eb93852f7f1490d1c451c5d4bfcd25fdccf24cebdc2d45d33d96c21923f7",
+      "version": "7c323d4e186b79a2fef36c376b88fee0edf40523e8a325e889ec588a88dd3a24",
+      "chunk_index": 0,
+      "title": "Authorization holds and captured charges",
+      "content": "An authorization hold reserves available funds but is not a captured charge. The payment ledger labels a hold authorized and a completed charge captured. A bank notification alone is insufficient to distinguish them; compare the merchant reference and ledger event type."
+    },
+    {
+      "chunk_id": "8063eb93852f7f1490d1c451c5d4bfcd25fdccf24cebdc2d45d33d96c21923f7:7c323d4e186b79a2fef36c376b88fee0edf40523e8a325e889ec588a88dd3a24:1",
+      "document_id": "8063eb93852f7f1490d1c451c5d4bfcd25fdccf24cebdc2d45d33d96c21923f7",
+      "version": "7c323d4e186b79a2fef36c376b88fee0edf40523e8a325e889ec588a88dd3a24",
+      "chunk_index": 1,
+      "title": "Authorization holds and captured charges",
+      "content": "A released hold is recorded as voided, not refunded. The release instruction can precede the bank display update. Support may provide the void reference after identity verification but cannot promise the bank posting date or create a refund for an uncaptured hold."
+    },
+    {
+      "chunk_id": "8063eb93852f7f1490d1c451c5d4bfcd25fdccf24cebdc2d45d33d96c21923f7:7c323d4e186b79a2fef36c376b88fee0edf40523e8a325e889ec588a88dd3a24:2",
+      "document_id": "8063eb93852f7f1490d1c451c5d4bfcd25fdccf24cebdc2d45d33d96c21923f7",
+      "version": "7c323d4e186b79a2fef36c376b88fee0edf40523e8a325e889ec588a88dd3a24",
+      "chunk_index": 2,
+      "title": "Authorization holds and captured charges",
+      "content": "A partial capture leaves the uncaptured remainder reserved until voided or expired. Reconciliation must separately list the captured amount and remaining authorization. Do not count their sum as two settled payments; refund eligibility is assessed only on the captured portion."
+    },
+    {
+      "chunk_id": "819185d8c2459adf7da3c3bb60fdede4c037236c107b67999570fb647fd3f438:476e5b06c7edba937e927654d10be9d35218e75047a15862b54e73e30be1da1f:0",
+      "document_id": "819185d8c2459adf7da3c3bb60fdede4c037236c107b67999570fb647fd3f438",
+      "version": "476e5b06c7edba937e927654d10be9d35218e75047a15862b54e73e30be1da1f",
+      "chunk_index": 0,
+      "title": "Reseller billed subscriptions",
+      "content": "For a subscription billed by a reseller, the reseller issues the customer invoice and handles the customer payment review. The platform can verify workspace status but cannot correct a reseller invoice. Support first checks the billing_owner field on the subscription."
+    },
+    {
+      "chunk_id": "819185d8c2459adf7da3c3bb60fdede4c037236c107b67999570fb647fd3f438:476e5b06c7edba937e927654d10be9d35218e75047a15862b54e73e30be1da1f:1",
+      "document_id": "819185d8c2459adf7da3c3bb60fdede4c037236c107b67999570fb647fd3f438",
+      "version": "476e5b06c7edba937e927654d10be9d35218e75047a15862b54e73e30be1da1f",
+      "chunk_index": 1,
+      "title": "Reseller billed subscriptions",
+      "content": "Disabling renewal at the platform for a reseller managed plan records a request pending reseller confirmation. The effective renewal change requires the reseller acknowledgement reference. A platform request timestamp alone does not prove the reseller stopped billing."
+    },
+    {
+      "chunk_id": "819185d8c2459adf7da3c3bb60fdede4c037236c107b67999570fb647fd3f438:476e5b06c7edba937e927654d10be9d35218e75047a15862b54e73e30be1da1f:2",
+      "document_id": "819185d8c2459adf7da3c3bb60fdede4c037236c107b67999570fb647fd3f438",
+      "version": "476e5b06c7edba937e927654d10be9d35218e75047a15862b54e73e30be1da1f",
+      "chunk_index": 2,
+      "title": "Reseller billed subscriptions",
+      "content": "A reseller transfer request needs approval from the current reseller, destination reseller and tenant owner. Existing billing ownership remains in force until the transfer receipt is confirmed. The assistant must not tell the customer to pay both resellers during review."
+    },
+    {
+      "chunk_id": "84cf11d6211e6e3e2aab34ab03132ec974c6a7c99ff406246d540bbc15121b54:4b46372ee1b90ab2253fd2a77e37fb6a587bff1c020547e099eacfaf39016da7:0",
+      "document_id": "84cf11d6211e6e3e2aab34ab03132ec974c6a7c99ff406246d540bbc15121b54",
+      "version": "4b46372ee1b90ab2253fd2a77e37fb6a587bff1c020547e099eacfaf39016da7",
+      "chunk_index": 0,
+      "title": "Purchase orders and bank transfer matching",
+      "content": "A purchase order reference records a customer procurement commitment but is not proof of payment. A bank transfer is matched using the order reference, received currency and treasury receipt. Provisioning waits for treasury confirmation under this payment method."
+    },
+    {
+      "chunk_id": "84cf11d6211e6e3e2aab34ab03132ec974c6a7c99ff406246d540bbc15121b54:4b46372ee1b90ab2253fd2a77e37fb6a587bff1c020547e099eacfaf39016da7:1",
+      "document_id": "84cf11d6211e6e3e2aab34ab03132ec974c6a7c99ff406246d540bbc15121b54",
+      "version": "4b46372ee1b90ab2253fd2a77e37fb6a587bff1c020547e099eacfaf39016da7",
+      "chunk_index": 1,
+      "title": "Purchase orders and bank transfer matching",
+      "content": "A transfer with a missing order reference enters unmatched_funds review. Treasury may request the payer legal name and redacted transfer reference through the secure portal. The assistant cannot assign unmatched money to a tenant based solely on a chat statement."
+    },
+    {
+      "chunk_id": "84cf11d6211e6e3e2aab34ab03132ec974c6a7c99ff406246d540bbc15121b54:4b46372ee1b90ab2253fd2a77e37fb6a587bff1c020547e099eacfaf39016da7:2",
+      "document_id": "84cf11d6211e6e3e2aab34ab03132ec974c6a7c99ff406246d540bbc15121b54",
+      "version": "4b46372ee1b90ab2253fd2a77e37fb6a587bff1c020547e099eacfaf39016da7",
+      "chunk_index": 2,
+      "title": "Purchase orders and bank transfer matching",
+      "content": "An overpayment remains an unapplied balance until treasury approves allocation or return. It does not automatically buy more seats or extend a term. Support records the matched invoice amount and excess separately, with currency preserved in the handoff."
+    },
+    {
+      "chunk_id": "8e544619d0d58505c0d88c178cc9aaaf4c2e7b67a3907177126c224326d5e848:a1a121bc604adef39371bae2e809e23e04bca756b291b35c4e446a7113f365c1:0",
+      "document_id": "8e544619d0d58505c0d88c178cc9aaaf4c2e7b67a3907177126c224326d5e848",
+      "version": "a1a121bc604adef39371bae2e809e23e04bca756b291b35c4e446a7113f365c1",
+      "chunk_index": 0,
+      "title": "Seat assignments and billing quantity",
+      "content": "Purchasing seat capacity and assigning a member are separate actions. A tenant with available capacity can invite a member, but the member gains access only after accepting and receiving a role. An unaccepted invitation is not an active seat assignment."
+    },
+    {
+      "chunk_id": "8e544619d0d58505c0d88c178cc9aaaf4c2e7b67a3907177126c224326d5e848:a1a121bc604adef39371bae2e809e23e04bca756b291b35c4e446a7113f365c1:1",
+      "document_id": "8e544619d0d58505c0d88c178cc9aaaf4c2e7b67a3907177126c224326d5e848",
+      "version": "a1a121bc604adef39371bae2e809e23e04bca756b291b35c4e446a7113f365c1",
+      "chunk_index": 1,
+      "title": "Seat assignments and billing quantity",
+      "content": "Removing a member revokes access but does not automatically reduce contracted seat capacity. The billing administrator reviews the next renewal quantity separately. Support cannot promise an immediate prorated refund merely because the member list became shorter."
+    },
+    {
+      "chunk_id": "8e544619d0d58505c0d88c178cc9aaaf4c2e7b67a3907177126c224326d5e848:a1a121bc604adef39371bae2e809e23e04bca756b291b35c4e446a7113f365c1:2",
+      "document_id": "8e544619d0d58505c0d88c178cc9aaaf4c2e7b67a3907177126c224326d5e848",
+      "version": "a1a121bc604adef39371bae2e809e23e04bca756b291b35c4e446a7113f365c1",
+      "chunk_index": 2,
+      "title": "Seat assignments and billing quantity",
+      "content": "A seat limit error is a capacity constraint, not a token expiration. The administrator can review pending invitations and purchased capacity. Deleting audit records does not free seats, and raising a technical incident does not authorize extra billable capacity."
+    },
+    {
+      "chunk_id": "8f6c4372dd4136b99d863e674ea117ff97fe8f1213440aa6998c2ee6aad41264:498104ff66d539d2cfd35781479744194c7b5a780c9431e5e1f095edc3d12826:0",
+      "document_id": "8f6c4372dd4136b99d863e674ea117ff97fe8f1213440aa6998c2ee6aad41264",
+      "version": "498104ff66d539d2cfd35781479744194c7b5a780c9431e5e1f095edc3d12826",
+      "chunk_index": 0,
+      "title": "Single sign on certificate rotation",
+      "content": "For a scheduled SSO signing certificate rotation, the identity administrator uploads the new public certificate while the previous certificate remains valid during an overlap window. Private signing keys never leave the identity provider. The assistant must not request them."
+    },
+    {
+      "chunk_id": "8f6c4372dd4136b99d863e674ea117ff97fe8f1213440aa6998c2ee6aad41264:498104ff66d539d2cfd35781479744194c7b5a780c9431e5e1f095edc3d12826:1",
+      "document_id": "8f6c4372dd4136b99d863e674ea117ff97fe8f1213440aa6998c2ee6aad41264",
+      "version": "498104ff66d539d2cfd35781479744194c7b5a780c9431e5e1f095edc3d12826",
+      "chunk_index": 1,
+      "title": "Single sign on certificate rotation",
+      "content": "During the overlap window either configured public certificate may verify an assertion. After the administrator closes the window, assertions signed only by the retired certificate are rejected. Reissuing an API token does not repair an SSO certificate mismatch."
+    },
+    {
+      "chunk_id": "8f6c4372dd4136b99d863e674ea117ff97fe8f1213440aa6998c2ee6aad41264:498104ff66d539d2cfd35781479744194c7b5a780c9431e5e1f095edc3d12826:2",
+      "document_id": "8f6c4372dd4136b99d863e674ea117ff97fe8f1213440aa6998c2ee6aad41264",
+      "version": "498104ff66d539d2cfd35781479744194c7b5a780c9431e5e1f095edc3d12826",
+      "chunk_index": 2,
+      "title": "Single sign on certificate rotation",
+      "content": "An emergency certificate revocation ends the overlap immediately after security approval. The identity team documents the incident and verifies new assertions before restoring login. Support must not suggest disabling assertion signature verification as a workaround."
+    },
+    {
+      "chunk_id": "c68f0a114127119eb52039aaa555323cbc5e753f092621cdabaa88b611345f85:843faf36ad3dd01bba56afc1593e8e0e16099cf41d517eff865ba12ba05a050e:0",
+      "document_id": "c68f0a114127119eb52039aaa555323cbc5e753f092621cdabaa88b611345f85",
+      "version": "843faf36ad3dd01bba56afc1593e8e0e16099cf41d517eff865ba12ba05a050e",
+      "chunk_index": 0,
+      "title": "Charge disputes and refund coordination",
+      "content": "A processor dispute and a merchant refund request are separate workflows for the same capture. If a dispute is open, finance places any new refund request on coordination hold to avoid duplicate compensation. The assistant must not promise that both paths will pay out."
+    },
+    {
+      "chunk_id": "c68f0a114127119eb52039aaa555323cbc5e753f092621cdabaa88b611345f85:843faf36ad3dd01bba56afc1593e8e0e16099cf41d517eff865ba12ba05a050e:1",
+      "document_id": "c68f0a114127119eb52039aaa555323cbc5e753f092621cdabaa88b611345f85",
+      "version": "843faf36ad3dd01bba56afc1593e8e0e16099cf41d517eff865ba12ba05a050e",
+      "chunk_index": 1,
+      "title": "Charge disputes and refund coordination",
+      "content": "A withdrawn dispute does not by itself approve a merchant refund. Finance verifies the processor status and then resumes refund review. The handoff includes the dispute reference, capture reference and coordination hold status without unredacted bank evidence."
+    },
+    {
+      "chunk_id": "c68f0a114127119eb52039aaa555323cbc5e753f092621cdabaa88b611345f85:843faf36ad3dd01bba56afc1593e8e0e16099cf41d517eff865ba12ba05a050e:2",
+      "document_id": "c68f0a114127119eb52039aaa555323cbc5e753f092621cdabaa88b611345f85",
+      "version": "843faf36ad3dd01bba56afc1593e8e0e16099cf41d517eff865ba12ba05a050e",
+      "chunk_index": 2,
+      "title": "Charge disputes and refund coordination",
+      "content": "A dispute fee is recorded separately from the captured order amount. Its treatment requires finance review under the fictional contract and is not automatically refunded with the order. Support cannot infer fee waiver eligibility from the outcome of the main dispute."
+    },
+    {
+      "chunk_id": "d684447d6abbe63b4b21704583efaf6e65eaffde3f2b940681764319b981c940:5878c68b616d4e3a2415fed2d305dfe06ab7d210583d404f295396e797c44218:0",
+      "document_id": "d684447d6abbe63b4b21704583efaf6e65eaffde3f2b940681764319b981c940",
+      "version": "5878c68b616d4e3a2415fed2d305dfe06ab7d210583d404f295396e797c44218",
+      "chunk_index": 0,
+      "title": "Server failures and retry limits",
+      "content": "HTTP 500 with reason internal_fault is a server failure, not proof that a payment failed. Capture the request identifier, endpoint and UTC time. For read requests, retry at most twice with increasing delay. Never include Authorization headers in diagnostic attachments."
+    },
+    {
+      "chunk_id": "d684447d6abbe63b4b21704583efaf6e65eaffde3f2b940681764319b981c940:5878c68b616d4e3a2415fed2d305dfe06ab7d210583d404f295396e797c44218:1",
+      "document_id": "d684447d6abbe63b4b21704583efaf6e65eaffde3f2b940681764319b981c940",
+      "version": "5878c68b616d4e3a2415fed2d305dfe06ab7d210583d404f295396e797c44218",
+      "chunk_index": 1,
+      "title": "Server failures and retry limits",
+      "content": "A write request that returns HTTP 500 may already have committed. Query its receipt using the same idempotency key before retrying. A new idempotency key represents a new operation and can cause a second charge. Support escalates if the receipt remains indeterminate."
+    },
+    {
+      "chunk_id": "d684447d6abbe63b4b21704583efaf6e65eaffde3f2b940681764319b981c940:5878c68b616d4e3a2415fed2d305dfe06ab7d210583d404f295396e797c44218:2",
+      "document_id": "d684447d6abbe63b4b21704583efaf6e65eaffde3f2b940681764319b981c940",
+      "version": "5878c68b616d4e3a2415fed2d305dfe06ab7d210583d404f295396e797c44218",
+      "chunk_index": 2,
+      "title": "Server failures and retry limits",
+      "content": "HTTP 503 with Retry-After indicates planned overload handling. Read clients wait for the indicated interval. A persistent failure after the retry budget is exhausted is handed to reliability staff with the observed timeline; the assistant must not promise a recovery deadline."
+    },
+    {
+      "chunk_id": "d942c1175c2aa554fc3eb301a40f4ec2864a51ad09b4df37db3c999c81dd5bab:5fce498ab2c8b5f96375d62c23cd09b6eb891248ac6f8be4a804e7b582f5245b:0",
+      "document_id": "d942c1175c2aa554fc3eb301a40f4ec2864a51ad09b4df37db3c999c81dd5bab",
+      "version": "5fce498ab2c8b5f96375d62c23cd09b6eb891248ac6f8be4a804e7b582f5245b",
+      "chunk_index": 0,
+      "title": "Payment settlement and service activation",
+      "content": "The fictional business has separate payment and provisioning states. A payment receipt marked settled allows provisioning to begin but does not prove that a workspace is ready. The operator checks the provisioning job identifier and its most recent state transition."
+    },
+    {
+      "chunk_id": "d942c1175c2aa554fc3eb301a40f4ec2864a51ad09b4df37db3c999c81dd5bab:5fce498ab2c8b5f96375d62c23cd09b6eb891248ac6f8be4a804e7b582f5245b:1",
+      "document_id": "d942c1175c2aa554fc3eb301a40f4ec2864a51ad09b4df37db3c999c81dd5bab",
+      "version": "5fce498ab2c8b5f96375d62c23cd09b6eb891248ac6f8be4a804e7b582f5245b",
+      "chunk_index": 1,
+      "title": "Payment settlement and service activation",
+      "content": "A provisioning job in awaiting_capacity is queued for an available workspace slot. Do not ask the customer to pay again. Collect the order identifier, settled receipt reference and job identifier for the provisioning team. No fixed activation deadline is guaranteed."
+    },
+    {
+      "chunk_id": "d942c1175c2aa554fc3eb301a40f4ec2864a51ad09b4df37db3c999c81dd5bab:5fce498ab2c8b5f96375d62c23cd09b6eb891248ac6f8be4a804e7b582f5245b:2",
+      "document_id": "d942c1175c2aa554fc3eb301a40f4ec2864a51ad09b4df37db3c999c81dd5bab",
+      "version": "5fce498ab2c8b5f96375d62c23cd09b6eb891248ac6f8be4a804e7b582f5245b",
+      "chunk_index": 2,
+      "title": "Payment settlement and service activation",
+      "content": "A provisioning job in rejected_configuration requires correction of the requested region or plan combination before resubmission. Resubmitting provisioning under the existing paid order does not create another payment. Only the provisioning team may authorize the corrected request."
+    },
+    {
+      "chunk_id": "e10dd201e3db832e7573b73a3bb3552df3d4ae479f6c27487104f893bc6962f1:488b4cae6b141d0942b318c3e18f984d15fa0dff4ab3e8bcb97e472d95704eae:0",
+      "document_id": "e10dd201e3db832e7573b73a3bb3552df3d4ae479f6c27487104f893bc6962f1",
+      "version": "488b4cae6b141d0942b318c3e18f984d15fa0dff4ab3e8bcb97e472d95704eae",
+      "chunk_index": 0,
+      "title": "Invoice identity and issuance",
+      "content": "A payment receipt confirms a payment event, while an invoice identifies the billed legal entity and taxable items. They are distinct records. To request an invoice, provide the order reference, verified company legal name and tax registration identifier through the billing portal."
+    },
+    {
+      "chunk_id": "e10dd201e3db832e7573b73a3bb3552df3d4ae479f6c27487104f893bc6962f1:488b4cae6b141d0942b318c3e18f984d15fa0dff4ab3e8bcb97e472d95704eae:1",
+      "document_id": "e10dd201e3db832e7573b73a3bb3552df3d4ae479f6c27487104f893bc6962f1",
+      "version": "488b4cae6b141d0942b318c3e18f984d15fa0dff4ab3e8bcb97e472d95704eae",
+      "chunk_index": 1,
+      "title": "Invoice identity and issuance",
+      "content": "Invoices are issued only for captured billable amounts. An authorization hold cannot support an invoice request. A draft invoice is editable before issuance; an issued invoice requires the correction process and must not be silently replaced in a support attachment."
+    },
+    {
+      "chunk_id": "e10dd201e3db832e7573b73a3bb3552df3d4ae479f6c27487104f893bc6962f1:488b4cae6b141d0942b318c3e18f984d15fa0dff4ab3e8bcb97e472d95704eae:2",
+      "document_id": "e10dd201e3db832e7573b73a3bb3552df3d4ae479f6c27487104f893bc6962f1",
+      "version": "488b4cae6b141d0942b318c3e18f984d15fa0dff4ab3e8bcb97e472d95704eae",
+      "chunk_index": 2,
+      "title": "Invoice identity and issuance",
+      "content": "Invoice delivery uses the verified billing contact for the tenant. A project reader cannot change that address by chat. A billing administrator must verify the new contact in the billing portal before any resend to a different address is approved."
+    },
+    {
+      "chunk_id": "e74d405886225ea382cc4e7e70a9deebf03efc506df57e95e7903f5c3a7f8f0e:d704823ef5d3b00d3595a04839f2997b6a5c8ed5f9847f3194ada235d0f12e16:0",
+      "document_id": "e74d405886225ea382cc4e7e70a9deebf03efc506df57e95e7903f5c3a7f8f0e",
+      "version": "d704823ef5d3b00d3595a04839f2997b6a5c8ed5f9847f3194ada235d0f12e16",
+      "chunk_index": 0,
+      "title": "Tenant isolation and resource ownership",
+      "content": "Every project lookup uses the authenticated tenant identifier and the project identifier together. A project belonging to another tenant is returned as HTTP 404 to avoid disclosing its existence. A user who belongs to both tenants must explicitly switch the active tenant."
+    },
+    {
+      "chunk_id": "e74d405886225ea382cc4e7e70a9deebf03efc506df57e95e7903f5c3a7f8f0e:d704823ef5d3b00d3595a04839f2997b6a5c8ed5f9847f3194ada235d0f12e16:1",
+      "document_id": "e74d405886225ea382cc4e7e70a9deebf03efc506df57e95e7903f5c3a7f8f0e",
+      "version": "d704823ef5d3b00d3595a04839f2997b6a5c8ed5f9847f3194ada235d0f12e16",
+      "chunk_index": 1,
+      "title": "Tenant isolation and resource ownership",
+      "content": "An invitation to tenant Cedar does not transfer resources from tenant Birch. The invited member sees only resources granted in Cedar after accepting the invitation. Support must not copy documents between tenants to make an invitation appear successful."
+    },
+    {
+      "chunk_id": "e74d405886225ea382cc4e7e70a9deebf03efc506df57e95e7903f5c3a7f8f0e:d704823ef5d3b00d3595a04839f2997b6a5c8ed5f9847f3194ada235d0f12e16:2",
+      "document_id": "e74d405886225ea382cc4e7e70a9deebf03efc506df57e95e7903f5c3a7f8f0e",
+      "version": "d704823ef5d3b00d3595a04839f2997b6a5c8ed5f9847f3194ada235d0f12e16",
+      "chunk_index": 2,
+      "title": "Tenant isolation and resource ownership",
+      "content": "A resource transfer requires separate approvals from the source owner and destination owner plus a transfer inventory. This policy describes a manual review only; the assistant cannot execute transfers. Existing links remain bound to the original tenant until completion is confirmed."
+    },
+    {
+      "chunk_id": "ef0215fbeb7cd10c798feecf83518ce9d447db4c36a1c837683d2f02655a11e7:b0196580d5fd7883f4ecf5fab79c04fe03beecb0ee57714098e74f07de94ec39:0",
+      "document_id": "ef0215fbeb7cd10c798feecf83518ce9d447db4c36a1c837683d2f02655a11e7",
+      "version": "b0196580d5fd7883f4ecf5fab79c04fe03beecb0ee57714098e74f07de94ec39",
+      "chunk_index": 0,
+      "title": "Invoice correction and credit notes",
+      "content": "An issued invoice with a wrong legal name enters a correction review. The original invoice number remains in the audit trail. Billing staff decide whether a replacement invoice or credit note is required; the assistant cannot edit an issued PDF or invent a new invoice number."
+    },
+    {
+      "chunk_id": "ef0215fbeb7cd10c798feecf83518ce9d447db4c36a1c837683d2f02655a11e7:b0196580d5fd7883f4ecf5fab79c04fe03beecb0ee57714098e74f07de94ec39:1",
+      "document_id": "ef0215fbeb7cd10c798feecf83518ce9d447db4c36a1c837683d2f02655a11e7",
+      "version": "b0196580d5fd7883f4ecf5fab79c04fe03beecb0ee57714098e74f07de94ec39",
+      "chunk_index": 1,
+      "title": "Invoice correction and credit notes",
+      "content": "A credit note references the original invoice and records a billing reduction. It is not itself proof of a bank refund. The operator checks the related refund transaction separately before saying that money was returned. A zero balance invoice can still have no refund transaction."
+    },
+    {
+      "chunk_id": "ef0215fbeb7cd10c798feecf83518ce9d447db4c36a1c837683d2f02655a11e7:b0196580d5fd7883f4ecf5fab79c04fe03beecb0ee57714098e74f07de94ec39:2",
+      "document_id": "ef0215fbeb7cd10c798feecf83518ce9d447db4c36a1c837683d2f02655a11e7",
+      "version": "b0196580d5fd7883f4ecf5fab79c04fe03beecb0ee57714098e74f07de94ec39",
+      "chunk_index": 2,
+      "title": "Invoice correction and credit notes",
+      "content": "Tax identifier changes require verified company evidence and approval by billing staff. The corrected document is delivered only to a verified billing contact. Private supporting documents are submitted through the portal rather than pasted into an assistant conversation."
+    },
+    {
+      "chunk_id": "f6bace27484d8abf6b6db34e7e0cafca05fdbdf13288e9b5b18288ddf8d4e333:9488956a8516922a78d8f93ab214b004eab7a9d2e9f8b08cc86280d1e3f2b7aa:0",
+      "document_id": "f6bace27484d8abf6b6db34e7e0cafca05fdbdf13288e9b5b18288ddf8d4e333",
+      "version": "9488956a8516922a78d8f93ab214b004eab7a9d2e9f8b08cc86280d1e3f2b7aa",
+      "chunk_index": 0,
+      "title": "Access tokens and authentication",
+      "content": "A missing bearer token produces HTTP 401 before tenant routing. The support operator checks whether the Authorization header reached the gateway and whether a proxy removed it. Collect only the request identifier and the token fingerprint; never request the raw credential in a ticket."
+    },
+    {
+      "chunk_id": "f6bace27484d8abf6b6db34e7e0cafca05fdbdf13288e9b5b18288ddf8d4e333:9488956a8516922a78d8f93ab214b004eab7a9d2e9f8b08cc86280d1e3f2b7aa:1",
+      "document_id": "f6bace27484d8abf6b6db34e7e0cafca05fdbdf13288e9b5b18288ddf8d4e333",
+      "version": "9488956a8516922a78d8f93ab214b004eab7a9d2e9f8b08cc86280d1e3f2b7aa",
+      "chunk_index": 1,
+      "title": "Access tokens and authentication",
+      "content": "An expired bearer token also produces HTTP 401, but it requires renewal through the identity portal. A fresh token does not recover a disabled account. Compare the expiration time with gateway UTC time and record clock skew separately from missing credentials."
+    },
+    {
+      "chunk_id": "f6bace27484d8abf6b6db34e7e0cafca05fdbdf13288e9b5b18288ddf8d4e333:9488956a8516922a78d8f93ab214b004eab7a9d2e9f8b08cc86280d1e3f2b7aa:2",
+      "document_id": "f6bace27484d8abf6b6db34e7e0cafca05fdbdf13288e9b5b18288ddf8d4e333",
+      "version": "9488956a8516922a78d8f93ab214b004eab7a9d2e9f8b08cc86280d1e3f2b7aa",
+      "chunk_index": 2,
+      "title": "Access tokens and authentication",
+      "content": "A valid token for the wrong audience produces HTTP 401 with reason audience_mismatch. The audience must be servicepilot-api. Do not change tenant membership to fix this error. Reissuing a token for the correct audience requires the original authenticated identity."
+    }
+  ],
+  "knowledge_hash": "3be14a78911ca8d5a7ab2857348e8a95b4c647795b8c2bcb9f5e6f067179fb9e"
+}
