@@ -1,0 +1,46 @@
+# Documentation policy: basic READMEs and runtime Skills only
+*.md
+*.MD
+!README.md
+**/README.md
+!/README.md
+!/backend/README.md
+!/frontend/README.md
+!backend/skills/**/SKILL.md
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Generated files and local environments
+**/__pycache__/
+*.py[cod]
+**/.venv*/
+**/venv/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/node_modules/
+**/dist/
+**/build/
+**/*.egg-info/
+**/.idea/
+**/.vscode/
+**/.playwright-cli/
+**/output/
+**/logs/
+*.log
+*.sqlite3
+*.sqlite3-*
+**/data/*
+!**/data/demo_docs/
+**/data/demo_docs/*
+!**/data/demo_docs/sample_knowledge.json
+**/config/nginx/ssl/
+.DS_Store
+Thumbs.db
+
+**/.git-initialization-backup/
+
+.local-review/
