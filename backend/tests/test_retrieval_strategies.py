@@ -10,7 +10,7 @@ import pytest
 
 from evaluation.retrieval import build_snapshot, Dataset, ReturnedChunk, score_evidence
 from evaluation.strategies import Strategy, StrategyRunner, preset, fuse
-from evaluation.experiment_dependencies import SyntheticIndex, SyntheticModel, ChromaIndex, public_chunk
+from evaluation.experiment_dependencies import SyntheticIndex, SyntheticModel, ChromaIndex, public_chunk, lexical_rank, LEXICAL_POLICY
 from evaluation.experiments import load_suite, make_experiment, compare, validate_report
 from scripts import evaluate_retrieval_strategies as cli
 
@@ -73,6 +73,57 @@ def test_candidate_budget_changes_actual_pool_and_branch_budget_changes_calls():
         assert t.candidate_counts[0]['vector']==budget
         assert {c[2] for c in index.calls}=={budget}
         assert len(e.results)==3
+
+
+def lexical_regression_snapshot():
+    docs=[dict(title=f'policy-{i}',content='shared rule') for i in range(21)]
+    last=SyntheticIndex(build_snapshot(docs)).rows[-1].title
+    for doc in docs:
+        if doc['title']==last:
+            doc['content']='shared exactneedle exactneedle exactneedle'
+    return build_snapshot(docs),last
+
+
+@pytest.mark.parametrize('adapter',['synthetic','chroma'])
+def test_lexical_top_k_is_ranked_over_all_matches_not_storage_prefix(adapter):
+    snapshot,target=lexical_regression_snapshot()
+    source=SyntheticIndex(snapshot)
+    if adapter=='synthetic':
+        index=source
+    else:
+        class Collection:
+            def count(self):return len(getattr(self,'rows',{}))
+            def add(self,ids,documents,metadatas):self.rows=dict(zip(ids,zip(documents,metadatas)))
+            def get(self,include,**kwargs):
+                # Filter matches all 21 documents. A pre-ranking limit would exclude the best one.
+                ids=sorted(self.rows)[:kwargs.get('limit',len(self.rows))]
+                return dict(ids=ids,documents=[self.rows[i][0] for i in ids],metadatas=[self.rows[i][1] for i in ids])
+        index=ChromaIndex(Collection(),snapshot,'fake-no-embedding')
+    expected=lexical_rank('shared exactneedle',source.rows)
+    assert expected[0].title==target
+    for budget in (1,3,20):
+        assert index.lexical('shared exactneedle',budget)==expected[:budget]
+    assert index.lexical('nonexistentword',20)==[]
+
+
+def test_lexical_ties_and_source_order_do_not_change_ranked_results():
+    snapshot,_=lexical_regression_snapshot()
+    index=SyntheticIndex(snapshot)
+    expected=index.lexical('shared',20)
+    index.rows.reverse()
+    assert index.lexical('shared',20)==expected
+
+
+def test_legacy_report_still_valid_but_new_lexical_policy_cannot_be_mixed(suite):
+    from evaluation.experiments import run_identity
+    current=build_report(suite,'B')
+    assert current.dependencies['lexical']==LEXICAL_POLICY
+    legacy=current.model_copy(deep=True)
+    legacy.dependencies.pop('lexical')
+    legacy.run_identity=run_identity(legacy)
+    validate_report(legacy)
+    with pytest.raises(ValueError,match='lexical'):
+        compare(legacy,current)
 
 
 @pytest.mark.parametrize('changes',[{'top_k':21},{'top_k':0},{'candidate_k':2},
@@ -357,6 +408,12 @@ def test_real_chroma_ephemeral_index_with_fake_embedding_only(suite):
             return ChromaIndex(collection,s,'fake-64-cosine',client)
         index=await asyncio.to_thread(create)
         try:
+            matched=await asyncio.to_thread(index.collection.get,
+                where_document={'$contains':'payment'},include=['documents','metadatas'])
+            all_rows=index.decode(matched['ids'],matched['documents'],matched['metadatas'])
+            assert len(all_rows)>3
+            expected=lexical_rank('payment',sorted(all_rows,key=lambda r:r.chunk_id))
+            assert await asyncio.to_thread(index.lexical,'payment',3)==expected[:3]
             e,t=await StrategyRunner(s,index,SyntheticModel()).run('c','payment capture',preset('D'))
             assert e.status=='success' and len(e.results)==3
             assert all(c['vector']==20 for c in t.candidate_counts)

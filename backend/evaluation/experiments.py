@@ -137,7 +137,9 @@ def execution_statistics(executions,traces,mode):
 
 def validate_report(report):
     required={'embedding','model','prompt','distance'}
-    if set(report.dependencies)!=required or any(not isinstance(report.dependencies.get(k),str) or not report.dependencies[k] for k in required-{'model'}):
+    if (not required <= set(report.dependencies) or set(report.dependencies)-required-{'lexical'}
+            or any(not isinstance(report.dependencies.get(k),str) or not report.dependencies[k] for k in required-{'model'})
+            or ('lexical' in report.dependencies and (not isinstance(report.dependencies['lexical'],str) or not report.dependencies['lexical']))):
         raise ExperimentInputError('报告缺少可靠的检索依赖身份')
     if report.config.rewrite and not report.dependencies['model']:
         raise ExperimentInputError('改写策略缺少模型身份')
@@ -182,8 +184,9 @@ def compare(left: ExperimentReport, right: ExperimentReport):
     for key in ('top_k','candidate_k','vector_k','lexical_k','rewrite_count','cache_mode','merge','rrf_constant'):
         if getattr(left.config,key)!=getattr(right.config,key):
             raise ExperimentInputError('非研究变量不同: '+key)
-    for key in ('embedding','distance','prompt'):
-        if left.dependencies.get(key)!=right.dependencies.get(key):
+    for key in ('embedding','distance','prompt','lexical'):
+        default = 'match-prefix-limit-v1' if key == 'lexical' else None
+        if left.dependencies.get(key, default)!=right.dependencies.get(key, default):
             raise ExperimentInputError('检索依赖不同: '+key)
     if left.dependencies.get('model') and right.dependencies.get('model') and left.dependencies['model']!=right.dependencies['model']:
         raise ExperimentInputError('改写/重排模型不同')

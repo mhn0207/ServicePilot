@@ -11,6 +11,8 @@ from evaluation.retrieval import ReturnedChunk, canonical_hash
 from tooling.knowledge_chunks import evidence_id
 from tooling.retrieval_ranking import RetrievalRanking
 
+LEXICAL_POLICY = 'all-matches-bm25-before-top-k-v2'
+
 
 def public_chunk(chunk):
     return ReturnedChunk(chunk_id=chunk.chunk_id, title=chunk.title, content=chunk.content)
@@ -27,6 +29,7 @@ def lexical_rank(query, rows):
 class SyntheticIndex:
     """特征哈希向量+cosine，验证算法路径；不是语义 embedding。"""
     identity = 'synthetic-feature-hash-64-v1;cosine;no-semantic-model'
+    lexical_policy = LEXICAL_POLICY
 
     def __init__(self, snapshot):
         self.rows = sorted([public_chunk(c) for c in snapshot.chunks], key=lambda r:r.chunk_id)
@@ -53,8 +56,8 @@ class SyntheticIndex:
     def lexical(self, query, k):
         terms = set(list(dict.fromkeys(RetrievalRanking._search_terms(query)))[:64])
         # 对齐线上 where_document contains（标题仅参与排序）。
-        matching = [r for r in self.rows if any(t in r.content for t in terms)][:k]
-        return lexical_rank(query,matching)
+        matching = [r for r in self.rows if any(t in r.content for t in terms)]
+        return lexical_rank(query,matching)[:k]
 
 
 class SyntheticModel:
@@ -75,6 +78,7 @@ class SyntheticModel:
 
 class ChromaIndex:
     """仅包装显式新建 collection；绝不构造默认 KnowledgeBase。"""
+    lexical_policy = LEXICAL_POLICY
     def __init__(self, collection, snapshot, identity, client=None):
         self.collection, self.identity, self.client = collection, identity, client
         if collection.count():
@@ -118,9 +122,10 @@ class ChromaIndex:
             return []
         clauses=[{'$contains':t} for t in terms]
         data=self.collection.get(where_document=clauses[0] if len(clauses)==1 else {'$or':clauses},
-                                 include=['documents','metadatas'],limit=k)
+                                 include=['documents','metadatas'])
         rows=self.decode(data['ids'],data['documents'],data['metadatas'])
-        return lexical_rank(query,sorted(rows,key=lambda r:r.chunk_id))
+        # 仅用于已验证的有限冻结快照；k 是相关性排序后的返回上限，不是任意存储前缀。
+        return lexical_rank(query,sorted(rows,key=lambda r:r.chunk_id))[:k]
 
 
 def real_index(snapshot, cache_path: Path):

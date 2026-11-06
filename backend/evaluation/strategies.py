@@ -110,7 +110,8 @@ class StrategyRunner:
 
     def identity(self):
         return {'embedding': self.index.identity, 'model': self.model.identity if self.model else None,
-                'prompt': 'rag-strategy-prompts-v2', 'distance': 'cosine'}
+                'prompt': 'rag-strategy-prompts-v2', 'distance': 'cosine',
+                'lexical': getattr(self.index, 'lexical_policy', 'unspecified-injected-policy')}
 
     async def run(self, case_id, query, config: Strategy, context=None):
         if not isinstance(query, str) or not query.strip() or len(query) > 2000:

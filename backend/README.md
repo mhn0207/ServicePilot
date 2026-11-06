@@ -88,6 +88,8 @@ python -X utf8 scripts/evaluate_retrieval_evidence.py --online --base-url http:/
 
 默认 `top_k=3`、`candidate_k=20`、`vector_k=20`、`lexical_k=20`、最多两个额外改写，`cache_mode=bypass`。预算须满足 `top_k <= candidate_k <= vector_k`，混合策略还需 `candidate_k <= lexical_k`。向量/词面各按分支预算取候选；单查询融合后截断到 candidate_k，跨查询联合池最多为查询数乘 candidate_k。最终所有策略返回相同 Top-K，候选不足则保留实际数量及原因。C/D 多出的查询和候选是实际额外成本。
 
+词面分支的 `lexical_k` 是相关性排序后的返回上限。模拟与 Chroma 适配器都先读取当前冻结快照内的全部匹配片段（当前最多72片），执行词面排序后取前 K，不再先对存储顺序使用 `[:k]` 或 `get(limit=k)`。这是小规模离线基准的全匹配评分，不承诺大型语料的扫描开销；扫描范围与返回预算不同。新依赖身份保存 `lexical=all-matches-bm25-before-top-k-v2`，缺此字段的历史报告按 `match-prefix-limit-v1` 识别，可校验/重放，但检索与回答比较均拒绝新旧算法混比。算法身份也参与实例缓存键。线上 `KnowledgeBase.search` 和 ToolManager 行为未改。
+
 词面分词与 BM25 标题加权排序由 `tooling/retrieval_ranking.py` 供生产和评测共用，线上默认搜索行为保持兼容。评测将分支名次用 RRF（`1/(60+rank)`）等权融合，再对不同查询结果做相同名次融合，不相加不可比的原始相似度。各阶段同分按 chunk_id 排序。模型重排只看到查询、候选索引、标题前 160 字和正文前 400 字，ID 映射保留在程序中；有效索引去重、遗漏补齐，越界或输出截断则降级到原排序。
 
 所有命令从本目录执行，`--run-id` 指定的目录必须未使用。默认单策略 B、dev、模拟依赖；矩阵也是 dev。
@@ -139,6 +141,78 @@ python -X utf8 scripts/evaluate_retrieval_evidence.py --online --base-url http:/
 主指标保留执行失败的 eligible 分母，另报成功 eligible 子集。共同成功子集给出明确 case_id 与两个分母（全部共同成功数、其中 eligible 数）。逐例列出 Recall 主判据的胜/平/负和 Hit/Recall/MRR 变化及退化证据。每例保存计划配置、实际步骤、改写列表、分支预算结果、去重/截断数量、降级原因、阶段耗时、缓存读写和实际模型观测。合法空结果、底层请求失败、改写失败回原查询、候选不足跳过重排、重排异常降级分别记录。完整执行率排除失败、降级及流水线缓存命中；无需重排的合法跳过可算完成。
 
 P50/P95 使用 nearest rank，记录样本数，计时是单次顺序执行的请求墙钟时间（含实际结果缓存路径、不含 setup）；小样本不代表生产延迟。本批没有真实效果/费用/性能基线，也没有重复真实实验，未报告波动或真实优胜方案。测试另覆盖真实内存 Chroma 引擎配注入假 embedding 的全库一致性，这仍不是实际模型联调。
+
+## 第三批：单轮回答质量
+
+实现和离线验收完成，真实收益待实验。新协议独立于检索报告与旧四维对话 Judge：`rag-answer-dataset-v1`、`rag-answer-fixture-v1`、`rag-answer-report-v1`、`rag-answer-comparison-v1`。没有修改旧 `/eval`、`/chat`、异步任务、前端或在线模型统计。
+
+`evaluation/corpora/answers.v4.json` 为默认回答标注：原 60 个英语问题、40 dev / 20 validation、118 项必答事实、146 项可选补充、133 项结构化禁止项，保持原 group_id/split，包含 3 个 partial 和 6 个 unanswerable。每个事实带稳定 ID、正文摘录和快照片段 ID；未知内容、可答范围、下一步与参考均独立记录。完整 source_dataset_hash、split 的 source_evaluated_dataset_hash、实际子集 evaluated_dataset_hash/case_set、知识与两个冻结身份都保留，不能混合 dev/validation。v1–v3 静态标注及对应 fixture 全部保留，不原地修改旧哈希。v2 拆分复合事实并补虚构动作/日期禁项，v3 修正 only 措辞，v4 在只观察固定离线向量后按原问题逐例复核必答范围；没有依据真实模型输出改答案，没有改动第二批冻结知识和检索标注。
+
+v4 的 `facts` 只列当前问题不可缺少的结论，`optional_facts` 保留原事实/ID/证据作为可选补充，`scope_rationale` 给出每例取舍。例如 v2-020 不再要求讲已开票更正，v2-041 不再要求讲API令牌重发；v2-023 明确询问交接清单与秘密移除，仍要求全部清单项。可选事实不进入正确性 Judge 的预期ID/参考或 oracle 构建，省略不扣事实覆盖分；若回答额外断言仍须经过完整 grounding 与禁止项检查。未删除原264项事实，没有通过放宽禁止结论来抬分；实际评分合理性仍待独立人工校准。
+
+默认标注哈希 `c88ffa6bada4e55079e532d92750d93b334f773abc74aba44698968fd1024e3b`，回答冻结哈希 `dde0a9d74393463a3a6115a1544d5c068ddb27183e79512aba6775e4219110ca`。静态校验重建全部原文和所有split，核对每条问题/检索用例哈希，并检查必答与可选两组的ID去重和全部引用。没有金额、价格、时效或合同条款时明确未知，partial仍须回答已知核心规则。
+
+```powershell
+# 所有命令均从 backend 执行；默认不会读取 .env、调用模型或连接用户库
+.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --validate-annotations
+.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --run-id answer-dev
+.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --case v2-001 --run-id answer-one
+
+# 消费第二批完整单策略报告；与当前 suite/split/Top-K/实际片段严格核对
+# 固定 fixture 只认识预先录入的精确请求，其他上下文须提供相应fixture或显式真实依赖
+# 默认v4 fixture按修复后的B词面算法制作，上面的example-dev-matrix应由当前代码生成
+.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --source-report data/eval/rag/experiments/example-dev-matrix/B/report.json --run-id answer-from-B
+
+# validation 明确指定一个候选；B为工程默认，不扫描策略矩阵
+.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --split validation --candidate B --case v2-058 --run-id answer-validation-one
+
+# 纯fixture评分记录重放/重新校验汇总，无生成、Judge或检索新请求
+.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --fixture data/eval/rag/answers/answer-dev --run-id answer-replay
+.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --compare data/eval/rag/answers/answer-dev/report.json data/eval/rag/answers/answer-replay/report.json --run-id answer-compare
+
+# 显式选择历史标注，重放既有v3回答报告；不重新运行旧算法或调用模型
+.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --annotations evaluation/corpora/answers.v3.json --fixture data/eval/rag/answers/batch3-final-dev --run-id answer-v3-replay
+
+# 必要相关验收和完整回归
+.venv/Scripts/python -X utf8 -m pytest tests/test_answer_quality.py tests/test_retrieval_evidence.py tests/test_retrieval_strategies.py -q
+.venv/Scripts/python -X utf8 -m pytest tests -q
+```
+
+单策略来源可以是第二批 `ExperimentReport`，或 `retrieval_source(..., runner=显式执行器, config=策略, mode=实际模式)` 注入；继续复用第二批执行状态/轨迹及第一批检索评分器。默认 B + SyntheticIndex，所有阶段分别记录依赖身份；synthetic 检索 + fixture 生成/Judge 明确标记 mixed，不能伪装全真实基线。固定 fixture 是预录入答案和逐项判断，通过实际请求哈希查表；它不做语义理解，也不根据运行中的参考临时打分。
+
+两个分支使用相同生成规则、temperature（默认 0）、max_tokens（默认 2048），彼此无会话历史。生成输入仅问题和本分支实际上下文。上下文采用规范 JSON，保留片段 ID/标题/完整正文；默认上限 16000 字符，包括 JSON 格式开销，可用 `--context-chars` 调整。超预算整分支明确拒绝，无隐式截断；`context_shown=false` 时保存的是未展示的候选文本，没有发送给生成器。oracle 按 fact_id 顺序、每事实最小替代 chunk_id、跨事实稳定去重构建，不从检索输出或模型答案选择。oracle 不硬截 Top-K，记录实际片段数、字符数、文本/哈希及预算，因此不是公平的检索方案。无正向依据的 unanswerable 的 oracle=N/A；retrieved 仍评估诚实处理。检索错误不冒充合法空集，不调用该分支生成，不被 oracle 成功掩盖；合法空召回仍可请求限制说明。
+
+正确性 Judge 与 grounding Judge 是两次独立调用，默认各 8192 输出 token，可用 `--judge-tokens` 设置。前者看标注、逐事实 covered/not_covered/contradicted/uncertain、逐禁止项 violation/no_violation/uncertain 和范围处理 pass/fail/uncertain；后者不接收参考或 oracle 标注，只看本分支实际上下文、实际回答及确定性的句子审计单位，逐断言返回 supported/unsupported/uncertain。每个单位必须被覆盖；需要标注 extraction=complete/partial/unknown。引用的回答 span 和证据 quote 必须真实存在；未知片段、未展示证据、重复断言/ID、遗漏事实、无证据 supported、非法 JSON/重复键/NaN/布尔偏移、空响应和未完成输出均不能评分通过。确定性检查只核对结构/引用/完整性，语义蕴含、否定、断言抽取是否充分仍需真实 Judge 与人工校准；stub 输入隔离测试不证明真实模型抗注入。
+
+句子审计单位同时识别标点和 LF/CRLF/CR 换行，未带句末标点的段落也必须检查，避免漏审整行业务断言。新报告的提示词/评分身份增加 `sentence-units-v2`；历史只有三项提示词哈希的报告按原单位规则重放，保留历史评分口径，不能冒充已修复的完整性验收，也不能与新规则报告直接比较。固定fixture仍按实际请求哈希匹配，不改写旧fixture哈希。
+
+| 报告项 | 分子、分母与限制 |
+| --- | --- |
+| generation_success_rate | 正常完成生成数 / 全部适用分支；检索失败和预算拒绝也留在分母 |
+| judge_coverage | 两个 Judge 完整有效且无 uncertain/不完整抽取的任务数 / 全部适用分支；另列 valid/generated |
+| end_to_end_complete | 完整有效评判任务数 / 全部适用任务；完成不等于内容正确 |
+| end_to_end_success | 事实全覆盖、无禁项、范围处理通过、所有事实断言有据且无未决的任务数 / 全部适用任务 |
+| fact_coverage_micro_lower | scored 子集 covered 事实数 / 该子集全部必要事实数，uncertain 不当 covered；macro 是有事实样本覆盖比例的均值 |
+| forbidden_violations | violation 数 / scored 子集所有禁项，另列 uncertain；关键违规逐例单列，不被均分抵消 |
+| grounding_supported_lower | 抽取完整且可评分子集中 supported 事实断言数 / 该子集事实断言数；uncertain 不当 supported；partial/unknown 抽取不产生整段比例 |
+
+scored 是两个 Judge 均通过结构/证据校验的子集，允许保留 uncertain 用于保守覆盖统计；valid 进一步排除未决。两个集合均明确列任务 ID、完整分母、缺失/未决数量。Judge 异常不填 0 或满分，不混入有效质量均值。零事实、零断言、零禁止项为 null/N/A；没有可核验断言不默认为 100% 有据。成对报告列共同生成/共同有效交集及分母、每例上下文/失败/差异，同时保留全部主分母。比较固定同一回答标注、知识、问题集合/split、Judge/生成配置、上下文政策和阶段模式，研究变量为检索配置；A/B/C/D 本身差异不造成误拒绝，其他模型混杂变量拒绝。缺样本/未完成拒绝，评分不完整或有关键未决则 inconclusive；没有自动通过或晋升基线。
+
+输出只追加到 ignored 的 `data/eval/rag/answers/<run_id>/`，已存在即拒绝。保存 `report.json`、快照、标注、来源检索报告、`review.json`。报告记录 Git HEAD/工作区、来源 run/config/trace、各阶段依赖与实际调用/请求哈希/参数/耗时/供应商用量，重放保留原模式、原调用观测并另记 observation/replay_of/replayed_at，不是本次实测。供应商没返回 token 为 null，没调用才汇总为 0；解析失败也保留已返回用量。SDK 与业务重试都为 0，没有估算不可见尝试和费用。review 清单覆盖高分、低分、uncertain、关键违规，包含问题、实际上下文、回答、判定和待填 human_verdict/disagreement/reviewer；没有替用户完成复核。
+
+退出码：**2** 为输入/配置/身份/报告/目录校验失败，**1** 为报告写入成功但存在阶段错误或未决，**0** 为没有阶段错误/未决；均不代表所有回答质量通过。默认 dev fixture 故意包含 uncertain，因此预期 1。
+
+真实小样本入口已提供，以下命令本批没有执行，需用户另行明确授权。只从安全注入的进程环境读取 `SERVICEPILOT_ANSWER_GENERATION_MODEL/API_KEY/BASE_URL` 和 `SERVICEPILOT_ANSWER_JUDGE_MODEL/API_KEY/BASE_URL`；BASE_URL 可省略，不读取真实 `.env`，报告只保留模型 ID 和端点哈希。独立 SDK 直接调用，绕开线上全局统计/缓存/熔断，DeepSeek 端点显式关闭隐式 thinking。真实模式必须 `--enable-provider` 且给出 `--limit` 或 `--case`；默认要求第二批真实来源报告，真实生成消费模拟检索时必须额外 `--allow-mixed`，始终标为 mixed，不能与全真实报告判优。
+
+```powershell
+# 先通过第二批独立环境准备真实 B 报告，再经另行授权执行本条；最多1例、每适用分支1次生成+2次Judge
+.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --mode real --enable-provider --limit 1 --source-report data/eval/rag/experiments/real-dev-B/B/report.json --generation-tokens 2048 --judge-tokens 8192 --run-id real-answer-one
+
+# 显式混合实验入口示例，真实生成/Judge + 默认模拟检索；不是全真实基线，本批未执行
+.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --mode real --enable-provider --allow-mixed --case v2-035 --run-id mixed-answer-one
+```
+
+英语合成资料不代表生产政策；没有真实效果、费用、重复实验波动、中文收益或真实样本人工校准。本批仅单轮独立 RAG，第四批可复用身份、执行记录、上下文与逐项评分接口，但没有实现多轮 Agent 或展示闭环。
 
 ## 数据边界
 
