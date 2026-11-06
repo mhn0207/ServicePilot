@@ -12,7 +12,7 @@ class EvaluationJobs:
         self.tasks = set()
         self.lock = asyncio.Lock()
 
-    def submit(self, runner):
+    def submit(self, runner, *, run_id=None):
         if sum(j['status'] in ('queued', 'running') for j in self.jobs.values()) >= self.capacity:
             raise RuntimeError('评测队列已满，请稍后再试')
         for key in list(self.jobs):
@@ -22,6 +22,8 @@ class EvaluationJobs:
                 del self.jobs[key]
         job = dict(job_id=uuid.uuid4().hex, status='queued', completed=0, total=0,
                    created_at=time.time(), result=None, error=None)
+        if run_id is not None:
+            job['run_id'] = run_id
         self.jobs[job['job_id']] = job
         task = asyncio.create_task(self._execute(job, runner))
         self.tasks.add(task)

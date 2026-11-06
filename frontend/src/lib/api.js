@@ -66,6 +66,51 @@ export async function requestSearch(settings, query, topK = 5) {
   return requestFor(settings, `/search?${params}`, { method: 'POST' })
 }
 
+export async function ragTaskKey(settings) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(settings.pythonToken || ''))
+  const identity = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, '0')).join('')
+  return `zhiying.eval:rag:agent-dev-v1:${apiBaseUrl(settings)}:${settings.userId}:${identity}`
+}
+
+export async function requestRagRuns(settings, runId = '') {
+  return requestFor(settings, `/eval/rag/runs${runId ? '/' + encodeURIComponent(runId) : ''}`)
+}
+
+export async function clearUnknownRagSubmission(settings) {
+  const key = await ragTaskKey(settings)
+  if (sessionStorage.getItem(key) === 'unknown') sessionStorage.removeItem(key)
+}
+
+export async function runRagEvaluation(settings, options = {}, resumeOnly = false) {
+  const key = await ragTaskKey(settings)
+  let saved = sessionStorage.getItem(key)
+  if (saved === 'unknown') throw new Error('首次提交结果未知，请先刷新历史报告核对；不会自动重新提交')
+  if (!saved && resumeOnly) return null
+  let initial
+  if (saved) initial = {job_id: saved, status: 'queued', completed: 0, total: 0}
+  else {
+    sessionStorage.setItem(key, 'unknown')
+    try {
+      initial = await requestFor(settings, '/eval/rag/run', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({suite:'agent-dev-v1'}) })
+    } catch (error) {
+      if (error.status && error.status < 500) sessionStorage.removeItem(key)
+      else error.message = `首次提交结果未知，请核对历史报告：${error.message}`
+      throw error
+    }
+    if (!initial?.job_id) throw new Error('提交结果未知：接口未返回任务 ID，请核对历史报告')
+    sessionStorage.setItem(key, initial.job_id)
+  }
+  try {
+    const result = await pollEvaluation(initial, id => requestFor(settings, `/eval/jobs/${encodeURIComponent(id)}`), options)
+    if (result) sessionStorage.removeItem(key)
+    return result
+  } catch (error) {
+    if (error.terminal || error.status === 404) sessionStorage.removeItem(key)
+    if (error.status === 404) error.message = '任务已过期（可能服务重启）；请查看历史报告，运行中任务不能恢复'
+    throw error
+  }
+}
+
 export async function requestChat(settings, message) {
   const payload = buildChatPayload(settings, message)
   const attemptKey = JSON.stringify([apiBaseUrl(settings), settings.userId, settings.conversationId, message])

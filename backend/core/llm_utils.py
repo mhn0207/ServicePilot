@@ -23,9 +23,16 @@ async def create_message(client: Any, *, stage: str = "unspecified", **kwargs: A
     try:
         response = await client.messages.create(**kwargs)
         status = "success"
+        observer = getattr(client, "evaluation_observer", None)
+        if observer is not None:
+            observer(stage, kwargs, response)
         return response
     finally:
-        record_llm_call(stage, kwargs.get("model", "unknown"), started, status, response)
+        recorder = getattr(client, "evaluation_recorder", None)
+        if recorder is not None:
+            recorder(stage, kwargs.get("model", "unknown"), started, status, response)
+        else:
+            record_llm_call(stage, kwargs.get("model", "unknown"), started, status, response)
 
 
 def extract_text_content(content: Iterable[Any], separator: str = "\n") -> str:

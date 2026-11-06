@@ -305,6 +305,7 @@
             {{ busy && pendingAction === 'evaluation' ? '评测运行中' : '运行评测' }}
           </button>
         </div>
+        <RagEvaluation :settings="settings" />
         <div v-if="evalData" class="evaluation-content">
           <div class="evaluation-summary">
             <div class="score-hero">
@@ -471,6 +472,7 @@ import {
 
 import AppIcon from './components/AppIcon.vue'
 import RequestInspector from './components/RequestInspector.vue'
+import RagEvaluation from './components/RagEvaluation.vue'
 
 import { createRequestState } from './lib/requestState'
 

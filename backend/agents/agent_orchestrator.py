@@ -16,6 +16,7 @@
   - Agent 置信度低于阈值 → 自动升级到更高级 Agent 或转人工
 """
 import asyncio
+from contextvars import ContextVar
 import inspect
 import json
 import logging
@@ -42,6 +43,9 @@ from core.intent_recognizer import IntentCategory, IntentRecognizer, UrgencyLeve
 from core.llm_utils import create_message, extract_text_content
 
 logger = logging.getLogger(__name__)
+
+# Task-local observational identity; no shared tool/model state.
+tool_call_context = ContextVar("agent_tool_call_context", default=None)
 
 
 # ── 数据结构 ──────────────────────────────────────────────────────────────────
@@ -196,6 +200,7 @@ class Request:
     before_unsafe_tool: Any = field(default=None, repr=False)
     unsafe_tool_calls: set = field(default_factory=set, repr=False)
     conversation_state: Optional[Dict[str, Any]] = None
+    tool_observer: Any = field(default=None, repr=False)
 
 
 @dataclass
@@ -396,9 +401,13 @@ class BaseAgent:
                             req.tool_attempts.append({"tool_name": name, "retry_safe": spec.retry_safe})
                             if not spec.retry_safe and req.before_unsafe_tool is not None:
                                 await req.before_unsafe_tool(name)
-                            result = spec.handler(req, args)
-                            if inspect.isawaitable(result):
-                                result = await result
+                            observation_token = tool_call_context.set({"role": self.agent_type.value, "tool_use_id": tool_use_id})
+                            try:
+                                result = spec.handler(req, args)
+                                if inspect.isawaitable(result):
+                                    result = await result
+                            finally:
+                                tool_call_context.reset(observation_token)
                             tools_used.append(name)
                             if isinstance(result, dict) and "success" in result:
                                 result_success = bool(result.get("success"))
@@ -428,6 +437,8 @@ class BaseAgent:
                             "retry_safe": spec.retry_safe if spec else True,
                         }
                     )
+                    if req.tool_observer is not None:
+                        req.tool_observer(dict(tool_traces[-1], result=result))
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": tool_use_id,
@@ -766,13 +777,15 @@ class AgentOrchestrator:
         model:    str = "claude-3-5-sonnet-20241022",
         skill_manager: Optional[Any] = None,
         rag_tool_manager: Optional[Any] = None,
+        client: Optional[Any] = None,
+        intent_recognizer: Optional[Any] = None,
     ):
         kwargs: Dict[str, Any] = {"api_key": api_key}
         if base_url:
             kwargs["base_url"] = base_url
-        client = AsyncAnthropic(**kwargs)
+        client = client if client is not None else AsyncAnthropic(**kwargs)
 
-        self._intent_recognizer = IntentRecognizer(api_key=api_key, base_url=base_url, model=model)
+        self._intent_recognizer = intent_recognizer if intent_recognizer is not None else IntentRecognizer(api_key=api_key, base_url=base_url, model=model)
         self._skill_manager = skill_manager
         self._composer = ResponseComposer(client, model, skill_manager)
         self._shared_tools: Dict[str, AgentToolSpec] = {}

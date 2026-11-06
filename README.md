@@ -118,7 +118,7 @@ python -X utf8 scripts/evaluate_retrieval_evidence.py
 
 从 `backend` 执行 `.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --validate-annotations` 校验标注；直接运行同一脚本可执行 dev 离线成对评测。默认 fixture 含故意的漏答、矛盾、关键违规和 uncertain，报告成功生成后退出 1；退出 0 只表示执行/评价无错误和未决，不表示质量全通过。逐事实覆盖、禁止结论、断言依据与可答性分别报告，不设总分。失败保留全部适用任务分母；零事实/零断言为 N/A，uncertain 保留，抽取不完整不报告整段 grounding 比例。产物位于 ignored 的 `backend/data/eval/rag/answers/<run_id>/`，含可检查的 `review.json`；尚无真实模型结果或独立人工校准。具体重放、比较和需另行授权的真实小样本命令见 [backend/README.md](backend/README.md)。本批只支持单轮，不接入 Agent、/chat 或前端。
 
-### 第四批：Agent 与展示闭环（计划）
+### 第四批：Agent 与展示闭环（离线实现）
 
 先检查实际检索调用和查询质量，再评估多轮省略、切换信息和复合诉求。区分必需、可选和不适用检索；不能将未调用工具一律判错。关联 run_id、case_id、request_id、知识片段、工具明细和评分，复用异步任务接口与评测页面。
 
@@ -143,3 +143,5 @@ Orchestrator 用例与完整 /chat 用例分开报告；后者只取少量场景
 维护者：mhn。本版本基于本机 ZhiYing / ZhiYingFrontend 工作区整理；后端原 Git 来源为 [Biscuit-AI531/EchoMind](https://github.com/Biscuit-AI531/EchoMind)，本次整理前 HEAD 为 b1adff4，工作区含未提交迭代。目录整理、文档提交规则整理与后续开发不构成全部代码原创声明。
 
 本次未在源工作区发现项目级 LICENSE / NOTICE，未擅自新增授权许可证；后续公开分发前应核实上游授权。依赖软件按各自许可证使用。
+
+第四批新增固定 Agent 离线入口：从 `backend` 执行 `.venv/Scripts/python -X utf8 scripts/evaluate_agents.py`，通过真实编排与工具循环生成独立 `scope=orchestrator` 报告，再由 `/eval/rag/run`、现有任务队列和评测页 RAG 区块展示。检索为实验 B / Top-K=3，模型为 fixture，向量为 synthetic；分子分母、错误、N/A 与语义未决分开保留。报告追加到 `backend/data/eval/rag/agents/`，历史报告可跨重启读取，运行中任务不恢复。真实质量、中文收益和人工校准仍待验证；完整命令和边界见前后端 README。

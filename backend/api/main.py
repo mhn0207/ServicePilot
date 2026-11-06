@@ -670,6 +670,41 @@ async def knowledge_stats():
     return {"total_chunks": await kb.doc_count_async()}
 
 
+class RagRunInput(BaseModel):
+    model_config = {"extra": "forbid"}
+    suite: Literal["agent-dev-v1"] = "agent-dev-v1"
+
+
+@app.post("/eval/rag/run", status_code=202)
+async def run_rag_eval(body: Optional[RagRunInput] = None):
+    from evaluation.agent_evaluation import run_agents
+    run_id = uuid.uuid4().hex
+    try:
+        return _eval_jobs.submit(lambda progress: run_agents(progress=progress, run_id=run_id), run_id=run_id)
+    except RuntimeError:
+        raise HTTPException(429, "评测队列已满，请稍后再试")
+
+
+@app.get("/eval/rag/runs")
+async def rag_runs():
+    from evaluation.agent_evaluation import list_agent_runs
+    return list_agent_runs()
+
+
+@app.get("/eval/rag/runs/{run_id}")
+async def rag_run(run_id: str):
+    import re
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", run_id):
+        raise HTTPException(400, "无效运行 ID")
+    from evaluation.agent_evaluation import read_agent_run
+    try:
+        return read_agent_run(run_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "评测报告不存在")
+    except (ValueError, OSError):
+        raise HTTPException(400, "报告路径或协议无效")
+
+
 @app.post("/eval/run", status_code=202)
 async def run_eval(body: Optional[EvalRunInput] = None):
     if _evaluator is None:

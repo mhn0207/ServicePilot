@@ -217,3 +217,22 @@ scored 是两个 Judge 均通过结构/证据校验的子集，允许保留 unce
 ## 数据边界
 
 `data/demo_docs/sample_knowledge.json` 是线上默认演示知识；`evaluation/corpora/` 是显式评测专用静态资料，不能自动 seed 到线上库。数据库、会话、画像、日志、历史评测和本机 `.env` 不提交。development 空库可自动导入原示例；production 不自动导入。工具不执行真实退款或创建工单。
+
+## 第四批：Agent 离线执行与页面
+
+新增固定 `agent-dev-v1` 开发协议样例。外部模型使用脚本化 SDK 响应，检索使用第二批 StrategyRunner 的 B 策略、Top-K=3 和内存特征哈希向量；这是实验适配器，不是业务默认搜索算法。真实 AgentOrchestrator 负责角色路由、工具白名单、工具循环及 Composer。中文样例只引用原有六篇演示资料，不能解释为中文质量基准。
+
+从 backend 使用本项目 Python 3.12 环境：
+
+```powershell
+.venv/Scripts/python -X utf8 scripts/evaluate_agents.py
+.venv/Scripts/python -X utf8 -m pytest tests/test_agent_evaluation.py tests/test_agent_api.py tests/test_chat_reliability.py -q
+```
+
+追加报告保存在 ignored 的 `data/eval/rag/agents/<run_id>/`。检索调用覆盖、角色、实体污染、返回/实际展示证据与回答检查分别呈现分子分母；无适用项为 N/A，未完成的语义 Judge 保留未决，不用零分或总分掩盖。报告保存实际生成输入，Composer 仅看到子 Agent 文本时不宣称其直接看到了原始证据。模拟依赖调用计数不是供应商用量；没有调用真实模型或证明真实收益。
+
+`POST /eval/rag/run` 只接受 `{"suite":"agent-dev-v1"}`（也可省略 body），返回 202、job_id 和 run_id；复用 `GET /eval/jobs/{job_id}` 查询有界串行队列。`GET /eval/rag/runs` 与 `GET /eval/rag/runs/{run_id}` 读取终态报告；使用固定目录，拒绝路径穿越及链接逃逸。配置 Bearer 鉴权时均沿用 admin 权限。进程重启不恢复运行中的任务，终态磁盘报告可继续读取。新入口不调用旧 `/eval/run` Judge 链路。
+
+现有评测页新增 RAG 区块，支持明确启动、已知任务恢复、历史报告和逐轮展开。HTTP 聊天验收单独标记 `scope=http_chat_fixture`，用 fakeredis 与固定模型验证实际路由回执和实体隔离；它不代表真实 Redis/Chroma、生产并发或业务模型验收。真实小样本和人工校准需要后续授权。
+
+第四批重放：`.venv/Scripts/python -X utf8 scripts/evaluate_agents.py --replay batch4-final-offline`，只读取已保存报告并重新汇总，不发模型/检索请求；Judge fixture 或评分代码身份改变时明确拒绝重放，历史原报告仍可读取。`--validate-annotations` 校验七场景九轮及知识身份。CLI 退出 0 表示执行终态完成，不表示检查全通过或质量回归通过。

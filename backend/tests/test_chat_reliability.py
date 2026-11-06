@@ -330,3 +330,28 @@ async def test_http_timing_includes_memory_commit_and_metrics_work_without_extra
     histogram.observe(3000)
     assert next(s.value for s in histogram.collect()[0].samples
                 if s.name.endswith("_bucket") and s.labels["le"] == "3000.0") == 1
+
+@pytest.mark.asyncio
+async def test_batch4_http_chat_fixture_receipt_and_current_order(services, tmp_path):
+    """scope=http_chat_fixture: real route/transactions, fixture model and fake Redis."""
+    memory, orch, model, http = services
+    responses=[]
+    for index, message in enumerate(['订单号 #11111，支付99元', '改为订单号 #22222', '这笔订单还缺什么资料']):
+        payload=body(message, f'batch4-{index}', 'batch4')
+        first=await http.post('/chat',json=payload)
+        assert first.status_code == 200
+        calls=model.messages.create.await_count
+        retry=await http.post('/chat',json=payload)
+        assert retry.json() == first.json()
+        assert model.messages.create.await_count == calls
+        responses.append(first.json())
+    assert responses[2]['entities']['order_id'] == ['22222']
+    assert not responses[2]['entities']['amount']
+    other=await http.post('/chat',json={**body('这笔订单还缺什么资料','isolated','batch4'),'user_id':'another-user'})
+    assert not other.json()['entities']['order_id']
+    assert model.messages.create.await_args.kwargs['messages'][-1]['content']
+    from pathlib import Path
+    from uuid import uuid4
+    destination=Path(__file__).resolve().parents[1]/'data/eval/rag/http_chat_fixture'/uuid4().hex
+    destination.mkdir(parents=True)
+    (destination/'report.json').write_text(json.dumps({'scope':'http_chat_fixture','mode':'fixture', 'status':'completed', 'checks':{'receipt_retries':3,'current_order':'22222','user_isolation':True},'requests':[r['request_id'] for r in responses]},ensure_ascii=False),encoding='utf-8')
