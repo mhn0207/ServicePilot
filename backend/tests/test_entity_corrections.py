@@ -29,7 +29,22 @@ def test_retraction_clears_same_order_amount_even_when_incoming_is_empty(message
     assert result['entities']['amount']==[]
     assert 'amount' not in result['sources']
 
-@pytest.mark.parametrize('message,required', [('取消自动续费是否自动退款？',True),('重复扣款需要什么资料？',True),('退款多久到账',True),('请介绍退款政策',True),('退款金额需要改为99元',False),('你好',False),('订单号改为22222',False)])
+@pytest.mark.parametrize('message,required', [
+ ('取消自动续费是否自动退款？',True),
+ ('取消自动扣费后，已经支付的钱会自动退回吗？',True),
+ ('关闭自动扣款后还能退钱吗？',True),
+ ('退订之后能退费吗？',True),
+ ('请解释自动续订的规则',True),
+ ('已经支付的钱会自动退回吗？',True),
+ ('款项可以返还吗？',True),
+ ('重复扣款需要什么资料？',True),
+ ('退款多久到账',True),('请介绍退款政策',True),
+ ('退款金额需要改为99元',False),
+ ('自动扣费金额改为99元',False),
+ ('退回的金额改为99元',False),
+ ('快递退回仓库了吗？',False),
+ ('你好',False),('订单号改为22222',False),
+])
 def test_policy_questions_require_actual_knowledge_tool_before_answer(message,required):
     calls=[]; returns=[]
     async def create(**kwargs):

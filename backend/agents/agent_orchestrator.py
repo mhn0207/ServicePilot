@@ -100,6 +100,7 @@ class AgentStats:
     success:   int   = 0
     total_ms:  float = 0.0
     monitor_penalty: float = 0.0
+    in_flight: int = 0
 
     samples: Any = field(default_factory=lambda: deque(maxlen=50))
     retry_at: float = 0.0
@@ -140,12 +141,16 @@ class AgentStats:
             self.observer(ms)
 
     @property
+    def completed(self) -> int:
+        return self.total - self.in_flight
+
+    @property
     def success_rate(self) -> float:
-        return self.success / self.total if self.total else 1.0
+        return self.success / self.completed if self.completed else 1.0
 
     @property
     def avg_ms(self) -> float:
-        return self.total_ms / self.total if self.total else 0.0
+        return self.total_ms / self.completed if self.completed else 0.0
 
     def routing_score(self) -> float:
         """路由评分：成功率高、延迟低的 Agent 得分高。"""
@@ -285,6 +290,7 @@ class BaseAgent:
                 self.stats.probe_running = True
                 self.stats.probe_owner = req.request_id
         self.stats.total += 1
+        self.stats.in_flight += 1
         try:
             call_result = await self._call_llm(req)
             ms = (time.monotonic() - t0) * 1000
@@ -325,6 +331,8 @@ class BaseAgent:
                 status="failed",
                 error_code="agent_failed",
             )
+        finally:
+            self.stats.in_flight -= 1
 
     async def _call_llm(self, req: Request) -> AgentCallResult:
         def _clean(s: str) -> str:
@@ -387,7 +395,11 @@ class BaseAgent:
                 # than generic model knowledge or workflow-only Skills. Corrections
                 # and greetings alone do not require retrieval.
                 policy_question = (
-                    re.search(r'退款|续费|重复扣款|企业合同|套餐|登录|认证|\b401\b|\b403\b', req.message)
+                    re.search(
+                        r'退款|退费|退钱|退订|续费|续订|订阅|自动扣(?:费|款)|'
+                        r'(?:钱|款|费用|金额).{0,12}(?:退回|返还)|'
+                        r'(?:退回|返还).{0,12}(?:钱|款|费用|金额)|'
+                        r'重复扣款|企业合同|套餐|登录|认证|\b401\b|\b403\b', req.message)
                     and re.search(r'[?？]|是否|怎么|如何|什么|多少|多久|吗|请(?:说明|介绍|解释)|能否|能保证|政策|规则|流程|时效|资格|条件', req.message)
                 )
                 if _ == 0 and not reused and policy_question and 'search_knowledge_base' in tools:
@@ -1338,6 +1350,8 @@ class AgentOrchestrator:
                     "recent_total": recent_n, "recent_success_rate": recent_sr, "recent_avg_ms": recent_ms,
                     "recovery_state": "probing" if agent.stats.probe_running else "cooldown" if agent.stats.retry_at else "healthy",
                     "total":        agent.stats.total,
+                    "in_flight":    agent.stats.in_flight,
+                    "completed":    agent.stats.completed,
                     "success_rate": round(agent.stats.success_rate, 3),
                     "avg_ms":       round(agent.stats.avg_ms, 1),
                     "monitor_penalty": round(agent.stats.monitor_penalty, 3),
