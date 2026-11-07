@@ -114,7 +114,9 @@ async def test_route_regression_does_not_replace_baseline_even_after_repeated_ru
     ev._judge = SimpleNamespace(_model="judge", _client=SimpleNamespace(base_url="test"), _max_tokens=4096,
                                judge=AsyncMock(return_value=QualityScores(1, 1, 1, 1)))
     cases = [{"question": "退款", "expected_agent": "billing"}]
-    assert (await ev.run(dialog_cases=cases)).pass_rate == 1
+    first = await ev.run(dialog_cases=cases)
+    assert first.pass_rate == 1
+    ev.promote_baseline(first)
     baseline = ev._baseline_path.read_text(encoding="utf-8")
     answer.agent_type = AgentType.TECHNICAL
     for _ in range(2):

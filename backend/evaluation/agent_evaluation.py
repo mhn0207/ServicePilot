@@ -11,13 +11,14 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 from uuid import uuid4
 from agents.agent_orchestrator import AgentOrchestrator, Request, tool_call_context
-from agents.tools import AgentToolSpec
+from agents.tools import build_shared_rag_tools
 from core.llm_utils import extract_text_content
 from core.intent_recognizer import IntentCategory, UrgencyLevel
 from evaluation.experiment_dependencies import SyntheticIndex
 from evaluation.retrieval import build_snapshot, canonical_hash, checked_execution
 from evaluation.strategies import StrategyRunner, preset
 from evaluation.answer_quality import check_correctness, check_grounding, answer_units
+from evaluation.provenance import source_identity, write_source_bundle
 BASE=Path(__file__).resolve().parents[1]
 REPORT_ROOT=BASE/'data/eval/rag/agents'
 PROTOCOL='agent-evaluation-v1'
@@ -85,7 +86,7 @@ class SDK:
         used=any(isinstance(m['content'],list) and any(isinstance(b,dict) and b.get('type')=='tool_result' for b in m['content']) for m in kwargs['messages'])
         if kwargs.get('tools') and not self.fixture.get('skip_tool') and not used:
             query=self.req.message+' '+' '.join(self.req.entities.get('order_id',[]))
-            content=[dict(type='tool_use',id='tool-'+uuid4().hex,name='search_knowledge',input={'query':query})]
+            content=[dict(type='tool_use',id='tool-'+uuid4().hex,name='search_knowledge_base',input={'query':query,'top_k':3})]
         else: content=[dict(type='text',text=self.fixture['answer'])]
         return NS(content=content,stop_reason='end_turn')
 def metric(values):
@@ -132,7 +133,9 @@ async def run_agents(progress=None,run_id=None):
         except OSError:
             pass  # Runtime images need not include Git; source module hashes remain available.
         report['identities'].update(git_head=git_head,workspace_dirty=workspace_dirty,
-            code_modules={p.relative_to(BASE).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (BASE/'agents/agent_orchestrator.py',BASE/'core/llm_utils.py',BASE/'evaluation/agent_scoring.py')})
+            source=source_identity(BASE),
+            code_modules={p.relative_to(BASE).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in (BASE/'agents/agent_orchestrator.py',BASE/'core/llm_utils.py',BASE/'evaluation/agent_scoring.py',BASE/'evaluation/answer_quality.py')})
+        write_source_bundle(BASE,target,report['identities']['source'])
         for name,value in [('snapshot.json',snapshot.model_dump()),('cases.json',data),('sdk.json',fixtures),('judge.json',load(BASE/'evaluation/fixtures/agent.judge.v1.json'))]:
             (target/name).write_text(json.dumps(value,ensure_ascii=False,indent=2),encoding='utf-8')
         total=sum(len(c['turns']) for c in data['cases'])
@@ -146,7 +149,10 @@ async def run_agents(progress=None,run_id=None):
                 t=dict(case_id=case['id'],turn_id=str(i+1),question=req.message,request_id=req.request_id,roles=[],queries=[],events=[],answer='',checks={},generation_inputs=[],annotations=label)
                 report['turns'].append(t)
                 sdk.turn=t
-                async def search(request,args):
+                async def search_with_rewrite(tool_name,query,top_k=5):
+                    if tool_name != 'knowledge_search' or top_k != 3:
+                        raise ValueError('offline business retrieval contract mismatch')
+                    args=dict(query=query,top_k=top_k)
                     e=dict(run_id=run_id,case_id=case['id'],turn_id=str(i+1),request_id=req.request_id,query=args['query'],parameters=copy.deepcopy(args),status='running',shown_chunks=[],cached=False,degraded=False,source='StrategyRunner B synthetic')
                     e.update(tool_call_context.get() or {})
                     t['events'].append(e)
@@ -155,8 +161,8 @@ async def run_agents(progress=None,run_id=None):
                     ex,tr=await runner.run(case['id'],args['query'],preset('B'))
                     ex=checked_execution(ex,snapshot); rows=[r.model_dump() for r in ex.results]
                     e.update(status=ex.status,shown_chunks=rows,chunks_hash=canonical_hash(rows),strategy_trace=tr.model_dump())
-                    return dict(success=ex.status=='success',chunks=rows,source='evaluation-B')
-                o.set_shared_tools({'search_knowledge':AgentToolSpec('search_knowledge','Read public snapshot',{'type':'object','properties':{'query':{'type':'string'}},'required':['query'],'additionalProperties':False},search,('general','technical','billing'))})
+                    return NS(success=ex.status=='success',data=rows,cached=False,reranked=False,error=ex.error_code)
+                o.set_shared_tools(build_shared_rag_tools(NS(search_with_rewrite=search_with_rewrite)))
                 def observe(trace):
                     event = next((e for e in t['events'] if e.get('tool_use_id') == trace.get('tool_use_id')), None)
                     if event is not None:
@@ -192,7 +198,9 @@ def replay_agent_run(run_id):
     r=copy.deepcopy(read_agent_run(run_id))
     identity=r.get('identities',{})
     actual=hashlib.sha256((BASE/'evaluation/agent_scoring.py').read_bytes()).hexdigest()
-    if identity.get('judge') != judge_identity() or identity.get('code_modules',{}).get('evaluation/agent_scoring.py') != actual:
+    quality_hash=hashlib.sha256((BASE/'evaluation/answer_quality.py').read_bytes()).hexdigest()
+    if (identity.get('judge') != judge_identity() or identity.get('code_modules',{}).get('evaluation/agent_scoring.py') != actual
+            or identity.get('code_modules',{}).get('evaluation/answer_quality.py') != quality_hash):
         raise ValueError('incompatible Judge/scoring identity; historical report remains readable')
     for t in r['turns']:
         if t.get('answer'): t['checks']=score(t['annotations'],t)

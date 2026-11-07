@@ -48,11 +48,13 @@ class AnswerConfig(StrictModel):
     sdk_retries: Literal[0] = 0
 
 
-def protocol_identity(*, legacy=False):
+def protocol_identity(*, legacy=False, span_coverage=True):
     identity = {name: canonical_hash(prompt) for name, prompt in (
         ('generation-v1', GEN_SYSTEM), ('correctness-v1', CORRECT_SYSTEM), ('grounding-v1', GROUND_SYSTEM))}
     if not legacy:
         identity['sentence-units-v2'] = canonical_hash('punctuation-or-CR-LF-boundary; preserve Python offsets; reject omitted nonblank units')
+        if span_coverage:
+            identity['span-coverage-v3'] = canonical_hash('complete extraction requires union of spans to cover every nonspace, nonpunctuation character; not semantic entailment')
     return identity
 
 
@@ -130,7 +132,7 @@ def check_correctness(value, case, answer):
     return result
 
 
-def check_grounding(value, answer, context, *, legacy_units=False):
+def check_grounding(value, answer, context, *, legacy_units=False, span_coverage=True):
     result = Grounding.model_validate(value)
     exact_ids(result.claims, [c.claim_id for c in result.claims], 'claim_id')
     units = {u['unit_id']: u for u in answer_units(answer, legacy=legacy_units)}
@@ -158,6 +160,14 @@ def check_grounding(value, answer, context, *, legacy_units=False):
                 raise ValueError('citation not shown to generator')
     if seen != set(units):
         raise ValueError('answer units omitted')
+    if span_coverage and result.extraction == 'complete':
+        import unicodedata
+        covered = set()
+        for row in result.claims:
+            covered.update(range(row.answer_span.start, row.answer_span.end))
+        if any(i not in covered and not char.isspace() and not unicodedata.category(char).startswith('P')
+               for i, char in enumerate(answer)):
+            raise ValueError('uncovered answer text in complete extraction')
     return result
 
 

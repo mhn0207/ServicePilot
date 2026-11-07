@@ -136,7 +136,7 @@ def validate_answer_report(report, suite):
             or (report.observation == 'replayed' and not (report.replay_of and report.replayed_at))):
         raise ValueError('missing replay provenance')
     if (not report.completed or report.identity != input_identity(suite, report.identity['case_set'])
-            or report.run_identity != report_identity(report) or report.prompts not in (protocol_identity(), protocol_identity(legacy=True))
+            or report.run_identity != report_identity(report) or report.prompts not in (protocol_identity(), protocol_identity(span_coverage=False), protocol_identity(legacy=True))
             or report.source_trace_hash != canonical_hash([t.model_dump() for t in report.source.traces])):
         raise ValueError('invalid report identity')
     deps = report.dependencies
@@ -201,7 +201,8 @@ def validate_answer_report(report, suite):
             if r.correctness:
                 check_correctness(r.correctness.model_dump(), c, r.answer)
             if r.grounding:
-                check_grounding(r.grounding.model_dump(), r.answer, r.context, legacy_units=legacy_units)
+                check_grounding(r.grounding.model_dump(), r.answer, r.context, legacy_units=legacy_units,
+                    span_coverage='span-coverage-v3' in report.prompts)
             if generated:
                 for call, result in zip(r.calls[1:], [r.correctness,r.grounding]):
                     if (call.status == 'success') != (result is not None):

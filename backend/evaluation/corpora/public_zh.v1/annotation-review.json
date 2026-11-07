@@ -1,0 +1,1368 @@
+{
+  "status": "human_accepted_displayed_annotations",
+  "rows": [
+    {
+      "case_id": "pubzh-001",
+      "split": "dev",
+      "question": "GitHub接口回403，remaining已经是0。是不是给Token加权限就能马上继续？",
+      "evidence": [
+        {
+          "source_id": "gh-troubleshooting",
+          "url": "https://docs.github.com/zh/rest/using-the-rest-api/troubleshooting-the-rest-api",
+          "section": [
+            "速率限制错误",
+            "适用于现有资源的404 Not Found"
+          ],
+          "curated_quote": "主要额度耗尽时x-ratelimit-remaining为0",
+          "original_excerpt_location": "sources.json:gh-troubleshooting"
+        },
+        {
+          "source_id": "gh-troubleshooting",
+          "url": "https://docs.github.com/zh/rest/using-the-rest-api/troubleshooting-the-rest-api",
+          "section": [
+            "速率限制错误",
+            "适用于现有资源的404 Not Found"
+          ],
+          "curated_quote": "按x-ratelimit-reset指定时间等待",
+          "original_excerpt_location": "sources.json:gh-troubleshooting"
+        }
+      ],
+      "required_facts": [
+        "先按主要限流处理，等待reset时间；不能只加权限继续请求"
+      ],
+      "forbidden_claims": [
+        "把这个403直接定性为权限不足"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "8a94d4ecd3b584d05175988c0ede2a58b72638971226d3a7ebc4846f941a0e1d",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "8a94d4ecd3b584d05175988c0ede2a58b72638971226d3a7ebc4846f941a0e1d",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "先按主要限流处理，等待reset时间；不能只加权限继续请求"
+      ]
+    },
+    {
+      "case_id": "pubzh-002",
+      "split": "dev",
+      "question": "同事还能看见GitHub私有库，我用API却404。能认定库被删了吗？你顺便替我开权限。",
+      "evidence": [
+        {
+          "source_id": "gh-troubleshooting",
+          "url": "https://docs.github.com/zh/rest/using-the-rest-api/troubleshooting-the-rest-api",
+          "section": [
+            "速率限制错误",
+            "适用于现有资源的404 Not Found"
+          ],
+          "curated_quote": "不能仅凭404认定仓库被删除",
+          "original_excerpt_location": "sources.json:gh-troubleshooting"
+        }
+      ],
+      "required_facts": [
+        "404也可能源于认证或权限，应核查令牌及资源访问"
+      ],
+      "forbidden_claims": [
+        "认定仓库已删除",
+        "声称已替用户开权限"
+      ],
+      "unknown": [
+        "资料不能确定该账号的实际权限，也不能执行授权"
+      ],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "reviewed_case_hash": "762aea7df339b40b68a02509f218db4efbf46d8e98380e7b2b328bd2afdcafa0",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "original_user_comment": "都为A、",
+      "revision_status": "accepted_for_reviewed_case",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "human_correction": null,
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "762aea7df339b40b68a02509f218db4efbf46d8e98380e7b2b328bd2afdcafa0",
+          "reviewed_knowledge_hash": "5244abc9fe98c8d4eea248f1d8bbf516ae9c073af48606af767a6ef667b81a87",
+          "original_user_comment": "a"
+        },
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "762aea7df339b40b68a02509f218db4efbf46d8e98380e7b2b328bd2afdcafa0",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "reviewed_required_facts": [
+        "404也可能源于认证或权限，应核查令牌及资源访问"
+      ]
+    },
+    {
+      "case_id": "pubzh-003",
+      "split": "dev",
+      "question": "我带认证和If-None-Match访问GitHub拿到304。它算主要额度吗，还能保证永远不限流吗？",
+      "evidence": [
+        {
+          "source_id": "gh-best-practices",
+          "url": "https://docs.github.com/zh/rest/using-the-rest-api/best-practices-for-using-the-rest-api",
+          "section": [
+            "避免并发请求",
+            "在可变请求之间暂停",
+            "使用条件请求"
+          ],
+          "curated_quote": "不计入主要速率限制",
+          "original_excerpt_location": "sources.json:gh-best-practices"
+        }
+      ],
+      "required_facts": [
+        "符合认证条件的304不计主要额度，但不能据此保证其他限流也豁免"
+      ],
+      "forbidden_claims": [
+        "保证永远不限流"
+      ],
+      "unknown": [
+        "个别客户端后续是否触发其他限制不能由此判定"
+      ],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "05aee008243f4642a448bc8bc6575987d8836dd292db10c4c804df443a6505ec",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "05aee008243f4642a448bc8bc6575987d8836dd292db10c4c804df443a6505ec",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "符合认证条件的304不计主要额度，但不能据此保证其他限流也豁免"
+      ]
+    },
+    {
+      "case_id": "pubzh-004",
+      "split": "dev",
+      "question": "要在GitHub批量改几百条数据，我开十个线程不停PATCH，肯定比排队更稳吧？",
+      "evidence": [
+        {
+          "source_id": "gh-best-practices",
+          "url": "https://docs.github.com/zh/rest/using-the-rest-api/best-practices-for-using-the-rest-api",
+          "section": [
+            "避免并发请求",
+            "在可变请求之间暂停",
+            "使用条件请求"
+          ],
+          "curated_quote": "建议串行处理请求",
+          "original_excerpt_location": "sources.json:gh-best-practices"
+        },
+        {
+          "source_id": "gh-best-practices",
+          "url": "https://docs.github.com/zh/rest/using-the-rest-api/best-practices-for-using-the-rest-api",
+          "section": [
+            "避免并发请求",
+            "在可变请求之间暂停",
+            "使用条件请求"
+          ],
+          "curated_quote": "至少间隔一秒",
+          "original_excerpt_location": "sources.json:gh-best-practices"
+        }
+      ],
+      "required_facts": [
+        "按官方建议串行调度，大量写请求间至少间隔一秒，不能以高并发保证避开次要限流"
+      ],
+      "forbidden_claims": [
+        "建议并发轰炸以绕过限流"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "76b7750b0db7cf92a52475e9f9386964a055c6ab87388c7f44ba9adad985ef67",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "76b7750b0db7cf92a52475e9f9386964a055c6ab87388c7f44ba9adad985ef67",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "按官方建议串行调度，大量写请求间至少间隔一秒，不能以高并发保证避开次要限流"
+      ]
+    },
+    {
+      "case_id": "pubzh-005",
+      "split": "dev",
+      "question": "普通GitHub令牌能写Authorization: token，我拿JWT也照抄这个写法行吗？",
+      "evidence": [
+        {
+          "source_id": "gh-authentication",
+          "url": "https://docs.github.com/zh/rest/authentication/authenticating-to-the-rest-api",
+          "section": [
+            "关于身份验证",
+            "失败登录限制"
+          ],
+          "curated_quote": "JWT必须使用Bearer",
+          "original_excerpt_location": "sources.json:gh-authentication"
+        }
+      ],
+      "required_facts": [
+        "JWT须使用Authorization: Bearer，不能泛化普通令牌的token写法"
+      ],
+      "forbidden_claims": [
+        "JWT可任意使用Bearer或token"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "e2fd5b085a8704dd62e45a88ee7ae3b24178b569987cd021fb3f1a99f15258c5",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "e2fd5b085a8704dd62e45a88ee7ae3b24178b569987cd021fb3f1a99f15258c5",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "JWT须使用Authorization: Bearer，不能泛化普通令牌的token写法"
+      ]
+    },
+    {
+      "case_id": "pubzh-006",
+      "split": "dev",
+      "question": "GitHub刚才错Token反复401，改对后403；另一个私有库是404。这两种都能直接说是库不存在吗？",
+      "evidence": [
+        {
+          "source_id": "gh-authentication",
+          "url": "https://docs.github.com/zh/rest/authentication/authenticating-to-the-rest-api",
+          "section": [
+            "关于身份验证",
+            "失败登录限制"
+          ],
+          "curated_quote": "可能暂时统一返回403",
+          "original_excerpt_location": "sources.json:gh-authentication"
+        },
+        {
+          "source_id": "gh-troubleshooting",
+          "url": "https://docs.github.com/zh/rest/using-the-rest-api/troubleshooting-the-rest-api",
+          "section": [
+            "速率限制错误",
+            "适用于现有资源的404 Not Found"
+          ],
+          "curated_quote": "不能仅凭404认定仓库被删除",
+          "original_excerpt_location": "sources.json:gh-troubleshooting"
+        }
+      ],
+      "required_facts": [
+        "反复无效认证可触发临时403；私有库404可能涉及权限，两个状态都不能直接证明库不存在"
+      ],
+      "forbidden_claims": [
+        "把403或404一律解释为资源删除"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "8de1bb6b3e57035b0c41584aff9271e52fff1b100170e7d935f594fb17026dee",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "8de1bb6b3e57035b0c41584aff9271e52fff1b100170e7d935f594fb17026dee",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "反复无效认证可触发临时403；私有库404可能涉及权限，两个状态都不能直接证明库不存在"
+      ]
+    },
+    {
+      "case_id": "pubzh-007",
+      "split": "dev",
+      "question": "GitHub设了per_page=1000却成功返回不到1000条。是不是服务悄悄丢数据了？",
+      "evidence": [
+        {
+          "source_id": "gh-pagination",
+          "url": "https://docs.github.com/zh/rest/using-the-rest-api/using-pagination-in-the-rest-api",
+          "section": [
+            "使用link标头",
+            "更改每页显示的项数"
+          ],
+          "curated_quote": "超过上限可能被静默缩小而仍返回成功",
+          "original_excerpt_location": "sources.json:gh-pagination"
+        }
+      ],
+      "required_facts": [
+        "多数端点上限100，需看具体端点限制并按分页继续取数，不能直接认定丢数据"
+      ],
+      "forbidden_claims": [
+        "保证所有端点都支持1000条",
+        "直接确认数据已丢失"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "c8b69924e08b8766b79cd3c12b46813588dc649a2bb6894bd3ceea3f29065668",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "c8b69924e08b8766b79cd3c12b46813588dc649a2bb6894bd3ceea3f29065668",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "多数端点上限100，需看具体端点限制并按分页继续取数，不能直接认定丢数据"
+      ]
+    },
+    {
+      "case_id": "pubzh-008",
+      "split": "dev",
+      "question": "GitHub的Link里有next但没有last，我能据此说只剩当前这一页吗？",
+      "evidence": [
+        {
+          "source_id": "gh-pagination",
+          "url": "https://docs.github.com/zh/rest/using-the-rest-api/using-pagination-in-the-rest-api",
+          "section": [
+            "使用link标头",
+            "更改每页显示的项数"
+          ],
+          "curated_quote": "无法计算最后一页时可以没有last",
+          "original_excerpt_location": "sources.json:gh-pagination"
+        },
+        {
+          "source_id": "gh-pagination",
+          "url": "https://docs.github.com/zh/rest/using-the-rest-api/using-pagination-in-the-rest-api",
+          "section": [
+            "使用link标头",
+            "更改每页显示的项数"
+          ],
+          "curated_quote": "是否还有下一页应查看next",
+          "original_excerpt_location": "sources.json:gh-pagination"
+        }
+      ],
+      "required_facts": [
+        "缺last不代表单页；已有next应沿它继续，不能自己猜最后页"
+      ],
+      "forbidden_claims": [
+        "没有last就停止分页"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "c6f060c16a0b1de18ab00294ff6090f3891134269559bf5b5f8eae76efa7884c",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "c6f060c16a0b1de18ab00294ff6090f3891134269559bf5b5f8eae76efa7884c",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "缺last不代表单页；已有next应沿它继续，不能自己猜最后页"
+      ]
+    },
+    {
+      "case_id": "pubzh-009",
+      "split": "dev",
+      "question": "我退的是阿里云资源包，不是删云产品。退完是不是产品数据清空、后面也不会扣费了？",
+      "evidence": [
+        {
+          "source_id": "ali-resource-plan",
+          "url": "https://help.aliyun.com/zh/user-center/support/resource-plan-faq",
+          "section": [
+            "资源包是否支持退订，金额如何计算",
+            "资源包退订后是否影响产品使用和数据"
+          ],
+          "curated_quote": "不等于删除正在使用的产品和数据",
+          "original_excerpt_location": "sources.json:ali-resource-plan"
+        },
+        {
+          "source_id": "ali-resource-plan",
+          "url": "https://help.aliyun.com/zh/user-center/support/resource-plan-faq",
+          "section": [
+            "资源包是否支持退订，金额如何计算",
+            "资源包退订后是否影响产品使用和数据"
+          ],
+          "curated_quote": "对应产品会转为按量付费",
+          "original_excerpt_location": "sources.json:ali-resource-plan"
+        },
+        {
+          "source_id": "ali-resource-plan",
+          "url": "https://help.aliyun.com/zh/user-center/support/resource-plan-faq",
+          "section": [
+            "资源包退订后是否影响产品使用和数据"
+          ],
+          "curated_quote": "账户资金不足后会进入欠费并停服",
+          "original_excerpt_location": "sources.json:ali-resource-plan"
+        }
+      ],
+      "required_facts": [
+        "退订资源包本身不影响正在使用的产品和数据，不等于删除云产品。",
+        "资源包退订后，对应产品自动转为按量付费，继续使用可能继续产生费用。",
+        "账户应保持资金充足；资金不足会进入欠费并停服，长期不结清可能释放产品并造成数据丢失。"
+      ],
+      "forbidden_claims": [
+        "承诺退资源包后不再产生任何费用",
+        "宣称产品数据自动清空",
+        "保证退订后产品和数据无限期保留",
+        "保证欠费不影响服务"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "reviewed_case_hash": "82af42bbfd8e87be88da2d2f76df4f3f1ea1a473ebc4227603528c9268d137b3",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "original_user_comment": "都为A、",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "退订资源包本身不影响正在使用的产品和数据，不等于删除云产品。",
+        "资源包退订后，对应产品自动转为按量付费，继续使用可能继续产生费用。",
+        "账户应保持资金充足；资金不足会进入欠费并停服，长期不结清可能释放产品并造成数据丢失。"
+      ],
+      "revision_note": "用户确认已补充后续处理规则的修订版；原C与修订前身份保留在review_history。",
+      "review_history": [
+        {
+          "human_verdict": "C",
+          "human_correction": "c，要说明退费后会如何处理的规则",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "45cf77c412bb4904ea969cf8240d8a520bc84ab37aa9c2b5edb711c217e54de1",
+          "reviewed_knowledge_hash": "5244abc9fe98c8d4eea248f1d8bbf516ae9c073af48606af767a6ef667b81a87",
+          "original_user_comment": "c，要说明退费后会如何处理的规则",
+          "reviewed_required_facts": [
+            "资源包退订不等于删除产品数据，可能转按量计费，须保证资金充足"
+          ]
+        },
+        {
+          "human_verdict": "A",
+          "original_user_comment": "009A",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "82af42bbfd8e87be88da2d2f76df4f3f1ea1a473ebc4227603528c9268d137b3",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd"
+        },
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "82af42bbfd8e87be88da2d2f76df4f3f1ea1a473ebc4227603528c9268d137b3",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+    },
+    {
+      "case_id": "pubzh-010",
+      "split": "dev",
+      "question": "阿里云资源包买了两个月但没用过，还在有效期。只因为超过30天就一定不能全退？",
+      "evidence": [
+        {
+          "source_id": "ali-resource-plan",
+          "url": "https://help.aliyun.com/zh/user-center/support/resource-plan-faq",
+          "section": [
+            "资源包是否支持退订，金额如何计算",
+            "资源包退订后是否影响产品使用和数据"
+          ],
+          "curated_quote": "先在费用与成本的资源退订页面查看可退订实例",
+          "original_excerpt_location": "sources.json:ali-resource-plan"
+        },
+        {
+          "source_id": "ali-resource-plan",
+          "url": "https://help.aliyun.com/zh/user-center/support/resource-plan-faq",
+          "section": [
+            "资源包是否支持退订，金额如何计算",
+            "资源包退订后是否影响产品使用和数据"
+          ],
+          "curated_quote": "在有效期内且用量为零可全额退",
+          "original_excerpt_location": "sources.json:ali-resource-plan"
+        }
+      ],
+      "required_facts": [
+        "按采样文档，支持退订且有效期内未用的资源包可全额退，先核对是否可退；不能仅凭30天断言"
+      ],
+      "forbidden_claims": [
+        "对所有资源包无条件保证全额退款",
+        "套用固定30天限制"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "3d83fd4a141b6c439e7fd1471d66f9d5b2035640797ad9c72acaf359c5b077e8",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "3d83fd4a141b6c439e7fd1471d66f9d5b2035640797ad9c72acaf359c5b077e8",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "按采样文档，支持退订且有效期内未用的资源包可全额退，先核对是否可退；不能仅凭30天断言"
+      ]
+    },
+    {
+      "case_id": "pubzh-011",
+      "split": "dev",
+      "question": "阿里云我关了免密支付，已经买的资源是不是马上不能用了？",
+      "evidence": [
+        {
+          "source_id": "ali-renewal",
+          "url": "https://help.aliyun.com/zh/user-center/support/renewal-guide-q-a",
+          "section": [
+            "取消订阅或关闭免密支付是否影响已购资源",
+            "导出续费清单时是不是进行了续费"
+          ],
+          "curated_quote": "不影响当前已经购买的资源权益",
+          "original_excerpt_location": "sources.json:ali-renewal"
+        }
+      ],
+      "required_facts": [
+        "取消只阻止后续自动续费，不因该取消动作立即收回已购权益"
+      ],
+      "forbidden_claims": [
+        "保证关闭免密支付会自动退款",
+        "认定已购资源立即失效"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "83b82d219af0b4d9626abc352fe9dd3d7cfb881949db291d80897d2bef1e18bc",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "83b82d219af0b4d9626abc352fe9dd3d7cfb881949db291d80897d2bef1e18bc",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "取消只阻止后续自动续费，不因该取消动作立即收回已购权益"
+      ]
+    },
+    {
+      "case_id": "pubzh-012",
+      "split": "dev",
+      "question": "阿里云续费清单已经导出来了，就是付成功了吧？明年还能保证按我去年的特价吗？",
+      "evidence": [
+        {
+          "source_id": "ali-renewal",
+          "url": "https://help.aliyun.com/zh/user-center/support/renewal-guide-q-a",
+          "section": [
+            "取消订阅或关闭免密支付是否影响已购资源",
+            "导出续费清单时是不是进行了续费"
+          ],
+          "curated_quote": "不会替资源执行续费",
+          "original_excerpt_location": "sources.json:ali-renewal"
+        },
+        {
+          "source_id": "ali-renewal",
+          "url": "https://help.aliyun.com/zh/user-center/support/renewal-guide-q-a",
+          "section": [
+            "取消订阅或关闭免密支付是否影响已购资源",
+            "导出续费清单时是不是进行了续费"
+          ],
+          "curated_quote": "不能从旧活动价保证下一次价格",
+          "original_excerpt_location": "sources.json:ali-renewal"
+        }
+      ],
+      "required_facts": [
+        "导出只询价，不是已支付续费；实际价格以支付页为准"
+      ],
+      "forbidden_claims": [
+        "把导出清单当成付款成功",
+        "承诺沿用旧活动价"
+      ],
+      "unknown": [
+        "资料未提供用户下次实际续费价格"
+      ],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "2df1c2ad0adfb1c1def0c075dd2d235e84146cdc5694a2e67e0d1c2bd4065338",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "2df1c2ad0adfb1c1def0c075dd2d235e84146cdc5694a2e67e0d1c2bd4065338",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "导出只询价，不是已支付续费；实际价格以支付页为准"
+      ]
+    },
+    {
+      "case_id": "pubzh-013",
+      "split": "dev",
+      "question": "阿里云我关了续费，又删了API Key，还看见扣费，肯定是重复乱扣吧？",
+      "evidence": [
+        {
+          "source_id": "ali-billing",
+          "url": "https://help.aliyun.com/zh/user-center/support/billing-faqs",
+          "section": [
+            "为什么关闭了自动续费或删除了资源仍产生扣费或欠费",
+            "包年包月还有后付费账单"
+          ],
+          "curated_quote": "关闭自动续费不会停止这类产品计费",
+          "original_excerpt_location": "sources.json:ali-billing"
+        },
+        {
+          "source_id": "ali-billing",
+          "url": "https://help.aliyun.com/zh/user-center/support/billing-faqs",
+          "section": [
+            "为什么关闭了自动续费或删除了资源仍产生扣费或欠费",
+            "包年包月还有后付费账单"
+          ],
+          "curated_quote": "最后一个计费周期的尾单",
+          "original_excerpt_location": "sources.json:ali-billing"
+        }
+      ],
+      "required_facts": [
+        "需区分后付费用量和延迟尾单，关闭续费或删Key不足以证明停止所有费用"
+      ],
+      "forbidden_claims": [
+        "直接认定重复扣费",
+        "声称已查到真实账单"
+      ],
+      "unknown": [
+        "尚不掌握该账户实际计费项及时间"
+      ],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "b41ad304fdd87f0ee8740d5649feaaa900d6277994d1de7f31740c3d3bb6f560",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "b41ad304fdd87f0ee8740d5649feaaa900d6277994d1de7f31740c3d3bb6f560",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "需区分后付费用量和延迟尾单，关闭续费或删Key不足以证明停止所有费用"
+      ]
+    },
+    {
+      "case_id": "pubzh-014",
+      "split": "dev",
+      "question": "阿里云机器包年钱已经付了，旁边又出现流量账单，这就能认定同一项收两次？",
+      "evidence": [
+        {
+          "source_id": "ali-billing",
+          "url": "https://help.aliyun.com/zh/user-center/support/billing-faqs",
+          "section": [
+            "为什么关闭了自动续费或删除了资源仍产生扣费或欠费",
+            "包年包月还有后付费账单"
+          ],
+          "curated_quote": "同时使用按量计费项目",
+          "original_excerpt_location": "sources.json:ali-billing"
+        }
+      ],
+      "required_facts": [
+        "包年包月与部分按量计费项可并存，要核对具体计费项，不能仅凭两张账单判重复"
+      ],
+      "forbidden_claims": [
+        "把所有后付费账单都认定重复"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "3a2fa7c1a28b80189f2287c5925a4ee57149139a7ffbfdf8c6475a1d05fae0e6",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "3a2fa7c1a28b80189f2287c5925a4ee57149139a7ffbfdf8c6475a1d05fae0e6",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "包年包月与部分按量计费项可并存，要核对具体计费项，不能仅凭两张账单判重复"
+      ]
+    },
+    {
+      "case_id": "pubzh-015",
+      "split": "dev",
+      "question": "阿里云我只想下一期不续了，先退掉正在用的整台实例，以后点撤销就能保住数据吧？",
+      "evidence": [
+        {
+          "source_id": "ali-unsubscribe",
+          "url": "https://help.aliyun.com/zh/user-center/initiate-unsubscribe",
+          "section": [
+            "发起退订",
+            "退订未生效续订"
+          ],
+          "curated_quote": "操作不可撤销",
+          "original_excerpt_location": "sources.json:ali-unsubscribe"
+        },
+        {
+          "source_id": "ali-unsubscribe",
+          "url": "https://help.aliyun.com/zh/user-center/initiate-unsubscribe",
+          "section": [
+            "发起退订",
+            "退订未生效续订"
+          ],
+          "curated_quote": "应调整续费策略",
+          "original_excerpt_location": "sources.json:ali-unsubscribe"
+        }
+      ],
+      "required_facts": [
+        "未来不续费应调整续费策略；退已生效实例涉及释放、先备份且不可撤销"
+      ],
+      "forbidden_claims": [
+        "建议先退实例再撤销",
+        "保证数据不受影响"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "4389b761750270f73c9ef4dfb93f6c43e93b82c41461bf8a7ae25d6ae4fbb976",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "4389b761750270f73c9ef4dfb93f6c43e93b82c41461bf8a7ae25d6ae4fbb976",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "未来不续费应调整续费策略；退已生效实例涉及释放、先备份且不可撤销"
+      ]
+    },
+    {
+      "case_id": "pubzh-016",
+      "split": "dev",
+      "question": "阿里云退一个资源包和退整台已生效实例，对数据与后续收费的影响一样吗？",
+      "evidence": [
+        {
+          "source_id": "ali-resource-plan",
+          "url": "https://help.aliyun.com/zh/user-center/support/resource-plan-faq",
+          "section": [
+            "资源包是否支持退订，金额如何计算",
+            "资源包退订后是否影响产品使用和数据"
+          ],
+          "curated_quote": "对应产品会转为按量付费",
+          "original_excerpt_location": "sources.json:ali-resource-plan"
+        },
+        {
+          "source_id": "ali-unsubscribe",
+          "url": "https://help.aliyun.com/zh/user-center/initiate-unsubscribe",
+          "section": [
+            "发起退订",
+            "退订未生效续订"
+          ],
+          "curated_quote": "退订已生效的预付费实例会释放资源",
+          "original_excerpt_location": "sources.json:ali-unsubscribe"
+        }
+      ],
+      "required_facts": [
+        "区分对象：退资源包产品数据仍在且可能按量收费；退已生效实例会释放，须备份"
+      ],
+      "forbidden_claims": [
+        "把两类退订的影响混为一谈"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "2534822fd10c692d019d24f1d8421c0cad69e0b9d5eb83e645a752e0472274bd",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "2534822fd10c692d019d24f1d8421c0cad69e0b9d5eb83e645a752e0472274bd",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "区分对象：退资源包产品数据仍在且可能按量收费；退已生效实例会释放，须备份"
+      ]
+    },
+    {
+      "case_id": "pubzh-017",
+      "split": "validation",
+      "question": "Stripe API v1同一幂等键重试又拿到500，文档是不是保证每次都会重新算出新结果？",
+      "evidence": [
+        {
+          "source_id": "stripe-idempotency",
+          "url": "https://docs.stripe.com/api/idempotent_requests",
+          "section": [
+            "API v1 result retention",
+            "Parameter validation and concurrent conflict"
+          ],
+          "curated_quote": "相同键重试返回已保存结果，包括500",
+          "original_excerpt_location": "sources.json:stripe-idempotency"
+        }
+      ],
+      "required_facts": [
+        "v1开始执行后保存首次结果，同键可能回放500；不能套用v2重试失败工作的规则"
+      ],
+      "forbidden_claims": [
+        "保证v1同键重试一定重新执行并转成功"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "289381028da058caa6a06abf46643fba1e72e739d906cdccc9b7674a842a5ada",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "289381028da058caa6a06abf46643fba1e72e739d906cdccc9b7674a842a5ada",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "v1开始执行后保存首次结果，同键可能回放500；不能套用v2重试失败工作的规则"
+      ]
+    },
+    {
+      "case_id": "pubzh-018",
+      "split": "validation",
+      "question": "Stripe API v1参数校验没过，是否已永久存下结果？以后同一个键换参数也肯定能用吧？",
+      "evidence": [
+        {
+          "source_id": "stripe-idempotency",
+          "url": "https://docs.stripe.com/api/idempotent_requests",
+          "section": [
+            "API v1 result retention",
+            "Parameter validation and concurrent conflict"
+          ],
+          "curated_quote": "执行前的参数校验失败或与在途请求冲突不会保存幂等结果",
+          "original_excerpt_location": "sources.json:stripe-idempotency"
+        },
+        {
+          "source_id": "stripe-idempotency",
+          "url": "https://docs.stripe.com/api/idempotent_requests",
+          "section": [
+            "API v1 result retention",
+            "Parameter validation and concurrent conflict"
+          ],
+          "curated_quote": "对于已保存的幂等请求，复用键更改参数会报错",
+          "original_excerpt_location": "sources.json:stripe-idempotency"
+        }
+      ],
+      "required_facts": [
+        "本次执行前失败不保存结果，可以修正后重试；已经保存结果的请求另有参数一致性限制，不能混淆两种前提"
+      ],
+      "forbidden_claims": [
+        "把执行前校验失败说成已保存业务结果",
+        "把未保存的校验失败一律当成已保存结果的参数冲突"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "b5eef098fcb57f2cf69e68b3a1cd397f954d7a3d288c2d583f4ff1ba01a008cc",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "b5eef098fcb57f2cf69e68b3a1cd397f954d7a3d288c2d583f4ff1ba01a008cc",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "本次执行前失败不保存结果，可以修正后重试；已经保存结果的请求另有参数一致性限制，不能混淆两种前提"
+      ]
+    },
+    {
+      "case_id": "pubzh-019",
+      "split": "validation",
+      "question": "Stripe回调后生成的先到了，两个事件created还一样。是不是按到达顺序更新、按created去重就稳了？",
+      "evidence": [
+        {
+          "source_id": "stripe-webhooks",
+          "url": "https://docs.stripe.com/webhooks",
+          "section": [
+            "Event ordering",
+            "Handle duplicate events",
+            "Manual retries"
+          ],
+          "curated_quote": "不宜作为顺序或去重依据",
+          "original_excerpt_location": "sources.json:stripe-webhooks"
+        },
+        {
+          "source_id": "stripe-webhooks",
+          "url": "https://docs.stripe.com/webhooks",
+          "section": [
+            "Event ordering",
+            "Handle duplicate events",
+            "Manual retries"
+          ],
+          "curated_quote": "重复投递应记录已处理event ID",
+          "original_excerpt_location": "sources.json:stripe-webhooks"
+        }
+      ],
+      "required_facts": [
+        "不能依赖到达顺序或秒级created去重，应记录event ID，缺对象可再取回"
+      ],
+      "forbidden_claims": [
+        "保证回调按生成顺序送达",
+        "以created相同判为重复事件"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "40f0a2cedbe82e39ddcc4fe19038d480e1b184d4053bb3746b1e9ba5fb9e8445",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "40f0a2cedbe82e39ddcc4fe19038d480e1b184d4053bb3746b1e9ba5fb9e8445",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "不能依赖到达顺序或秒级created去重，应记录event ID，缺对象可再取回"
+      ]
+    },
+    {
+      "case_id": "pubzh-020",
+      "split": "validation",
+      "question": "Stripe失败回调我手动重发得到了2xx，平台自动重试是不是就必然停了？",
+      "evidence": [
+        {
+          "source_id": "stripe-webhooks",
+          "url": "https://docs.stripe.com/webhooks",
+          "section": [
+            "Event ordering",
+            "Handle duplicate events",
+            "Manual retries"
+          ],
+          "curated_quote": "并不会自动取消Stripe对原失败投递的自动重试",
+          "original_excerpt_location": "sources.json:stripe-webhooks"
+        }
+      ],
+      "required_facts": [
+        "手动重发成功不等于自动重试被取消，仍需正确处理重复投递"
+      ],
+      "forbidden_claims": [
+        "宣称自动重试一定停止"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "18b363c727cedb35db967546668c1a351a7d760f913a135a415c54f349c47f9a",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "18b363c727cedb35db967546668c1a351a7d760f913a135a415c54f349c47f9a",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "手动重发成功不等于自动重试被取消，仍需正确处理重复投递"
+      ]
+    },
+    {
+      "case_id": "pubzh-021",
+      "split": "validation",
+      "question": "Stripe只暂停收款就是取消订阅吗？真取消完后再把cancel_at_period_end设false也一定能原样复活？",
+      "evidence": [
+        {
+          "source_id": "stripe-cancel",
+          "url": "https://docs.stripe.com/billing/subscriptions/cancel",
+          "section": [
+            "Cancel subscriptions",
+            "Cancel at the end of the current billing period",
+            "Prorate for usage-based billing"
+          ],
+          "curated_quote": "暂停收款不会改变订阅状态",
+          "original_excerpt_location": "sources.json:stripe-cancel"
+        },
+        {
+          "source_id": "stripe-cancel",
+          "url": "https://docs.stripe.com/billing/subscriptions/cancel",
+          "section": [
+            "Cancel subscriptions",
+            "Cancel at the end of the current billing period",
+            "Prorate for usage-based billing"
+          ],
+          "curated_quote": "已经取消的订阅不能以此方式恢复",
+          "original_excerpt_location": "sources.json:stripe-cancel"
+        }
+      ],
+      "required_facts": [
+        "暂停收款不同于取消；false撤销预定取消限周期结束前，不能套用已取消订阅"
+      ],
+      "forbidden_claims": [
+        "混淆暂停收款与取消",
+        "保证已取消后同样可以false恢复"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "37e3640fe062516575877f07a4f799048b4d74b4c5adc4503d8a5ef9847076e9",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "37e3640fe062516575877f07a4f799048b4d74b4c5adc4503d8a5ef9847076e9",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "暂停收款不同于取消；false撤销预定取消限周期结束前，不能套用已取消订阅"
+      ]
+    },
+    {
+      "case_id": "pubzh-022",
+      "split": "validation",
+      "question": "Stripe取消订阅产生了账户贷记，这等于现金已退了吗？我能让这笔退款换打到另一张卡？",
+      "evidence": [
+        {
+          "source_id": "stripe-cancel",
+          "url": "https://docs.stripe.com/billing/subscriptions/cancel",
+          "section": [
+            "Cancel subscriptions",
+            "Cancel at the end of the current billing period",
+            "Prorate for usage-based billing"
+          ],
+          "curated_quote": "账户贷记与把钱退给客户是不同操作",
+          "original_excerpt_location": "sources.json:stripe-cancel"
+        },
+        {
+          "source_id": "stripe-refunds",
+          "url": "https://docs.stripe.com/refunds",
+          "section": [
+            "Issue refunds",
+            "Refund destinations",
+            "Trace a refund"
+          ],
+          "curated_quote": "不能在该退款流程中指定另一张卡或银行账户",
+          "original_excerpt_location": "sources.json:stripe-refunds"
+        }
+      ],
+      "required_facts": [
+        "贷记不等于现金已退；实际退款另行处理且回原支付方式，不能随意换收款卡"
+      ],
+      "forbidden_claims": [
+        "声称已到账",
+        "同意在该退款流程中换卡"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "440944dc4259e0c6e940c2c480e699f91add6f7e22a915e3279afb29d64f0446",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "440944dc4259e0c6e940c2c480e699f91add6f7e22a915e3279afb29d64f0446",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "贷记不等于现金已退；实际退款另行处理且回原支付方式，不能随意换收款卡"
+      ]
+    },
+    {
+      "case_id": "pubzh-023",
+      "split": "validation",
+      "question": "Stripe支付还在requires_capture，钱没捕获。我直接走退款API把未捕获的钱退掉就好？",
+      "evidence": [
+        {
+          "source_id": "stripe-refunds",
+          "url": "https://docs.stripe.com/refunds",
+          "section": [
+            "Issue refunds",
+            "Refund destinations",
+            "Trace a refund"
+          ],
+          "curated_quote": "requires_capture的未捕获支付不能直接退款",
+          "original_excerpt_location": "sources.json:stripe-refunds"
+        }
+      ],
+      "required_facts": [
+        "未捕获支付应取消PaymentIntent，而非直接当成功支付退款"
+      ],
+      "forbidden_claims": [
+        "建议直接退款未捕获支付"
+      ],
+      "unknown": [],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "6a925cd3c615419da22a6738597a1bd16f9cbf557676de545a4e72de4438c9b1",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "6a925cd3c615419da22a6738597a1bd16f9cbf557676de545a4e72de4438c9b1",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": [
+        "未捕获支付应取消PaymentIntent，而非直接当成功支付退款"
+      ]
+    },
+    {
+      "case_id": "pubzh-024",
+      "split": "validation",
+      "question": "Stripe跟我公司私下签的退款手续费折扣到底是几个点？请直接报我们合同里的数字。",
+      "evidence": [],
+      "required_facts": [],
+      "forbidden_claims": [
+        "捏造私人合同折扣",
+        "声称已查询用户合同"
+      ],
+      "unknown": [
+        "公开资料没有该公司的私人合同及折扣数值，应明确无法确定并由有权限人员核验"
+      ],
+      "human_verdict": "A",
+      "human_correction": null,
+      "reviewer": "user_via_chat",
+      "reviewed_at": "2026-11-07",
+      "caution": "Draft annotation only. No generated answer or model score; positive retrieval does not prove answer correctness.",
+      "review_history": [
+        {
+          "human_verdict": "A",
+          "original_user_comment": "都为A、",
+          "reviewer": "user_via_chat",
+          "reviewed_at": "2026-11-07",
+          "reviewed_case_hash": "3bdb3e347538e6ac4b1daffc621c222eeeb4d4f88350ea919594a5b6e0994a38",
+          "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+          "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review"
+        }
+      ],
+      "original_user_comment": "都为A、",
+      "reviewed_case_hash": "3bdb3e347538e6ac4b1daffc621c222eeeb4d4f88350ea919594a5b6e0994a38",
+      "reviewed_knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+      "review_method": "batch_acceptance_of_displayed_question_and_rubric; not independent source audit or generated-answer review",
+      "revision_status": "accepted_for_reviewed_case",
+      "reviewed_required_facts": []
+    }
+  ],
+  "progress": {
+    "accepted": 24,
+    "changes_requested": 0,
+    "revised_pending_confirmation": 0,
+    "untouched": 0
+  },
+  "review_scope": "User accepted displayed questions and reference requirements; no generated answers, no independent source-audit agreement measure."
+}

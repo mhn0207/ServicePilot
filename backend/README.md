@@ -69,7 +69,7 @@ python -X utf8 scripts/evaluate_retrieval_evidence.py --fixture data/eval/rag/<r
 python -X utf8 scripts/evaluate_retrieval_evidence.py --online --base-url http://127.0.0.1:8000 --top-k 3
 ```
 
-该模式可能调用查询改写与重排模型，并沿用现有缓存；第一批不绕过缓存，不新增策略开关。逐条保留服务返回的 cached/reranked 标记，但没有完整模型配置、阶段耗时或 token 对比。客户端只校验实际返回片段，不能证明远端整个数据库恰好等于快照；现有 `/search` 也不暴露底层 ToolResult.success，HTTP 200 空结果无法进一步区分内部失败与普通空召回。这些边界需在第二批的独立评测实例和执行轨迹中处理。本批未执行在线实验，未获得真实流水线质量基线。
+该模式可能调用查询改写与重排模型，并沿用现有缓存；第一批不绕过缓存，不新增策略开关。逐条保留服务返回的 cached/reranked 标记，但没有完整模型配置、阶段耗时或 token 对比。客户端只校验实际返回片段，不能证明远端整个数据库恰好等于快照。`/search` 现在额外暴露底层 `success`，不改变原有字段或HTTP状态；证据级在线入口把内部失败记为执行错误，缺少此字段的旧服务记为invalid_response，不从HTTP 200推断成功。本批未执行在线实验，未获得业务默认流水线质量基线。
 
 ## 第二批：独立检索策略实验
 
@@ -140,7 +140,7 @@ python -X utf8 scripts/evaluate_retrieval_evidence.py --online --base-url http:/
 
 主指标保留执行失败的 eligible 分母，另报成功 eligible 子集。共同成功子集给出明确 case_id 与两个分母（全部共同成功数、其中 eligible 数）。逐例列出 Recall 主判据的胜/平/负和 Hit/Recall/MRR 变化及退化证据。每例保存计划配置、实际步骤、改写列表、分支预算结果、去重/截断数量、降级原因、阶段耗时、缓存读写和实际模型观测。合法空结果、底层请求失败、改写失败回原查询、候选不足跳过重排、重排异常降级分别记录。完整执行率排除失败、降级及流水线缓存命中；无需重排的合法跳过可算完成。
 
-P50/P95 使用 nearest rank，记录样本数，计时是单次顺序执行的请求墙钟时间（含实际结果缓存路径、不含 setup）；小样本不代表生产延迟。本批没有真实效果/费用/性能基线，也没有重复真实实验，未报告波动或真实优胜方案。测试另覆盖真实内存 Chroma 引擎配注入假 embedding 的全库一致性，这仍不是实际模型联调。
+P50/P95 使用 nearest rank，记录样本数，计时是单次顺序执行的请求墙钟时间（含实际结果缓存路径、不含 setup）；小样本不代表生产延迟。后续补做了本地缓存ONNX embedding的A/B实验，见末节；没有付费改写/重排或生成/Judge的效果基线，也没有重复实验波动结论。测试另覆盖真实内存 Chroma 引擎配注入假 embedding 的全库一致性，该测试仍不是实际模型效果验证。
 
 ## 第三批：单轮回答质量
 
@@ -258,3 +258,89 @@ Agent 统计保留 `total` 为已开始的请求数，新增 `in_flight`（在�
 专业Agent失败后，剩余不足11秒不再启动完整降级；允许降级时最多8秒并预留收尾时间。本轮成功知识检索可供有当前工具权限的降级角色复用，要求同一handler且知识缓存revision未变，保留原query/参数/返回和原tool_use_id关联。缓存只在当前Request内保存；不复用副作用工具，不跨用户/会话传播。
 
 响应 `performance.budget_events` 记录阶段开始/成功/失败/超时/未调用、跳过原因、`phase_remaining_s` 与 `request_remaining_s`。低预算失败仍沿用503/可重试回执，失败轮不写入正常历史；50秒外层超时仍保留504保护，不编造成功或改变副作用工具的未知结果语义。取消本地等待不等于远端供应商已停止计算，真实耗时/费用仍以实际观测为准。
+
+## 评测可信度修复与本地真实 A/B
+
+回答报告新增评分身份 `span-coverage-v3`：声明完整抽取时，断言摘录范围的并集必须覆盖回答中所有非空白、非标点字符；不能仅与一句话相交就视为整句已审。该检查不判断语义蕴含，Judge把整句错误标为supported仍需人工校准。历史v1/v2报告按旧规则读取；新旧评分身份不能直接比较，不篡改历史fixture或成绩。
+
+Agent离线入口现在通过业务 `build_shared_rag_tools` 装配 `search_knowledge_base`，SDK fixture显式提供Top-K=3，经真实参数检查与工具结果回传，政策咨询会进入业务 `tool_choice` 分支。检索依赖仍为内存实验B、模型仍为脚本，不声称验证真实模型自主查询质量；故意漏调/工具错误fixture仍保留为负例。
+
+旧 `/eval/run` 不再自动创建或替换基线，也不把最近历史当作正式基线。完成报告的响应新增 `timestamp`；确认报告后，管理员可显式请求 `POST /eval/baseline`，body为 `{"timestamp":"该报告的timestamp"}`。只能选本进程已有的唯一完整报告，评分错误、已报告回归或评测运行中拒绝晋升；生产鉴权沿用admin规则。基线原子写盘，进程重启仍可加载；没有同suite正式基线时只展示结果，不虚报回归通过。没有自动替用户晋升。
+
+新运行记录源码白名单manifest/总哈希、Python和已安装依赖版本，并保存 `source.zip`，包含后端运行Python与requirements，不含.env、数据、凭据或本地复盘材料。运行前采集源码身份，归档时复核字节，源码变化则报错。重排调用记录有序候选正文/ID、query、n、参数与有界合法模型索引；旧记录缺少这些信息时不补造。源码归档不等于模型服务可复现：供应商服务变化和随机性仍需单独控制。
+
+2026-11-06补做本地已缓存MiniLM ONNX真实embedding实验；新建内存Chroma collection，不下载、不接业务库、不调用供应商。固定suite.v2，Top-K=3、candidate/vector/lexical预算均20、cache=bypass，各split单次顺序运行。开发选型预先固定：仅当B的主指标证据组Recall严格高于A且Hit不降时选B，否则保留A。先完成dev决定，再运行validation；没有依据验证结果调参或修改业务默认策略。
+
+| split | 全部 / 正向分母 | A / B Hit@3 | A / B 证据组Recall@3 | A / B MRR@3 |
+| --- | --- | --- | --- | --- |
+| dev | 40 / 36 | 1.0 / 1.0 | 1.0 / 1.0 | 0.9861 / 1.0 |
+| validation | 20 / 18 | 1.0 / 1.0 | 1.0 / 1.0 | 0.9444 / 0.9722 |
+
+四组执行均0错误，各组模型供应商调用0，embedding查询次数等于全部用例数。B首条相关证据排序略好，但主指标没有收益，按预先规则保留A。开发A/B单次P95分别约33.0/43.6ms，验证约32.2/47.8ms；不含建库，不代表/chat延迟、重复实验波动或生产性能。英语合成小语料出现召回天花板，不足以选出生产最优方案，也不能证明中文或最终回答收益。C/D及真实生成/Judge未运行。
+
+以下实验数字为维护者本地运行记录摘要，原始报告未随仓库分发，不能视为已公开独立复核的结果。本地报告目录为 `data/eval/rag/experiments/trust-dev-local-ab-20261106/`、`trust-validation-local-a-20261106/`（Git忽略）。读者可使用仓库内冻结数据、现有入口和已缓存模型重新运行；不同环境耗时可能不同，复跑时使用新run-id：
+
+```powershell
+.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --mode real --candidate B --with-baselines --onnx-cache <已有模型缓存目录> --top-k 3 --candidate-k 20 --vector-k 20 --lexical-k 20 --cache-mode bypass --run-id <新dev目录>
+# 固定开发决定后，仅运行明确候选及A/B，不循环按validation调参
+.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --mode real --split validation --candidate A --with-baselines --onnx-cache <已有模型缓存目录> --top-k 3 --candidate-k 20 --vector-k 20 --lexical-k 20 --cache-mode bypass --run-id <新validation目录>
+```
+
+`answers/trust-paired-fixture-20261106/` 是新评分协议的fixture成对报告，不是真实生成实验。另备10问题/20分支（19适用）的 `human-review-packet.json`，含原文、参考、实际上下文、固定Judge判定和AI证据复核建议；human字段仍空，不能报告为已完成人工校准。Chroma运行存在现有telemetry兼容告警；不将告警掩饰为无警告验收。
+
+## 官方公开来源中文资料草稿
+
+`evaluation/corpora/public_zh.v1/` 是2026-11-07新增的数据准备，不修改原合成集或线上seed。12个官方来源来自GitHub、阿里云和Stripe，保存短摘录、中文摘要、适用产品/版本、访问日期、小节和摘要哈希；没有保存完整网页，不伪称有原网页哈希或官方背书。各产品规则仅适用于其注明范围，不能混成ServicePilot自己的业务政策。
+
+24题包含条件区分、口语改写、跨来源多证据、部分可答和无答案。GitHub/阿里云16题为dev，Stripe8题为候选validation；来源URL不跨split，但这是按供应商分组的分布变化，不能声称随机同分布或完全独立的人工作题。摘要、问题和初始标签由AI整理；维护者已逐题查看并明确认可24题展示标注，已按当前case哈希记录到 `annotation-review.json`。009此前的C意见促成产品、数据、按量计费和欠费后续规则补充，原C及修订认可保留在review_history。认可范围为展示的问题和参考要求，不等于维护者逐一审计源网页或校准真实生成答案。检索及Flash小样本见下文；没有实际回答的人工通过率或Judge分数，不能把标注认可写成模型效果通过。
+
+本批12份短摘要各一个片段，不支持长文切片或同文错片段的效果结论。只复用现有检索协议；`answer_data.py` 的英语回答协议没有被假装扩展为中文。无答案的not_applicable仅表示没有正向证据分母，不是在要求业务Agent绝对不能检索。
+
+题目、核心要求和审核记录见仓库内 `evaluation/corpora/public_zh.v1/annotation-review.json`；来源见同目录 `sources.json`。24题展示标注已获认可，原始实验报告仍仅保存在本地。后续数据修订须记录具体版本和实际认可范围。冻结suite中的执行状态文字保留冻结时的历史事实，不作为实时进度；最新运行事实见报告和下述说明。先用dev选候选，再一次验证，不依据验证结果继续调参，不需要增加新评测模块。
+
+2026-11-07已按预先固定预算运行该集dev A/B：本地缓存MiniLM-L6-v2、每策略新内存Chroma、Top-K=3、candidate/vector/lexical预算20、cache=bypass，不调用供应商。16题全部适用，A/B的Hit@3为0.75/1.0，按问题宏平均的证据组Recall@3为0.6875/1.0，MRR@3为0.6771/0.8542，完整证据为10/16与16/16，执行错误均0。主Recall改善6题、持平10题；收益集中在GitHub私有资源/限流和阿里资源包两个摘要，不能当成6个独立政策族。B在004的首证据名次反而由1退至3。
+
+各次候选池实际含全部12片，本轮主要衡量小候选池的Top-3排序，不证明大库候选召回。固定MiniLM的中文适用性没有被预设，结果不能推广到其他embedding。单次P50/P95为A28.76/32.68ms、B39.93/45.70ms，不含建库；16样本nearest-rank P95为最大值，不代表稳定尾延迟。按预先规则B成为下一步候选后，先保存决定和配置，再原样一次运行候选validation及固定A/B，没有改生产配置、依据验证结果调参或自动晋升基线。
+
+候选验证集共8题，其中7题有正向证据、1题无答案不计正向召回。A/B的Hit@3均1.0，证据组Recall@3为0.9286/1.0，MRR@3为0.9286/1.0，完整证据为6/7与7/7，执行错误均0。差异主要来自022：A只拿到退款资料，B还补到贷记与实际退款的区分依据。单次P50/P95为A28.30/29.31ms、B41.88/53.84ms。只有1题造成证据Recall差距，不能推导稳定或大样本收益；没有生成024的回答，也未验证其拒答质量。
+
+报告追加在ignored的 `data/eval/rag/experiments/public-zh-dev-ab-20261107/` 与 `public-zh-validation-b-20261107/`，有A/B逐例报告、原始观察、源码归档、来源与人工标注副本、预先配置、`diagnostics.json`和`summary.txt`。开发目录的`answer-inputs/`保留执行前的4题×A/B/oracle共12个中文生成输入，参考另置；其空回答是准备时的历史状态，实际生成结果另存于下述新run，不覆盖原输入包。
+
+## Flash中文回答小样本（真实生成，已做部分人工核验）
+
+2026-11-07完成004/009/012/016四题的A实际检索上下文、B实际检索上下文、oracle标注证据三组独立请求。显式调用官方 `deepseek-flash`，temperature=0、max_tokens=1024、thinking disabled、SDK/业务重试均0；不调用Judge/C/D、不使用工具或会话历史。每次生成只接收问题和实际片段，不接收参考、禁项、分支名、其他回答。
+
+12次均返回 `deepseek-flash`、stop_reason=end_turn，输出均未超1024token。供应商返回字段分列为input_tokens=6181、output_tokens=3690、cache_read_input_tokens=1920、cache_creation_input_tokens=0；没有估算费用，也不把缓存用量混成一个未经核对的总输入值。
+
+本节是本地诊断摘要，原始输出及人工反馈未随仓库分发。产物 `data/eval/rag/answers/public-zh-flash-20261107/` 含原输入、逐次响应、参数/请求哈希/耗时/供应商用量、源码及一次性runner、`review-with-answers.json` 和 `reading-comparison.txt`。这是独立诊断记录，不冒充原英语AnswerReport；4题是看过召回后的诊断抽样，不代表整集回答准确率。维护者对009三组回答给出“还可以”的总体反馈，记录为overall_acceptable，未推断分项覆盖/grounding/关键错误均通过；009分项仍为空。012三组的两个核心必答点已获维护者确认，记录在 `human-feedback-012.json`；只核验核心覆盖，不代表附加建议或整篇grounding通过。004的B与016的A另有单项问题核验；其余回答和维度仍待核验，不按整份回答统计通过率。
+
+初步阅读：009和016的A回答明确承认证据不足，B/oracle能覆盖资源包后续规则或两类退订比较；不能把A的诚实保留直接判作幻觉。004与012三组均给出主要要点。维护者已确认两处具体问题：016的A把不可撤销加强为数据不可恢复；004的B把未被资料明确支持的低并发方案说成可确认的稳妥做法。分别记录在 `human-finding-016A.json` 与 `human-finding-004B.json`，不推断整篇通过/失败，也不认定低并发技术上必错。其余AI笔记仍只是待核验提示，不是Judge或人工判定，也不报告通过率。模型别名实际服务版本可能随供应商更新，单轮差异不能证明唯一因果。
+
+## 中文多片段难例集（待人工核验）
+
+`evaluation/corpora/public_zh_hard.v1/` 为2026-11-07补充的数据草稿，复用现有 `rag-evidence-v1` 与 `rag-suite-v2`，没有新增检索、生成或Judge模块，不修改旧集、旧报告和业务入库。16个Redis官方页面整理为6篇中文资料，分别讲事务、过期、淘汰、持久化、Pub/Sub及Streams；每篇约800—950字符，固定500字符规则各切出2片，共12片。它是多片段整理资料，不是完整官方长文或大库基准；候选池仍只有12片，不能据此声称验证了大库候选召回或候选预算的压力边界。
+
+30题中12题区分相近命令或前提，6题要求同文档两个片段，6题部分可答，6题无答案。18题完全可答加6题部分可答，正向检索分母为24；无答案中4题缺少实例观测、2题缺少快照未收录的产品规则。无答案仅相对于给定快照，不声称整个官方站点没有答案。`required_facts`和`forbidden_claims`仍只是核验要求，不能自动评分中文回答；没有生成回答也不能报告拒答通过率。
+
+dev为事务/过期/淘汰各5题，validation为持久化/Pub/Sub/Streams各5题。来源URL、文档及主题组不跨split；两组检索时使用同一个完整知识快照，这是同库不同题目划分，不是把验证文档从索引中移除。主题分布有差异，不能当成随机同分布验证；资料与题目仍由同一AI整理，作者看过两组题，不能声称双盲或独立人工作题。新来源URL与旧 `public_zh.v1` 不重合，不代表标注方法已独立校准。
+
+`sources.json` 保存官方URL、小节、访问日期、短摘录，以及每段中文整理在文档中的字符范围和来源编号。中文整理包含解释和推论，不是官方逐字原文；未保存完整网页或伪造原页哈希。`annotation-review.json` 的人工字段保持为空，逐题提供事实、禁止结论、未知范围和证据来源。`hard-negatives.json` 给12题各标出一个同文同标题、但不支持所需结论的干扰片段；这12项语义判断也待人工复核。
+
+本批只做数据及评分契约验证：重建快照、校验引用/摘录/分组/冻结身份；注入12条同标题错片段结果，确认不会命中证据；对6道跨片段题只给一个正确片段，确认覆盖率严格小于1；确认6道无答案不进入正向分母。这些人为构造的返回结果不是实际检索结果，不能把检查通过写成模型召回率。检查记录在ignored的 `data/eval/rag/data_checks/public-zh-hard-20261107/`，正式策略对照、生成和Judge均未运行，也未追加付费请求。
+
+```powershell
+# 从backend执行；只校验数据，不加载embedding、访问数据库或调用供应商
+.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --suite evaluation/corpora/public_zh_hard.v1/suite.json --validate-suite
+.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --suite evaluation/corpora/public_zh_hard.v1/suite.json --split validation --validate-suite
+```
+
+当前冻结身份为 `e56772461fe83a951846946323158f4524ee27d3060b81581763ec97ba44cbc2`。它锁定待审数据内容，不代表人工验收通过。后续先核对来源和标注；若需修改，保存修订身份和原因，不能覆盖旧运行后沿用原身份。完整30题、必答要求、禁止结论、未知范围和证据来源均在仓库内同目录的 `annotation-review.json`，官方URL见 `sources.json`。审核时分别记录标签是否合理、是否独立核对原始来源，未审核字段保持空值；尚不依据验证集分数调参、扩大候选或自动晋升基线。
+
+公开中文集可直接用现有入口校验与复跑（以下校验不执行检索或供应商调用）：
+
+```powershell
+.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --suite evaluation/corpora/public_zh.v1/suite.json --validate-suite
+.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --suite evaluation/corpora/public_zh.v1/suite.json --split validation --validate-suite
+# 如需本地真实A/B，将前文真实检索命令增加 --suite evaluation/corpora/public_zh.v1/suite.json
+# Redis难例集先完成来源与标注核验；当前没有策略收益或回答质量结论。
+```

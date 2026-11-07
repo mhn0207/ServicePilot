@@ -23,6 +23,7 @@ from pydantic import ValidationError
 from evaluation.retrieval import (
     Dataset, Execution, Fixture, ReturnedChunk, build_snapshot, make_report,
 )
+from evaluation.provenance import source_identity, write_source_bundle
 
 OUTPUT_ROOT = ROOT / "data" / "eval" / "rag"
 
@@ -44,7 +45,7 @@ def code_identity() -> dict:
             return None
     status = git("status", "--porcelain")
     return {"head": git("rev-parse", "HEAD"), "branch": git("branch", "--show-current"),
-            "worktree_dirty": bool(status) if status is not None else None}
+            "worktree_dirty": bool(status) if status is not None else None, **source_identity(ROOT)}
 
 
 async def request_executions(base_url: str, dataset: Dataset, top_k: int) -> list[Execution]:
@@ -64,6 +65,12 @@ async def request_executions(base_url: str, dataset: Dataset, top_k: int) -> lis
                 data = response.json()
                 if not isinstance(data, dict) or not isinstance(data.get("results"), list):
                     raise ValueError("invalid response")
+                if type(data.get('success')) is not bool:
+                    raise ValueError('missing execution status; legacy server cannot prove success')
+                if not data['success']:
+                    rows.append(Execution(case_id=case.id, status='error', error_code='request_error',
+                        elapsed_ms=round((time.monotonic()-started)*1000, 3)))
+                    continue
                 # 只提取协议字段，忽略服务端额外信息，不把私有响应直接写入报告。
                 results = []
                 for item in data["results"]:
@@ -117,13 +124,14 @@ def main(argv=None) -> int:
             fixture.validate_inputs(dataset, args.top_k)
         # 在请求前拒绝重复运行目录，防止已经调用在线模型后才发现不能写报告。
         output.mkdir(parents=True, exist_ok=False)
+        code = code_identity()
         if args.online:
             executions = asyncio.run(request_executions(args.base_url, dataset, args.top_k))
         else:
             executions = fixture.executions
         report = make_report(dataset, snapshot, executions, top_k=args.top_k, run_id=run_id,
                              mode="online" if args.online else "fixture", started_at=started_at, finished_at=now(),
-                             code=code_identity(), configuration={
+                             code=code, configuration={
                                  "pipeline": "existing /search: rewrite + hybrid recall + rerank",
                                  "cache_policy": "existing defaults; no bypass in batch 1",
                                  "latency_source": "http_client_wall_time" if args.online else "fixture_recorded",
@@ -139,6 +147,7 @@ def main(argv=None) -> int:
                          executions=[r.execution for r in report.results])
         write_json(output / "executions.json", replay)
         write_json(output / "report.json", report)
+        write_source_bundle(ROOT, output, report.code)
     except (OSError, ValueError, TypeError, ValidationError) as error:
         # 不打印数据值、URL、认证头、服务端异常正文。
         print(f"评测输入或报告错误：{type(error).__name__}；请检查协议、哈希、证据标注和唯一 run-id。", file=sys.stderr)

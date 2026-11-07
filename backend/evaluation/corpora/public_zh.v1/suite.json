@@ -1,0 +1,63 @@
+{
+  "protocol_version": "rag-suite-v2",
+  "corpus": "corpus.json",
+  "snapshot": "snapshot.json",
+  "dataset": "cases.json",
+  "sources": "sources.json",
+  "knowledge_hash": "c33496f9f09cea3c008d9eef05db19c33e0a2aed8ae4cad4574a55b400ca77fd",
+  "source_dataset_hash": "f509fc1806f2e6133dfd61e6ccfad5931d510b7157a58277d71d929a464c20cc",
+  "sources_hash": "8d95864c0578fb0413484d28dbc0c97b5a415a9f0f7e7a5d26f5076eb87a09a2",
+  "review_status": "HUMAN_ACCEPTED_24_DISPLAYED_ANNOTATIONS_NO_MODEL_VALIDATION",
+  "grouping_rationale": "All GitHub and Aliyun source families in dev; all Stripe source family in candidate validation. No shared source URL across splits. Vendor/domain shift is a confound; not random IID evaluation.",
+  "limitations": [
+    "12 curated short summaries; no long-document or same-document wrong-chunk claim",
+    "Original sources external, summaries/questions/labels authored by one AI; user batch-accepted displayed annotations; no independent human source audit or generated-answer calibration",
+    "Candidate validation has not been run; do not tune using its scores",
+    "No Chinese answer/Judge protocol implemented; existing answer_data en-only must not be reused as zh",
+    "No official endorsement, production guarantee, corpus completeness, full-page hash, or universal policy claim"
+  ],
+  "splits": {
+    "dev": {
+      "case_ids": [
+        "pubzh-001",
+        "pubzh-002",
+        "pubzh-003",
+        "pubzh-004",
+        "pubzh-005",
+        "pubzh-006",
+        "pubzh-007",
+        "pubzh-008",
+        "pubzh-009",
+        "pubzh-010",
+        "pubzh-011",
+        "pubzh-012",
+        "pubzh-013",
+        "pubzh-014",
+        "pubzh-015",
+        "pubzh-016"
+      ],
+      "groups": [
+        "public-aliyun-billing",
+        "public-github-rest"
+      ],
+      "evaluated_dataset_hash": "9ba82cb5ad4e6b7c69aac9eb67a8b4be2eeb7919205f1c7a8bde037c1fb6440a"
+    },
+    "validation": {
+      "case_ids": [
+        "pubzh-017",
+        "pubzh-018",
+        "pubzh-019",
+        "pubzh-020",
+        "pubzh-021",
+        "pubzh-022",
+        "pubzh-023",
+        "pubzh-024"
+      ],
+      "groups": [
+        "public-stripe"
+      ],
+      "evaluated_dataset_hash": "a178b5358fa05d2bcb012b0b6977a11c30a4d030091dbe50b279774ff4c46963"
+    }
+  },
+  "freeze_hash": "575a7351c2f220750df6ef9b31a3d136282810f90d00c26f85fbd033ebcd4075"
+}

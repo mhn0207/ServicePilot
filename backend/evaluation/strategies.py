@@ -4,7 +4,7 @@ import copy
 import time
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_validator, model_serializer
 
 from evaluation.retrieval import (
     StrictModel, Execution, ReturnedChunk, Snapshot, canonical_hash, checked_execution,
@@ -66,7 +66,18 @@ class ModelCall(StrictModel):
     cache_read_input_tokens: int | None = Field(default=None, ge=0)
     cache_creation_input_tokens: int | None = Field(default=None, ge=0)
     elapsed_ms: float = 0.0
+    request_data: dict = Field(default_factory=dict)
+    response_value: list | None = None
     boundary: str = 'logical SDK call; SDK retries disabled; missing provider usage remains null'
+
+    @model_serializer(mode='wrap')
+    def serialize_observation(self, handler):
+        data = handler(self)
+        if not self.request_data:
+            data.pop('request_data', None)
+        if self.response_value is None:
+            data.pop('response_value', None)
+        return data
 
 
 class Trace(StrictModel):
@@ -243,7 +254,8 @@ class StrategyRunner:
             raise ValueError('missing explicit model')
         parameters = {'temperature': .3 if stage == 'rewrite' else 0.0,
                       'max_tokens': 512 if stage == 'rewrite' else 2048}
-        observation = ModelCall(stage=stage, model=self.model.identity, parameters=parameters)
+        observation = ModelCall(stage=stage, model=self.model.identity, parameters=parameters,
+            request_data=dict(query=query, n=n, candidates=[c.model_dump() for c in candidates]))
         trace.model_calls.append(observation)
         started = time.perf_counter()
         try:
@@ -254,6 +266,11 @@ class StrategyRunner:
                 setattr(observation, field, value if type(value) is int and value >= 0 else None)
             if response.get('truncated'):
                 raise ValueError('truncated output')
+            value = response.get('value')
+            # Only preserve bounded protocol values, not arbitrary provider output.
+            if isinstance(value, list) and len(value) <= 1000 and all(
+                    type(v) is int or (isinstance(v,str) and len(v)<=2000) for v in value):
+                observation.response_value = value
             observation.status = 'success'
             return response['value']
         finally:

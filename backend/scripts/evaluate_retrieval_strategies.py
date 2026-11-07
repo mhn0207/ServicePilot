@@ -22,6 +22,7 @@ from evaluation.experiments import (
     ExperimentReport, load_json, load_suite, make_experiment, compare, validate_report,
 )
 from scripts.evaluate_retrieval_evidence import code_identity
+from evaluation.provenance import write_source_bundle
 
 OUTPUT_ROOT=ROOT/'data/eval/rag/experiments'
 DEFAULT_SUITE=ROOT/'evaluation/corpora/suite.v2.json'
@@ -48,6 +49,7 @@ async def execute(args, output, suite):
                       vector_k=args.vector_k or 20,lexical_k=args.lexical_k or 20,
                       cache_mode=args.cache_mode or 'bypass')
         started=now()
+        code=code_identity()
         t=time.perf_counter()
         # 每个 run 有自己的 collection/模型客户端/缓存；共享的只是只读快照。
         index=await asyncio.to_thread(real_index,snapshot,args.onnx_cache) if args.mode=='real' else SyntheticIndex(snapshot)
@@ -66,7 +68,7 @@ async def execute(args, output, suite):
             await asyncio.to_thread(index.verify,snapshot)
             report=make_experiment(dataset=dataset,source=source,snapshot=snapshot,manifest=manifest,
                 split=args.split,config=config,dependencies=runner.identity(),executions=executions,traces=traces,
-                run_id=output.name+'_'+name,mode=args.mode,code=code_identity(),started_at=started,
+                run_id=output.name+'_'+name,mode=args.mode,code=code,started_at=started,
                 finished_at=now(),setup=setup)
             directory=output/name
             directory.mkdir()
@@ -77,6 +79,7 @@ async def execute(args, output, suite):
             write(directory/'executions.json',[e.model_dump() for e in executions])
             write(directory/'traces.json',[t.model_dump() for t in traces])
             write(directory/'report.json',report)
+            write_source_bundle(ROOT,directory,report.code)
             reports.append(report)
             print(f'{name}: {report.scoring.total} cases, {report.scoring.errors} errors; mode={args.mode}')
         finally:
@@ -119,6 +122,7 @@ def replay(args,output,suite):
     write(output/'executions.json',[e.model_dump() for e in executions])
     write(output/'traces.json',[t.model_dump() for t in traces])
     write(output/'report.json',report)
+    write_source_bundle(ROOT,output,report.code)
     return 1 if report.scoring.errors else 0
 
 

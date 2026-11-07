@@ -267,7 +267,7 @@ def test_online_auth_and_error_reporting_with_mock_transport(snapshot, monkeypat
         assert request.url.path == '/search' and request.url.params['top_k'] == '3'
         if request.url.params['query'] == 'fails':
             return httpx.Response(503, json={'detail': 'private backend failure'})
-        return httpx.Response(200, json={'results': [result(snapshot, 'alpha').model_dump()], 'cached': False, 'reranked': True})
+        return httpx.Response(200, json={'success': True, 'results': [result(snapshot, 'alpha').model_dump()], 'cached': False, 'reranked': True})
     client = httpx.AsyncClient
     monkeypatch.setenv('ZHIYING_EVAL_TOKEN', 'secret-test-token')
     monkeypatch.setattr(cli.httpx, 'AsyncClient', lambda **kw: client(**kw, transport=httpx.MockTransport(handler)))

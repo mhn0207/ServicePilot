@@ -1,0 +1,311 @@
+{
+  "version": "public-zh-sources-draft-v1",
+  "retrieved_on": "2026-11-07",
+  "sources": [
+    {
+      "id": "gh-troubleshooting",
+      "publisher": "GitHub",
+      "title": "GitHub REST API：限流与私有资源排查",
+      "url": "https://docs.github.com/zh/rest/using-the-rest-api/troubleshooting-the-rest-api",
+      "language": "zh",
+      "sections": [
+        "速率限制错误",
+        "适用于现有资源的404 Not Found"
+      ],
+      "original_excerpt": "避免证实私有仓库的存在",
+      "facts": [
+        "GitHub REST API限流可能返回403或429；主要额度耗尽时x-ratelimit-remaining为0。",
+        "若响应带retry-after，应等待该秒数；额度为0时按x-ratelimit-reset指定时间等待。",
+        "访问私有资源时，认证不正确也可能得到404，不能仅凭404认定仓库被删除；应核查令牌及访问权限。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "27ffbe9a9f3c53d2dc7763f584442638b008fb04b50fe6366e15e59702b685fd",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-github-rest"
+    },
+    {
+      "id": "gh-best-practices",
+      "publisher": "GitHub",
+      "title": "GitHub REST API：请求调度与条件请求",
+      "url": "https://docs.github.com/zh/rest/using-the-rest-api/best-practices-for-using-the-rest-api",
+      "language": "zh",
+      "sections": [
+        "避免并发请求",
+        "在可变请求之间暂停",
+        "使用条件请求"
+      ],
+      "original_excerpt": "应采用串行方式发出请求",
+      "facts": [
+        "为降低GitHub REST API次要限流风险，建议串行处理请求；大量POST、PATCH、PUT或DELETE之间至少间隔一秒。",
+        "正确认证的条件GET返回304时，不计入主要速率限制；这不等于对其他限制的豁免。",
+        "可以保存etag并在后续请求使用if-none-match；条件请求是否支持需以具体端点说明为准。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "13d8c30b90a5de979242bd6d8e5e900e908b6e90346ea89886f767de258f49e3",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-github-rest"
+    },
+    {
+      "id": "gh-authentication",
+      "publisher": "GitHub",
+      "title": "GitHub REST API：令牌认证方式与失败登录",
+      "url": "https://docs.github.com/zh/rest/authentication/authenticating-to-the-rest-api",
+      "language": "zh",
+      "sections": [
+        "关于身份验证",
+        "失败登录限制"
+      ],
+      "original_excerpt": "必须使用 `Authorization: Bearer`",
+      "facts": [
+        "GitHub REST API多数令牌可通过Authorization的Bearer或token方式传递，但JWT必须使用Bearer。",
+        "无效凭据最初返回401；短时间内反复使用无效凭据后，用户的认证尝试可能暂时统一返回403，即使随后提供有效凭据。",
+        "令牌还必须具有端点所需权限；仅更换Authorization写法不代表获得额外资源权限。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "e8702713912e7b36ab18ba21ef94f675074d5bc807f538225604cf0a9a5114fb",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-github-rest"
+    },
+    {
+      "id": "gh-pagination",
+      "publisher": "GitHub",
+      "title": "GitHub REST API：分页与每页数量",
+      "url": "https://docs.github.com/zh/rest/using-the-rest-api/using-pagination-in-the-rest-api",
+      "language": "zh",
+      "sections": [
+        "使用link标头",
+        "更改每页显示的项数"
+      ],
+      "original_excerpt": "如果无法计算",
+      "facts": [
+        "GitHub REST API分页应沿link标头提供的URL继续请求；不同端点的分页参数不一定相同。",
+        "link可能只有部分关系：无法计算最后一页时可以没有last；是否还有下一页应查看next。",
+        "多数端点per_page上限为100；超过上限可能被静默缩小而仍返回成功，具体默认值和上限需核对端点文档。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "ced083fec781e3f0c39c4a0408d035c1f77a5f434d01a7b5a0dd661e614826fe",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-github-rest"
+    },
+    {
+      "id": "ali-resource-plan",
+      "publisher": "阿里云",
+      "title": "阿里云费用与成本：资源包退订与使用",
+      "url": "https://help.aliyun.com/zh/user-center/support/resource-plan-faq",
+      "language": "zh",
+      "sections": [
+        "资源包是否支持退订，金额如何计算",
+        "资源包退订后是否影响产品使用和数据"
+      ],
+      "original_excerpt": "不影响产品使用和数据",
+      "facts": [
+        "是否可退资源包，先在费用与成本的资源退订页面查看可退订实例。",
+        "支持退订的资源包在有效期内且用量为零可全额退；指定未来生效的资源包在生效前可全额退。",
+        "退资源包不等于删除正在使用的产品和数据：对应产品会转为按量付费，需保持账户资金充足。",
+        "账户资金不足后会进入欠费并停服；长期未结清欠费可能导致产品释放和数据丢失，不能把退资源包理解成永远免费保留数据。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "c3315647ee4ecdea708208d23e3278722ca5bb374d00512922b0b24781abf994",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-aliyun-billing"
+    },
+    {
+      "id": "ali-renewal",
+      "publisher": "阿里云",
+      "title": "阿里云费用与成本：续订常见问题",
+      "url": "https://help.aliyun.com/zh/user-center/support/renewal-guide-q-a",
+      "language": "zh",
+      "sections": [
+        "取消订阅或关闭免密支付是否影响已购资源",
+        "导出续费清单时是不是进行了续费"
+      ],
+      "original_excerpt": "取消订阅或关闭免密支付",
+      "facts": [
+        "取消订阅或关闭免密支付，只停止后续自动续费，不影响当前已经购买的资源权益。",
+        "导出续费清单是询价和导出信息，不会替资源执行续费；仍需按续费流程完成支付。",
+        "续费价格受活动、配置和有效期等影响，应以支付页面为准，不能从旧活动价保证下一次价格。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "dab8eb1c4b9e1dc4a663658e87b8830446ca7fcdfd36d07e6a291b8791889042",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-aliyun-billing"
+    },
+    {
+      "id": "ali-billing",
+      "publisher": "阿里云",
+      "title": "阿里云费用与成本：关闭续费后仍出账",
+      "url": "https://help.aliyun.com/zh/user-center/support/billing-faqs",
+      "language": "zh",
+      "sections": [
+        "为什么关闭了自动续费或删除了资源仍产生扣费或欠费",
+        "包年包月还有后付费账单"
+      ],
+      "original_excerpt": "后付费产品与自动续费无关",
+      "facts": [
+        "纯后付费产品按实际用量出账，关闭自动续费不会停止这类产品计费。",
+        "删除API Key或释放资源后，出账延迟仍可能带来最后一个计费周期的尾单；仅见新账单不能认定仍有新用量。",
+        "购买包年包月实例也可能同时使用按量计费项目，应在账单详情核对具体资源和计费项，不能仅凭两张账单认定重复扣费。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "fd6ce2f09c304b4308ee47b709a952622dd371ea788c95fb32014d833ed7137e",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-aliyun-billing"
+    },
+    {
+      "id": "ali-unsubscribe",
+      "publisher": "阿里云",
+      "title": "阿里云费用与成本：预付费退订操作边界",
+      "url": "https://help.aliyun.com/zh/user-center/initiate-unsubscribe",
+      "language": "zh",
+      "sections": [
+        "发起退订",
+        "退订未生效续订"
+      ],
+      "original_excerpt": "退订后无法撤销",
+      "facts": [
+        "退订已生效的预付费实例会释放资源，操作不可撤销，应先备份数据并核对订单。",
+        "只退未生效的续费订单，不影响当前已经生效的服务；已生效的续费订单不能单独取消退款。",
+        "只想避免未来自动续费而不退款，应调整续费策略；不要把关闭续费、退未生效订单和退整台实例当成同一操作。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "baa424e01aa71d3b472d1af94c599721936891265c181cd26cadf434f269c967",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-aliyun-billing"
+    },
+    {
+      "id": "stripe-idempotency",
+      "publisher": "Stripe",
+      "title": "Stripe API v1：幂等重试和结果保存",
+      "url": "https://docs.stripe.com/api/idempotent_requests",
+      "language": "en",
+      "sections": [
+        "API v1 result retention",
+        "Parameter validation and concurrent conflict"
+      ],
+      "original_excerpt": "including `500` errors.",
+      "facts": [
+        "Stripe API v1在端点开始执行后保存给定幂等键的首次状态码和响应体；相同键重试返回已保存结果，包括500。",
+        "API v1中，执行前的参数校验失败或与在途请求冲突不会保存幂等结果；对于已保存的幂等请求，复用键更改参数会报错。",
+        "上述结果回放规则不能直接套用API v2；当前官方文档对v2失败工作重试的行为另作说明。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "ab7b42ac5cf70d0c42afa75a99b2e620e4abdf0ec084d4baa35ad9ddc2790f4d",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-stripe"
+    },
+    {
+      "id": "stripe-webhooks",
+      "publisher": "Stripe",
+      "title": "Stripe Webhook：乱序、重复与重新投递",
+      "url": "https://docs.stripe.com/webhooks",
+      "language": "en",
+      "sections": [
+        "Event ordering",
+        "Handle duplicate events",
+        "Manual retries"
+      ],
+      "original_excerpt": "doesn’t guarantee the delivery of events",
+      "facts": [
+        "Stripe不保证Webhook按事件生成顺序送达；snapshot事件created精度为秒，不宜作为顺序或去重依据。",
+        "重复投递应记录已处理event ID；必要时通过API取回缺失对象，不应假定先收到的事件就是业务上先发生。",
+        "手工重发成功并返回2xx，并不会自动取消Stripe对原失败投递的自动重试。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "9eabdc11d08d35e983244645355311819a2c493c0d35f804b0f769fdfee9fbc0",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-stripe"
+    },
+    {
+      "id": "stripe-cancel",
+      "publisher": "Stripe",
+      "title": "Stripe订阅：暂停收款与周期末取消",
+      "url": "https://docs.stripe.com/billing/subscriptions/cancel",
+      "language": "en",
+      "sections": [
+        "Cancel subscriptions",
+        "Cancel at the end of the current billing period",
+        "Prorate for usage-based billing"
+      ],
+      "original_excerpt": "cancel_at_period_end",
+      "facts": [
+        "Stripe暂停收款不会改变订阅状态，不应把它直接当成取消订阅。",
+        "cancel_at_period_end=true允许订阅运行至已付周期结束；周期结束前可设为false撤销预定取消，已经取消的订阅不能以此方式恢复。",
+        "取消时的账户贷记与把钱退给客户是不同操作；需要实际退款时应另行发起refund并处理账户余额，不代表已到账。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "56cef1b606e0f007fff2a9a187bcdb421e6c2d89a28d84ded204063256a1f175",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-stripe"
+    },
+    {
+      "id": "stripe-refunds",
+      "publisher": "Stripe",
+      "title": "Stripe支付：退款目的地与未捕获支付",
+      "url": "https://docs.stripe.com/refunds",
+      "language": "en",
+      "sections": [
+        "Issue refunds",
+        "Refund destinations",
+        "Trace a refund"
+      ],
+      "original_excerpt": "You can’t send a refund to a different destination",
+      "facts": [
+        "Stripe退款返回原支付方式，不能在该退款流程中指定另一张卡或银行账户。",
+        "同一charge可多次部分退款，但累计不能超过原支付金额；requires_capture的未捕获支付不能直接退款，应取消PaymentIntent。",
+        "到账时间取决于银行等因素，文档给出的约5至10个工作日是估计，不是对任一客户的精确到账保证。"
+      ],
+      "retrieved_on": "2026-11-07",
+      "published_updated_at": null,
+      "review_status": "AI_DRAFT_PENDING_HUMAN",
+      "capture_kind": "selected official page sections read via browser; curated summary, not full-page archive",
+      "original_page_hash": null,
+      "summary_sha256": "0e50e8c7df04f90525c0c913a7de1fcdae66da2ef60f93df46240684dc7899ab",
+      "editorial_note": "Short excerpt plus authored Chinese paraphrase; excerpt is not complete evidence; verify original sections.",
+      "source_family": "public-stripe"
+    }
+  ]
+}

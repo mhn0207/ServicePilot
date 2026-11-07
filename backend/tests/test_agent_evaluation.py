@@ -75,7 +75,7 @@ async def test_offline_boundaries_and_role_answers(tmp_path,monkeypatch):
     assert {x['role'] for x in c['role_answers']}=={'technical','billing'}
     assert any(x['stage']=='composer' for x in c['model_steps'])
     for e in c['events']:
-        assert e['tool_use_id'] and e['actual_tool_result']['chunks']==e['shown_chunks']
+        assert e['tool_use_id'] and e['actual_tool_result']['results']==e['shown_chunks']
     assert r['summary']['execution_success']['value']<1
 
 

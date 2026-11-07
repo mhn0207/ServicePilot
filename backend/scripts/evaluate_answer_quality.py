@@ -23,6 +23,7 @@ from evaluation.experiment_dependencies import SyntheticIndex
 from evaluation.experiments import load_json, make_experiment, ExperimentReport
 from evaluation.strategies import StrategyRunner, preset
 from scripts.evaluate_retrieval_evidence import code_identity
+from evaluation.provenance import write_source_bundle
 from scripts.evaluate_retrieval_strategies import write
 
 OUTPUT_ROOT = ROOT / 'data/eval/rag/answers'
@@ -38,11 +39,12 @@ async def retrieval_source(suite, runner=None, config=None, run_id='answer-sourc
     config = config or preset('B')
     runner = runner or StrategyRunner(snapshot, SyntheticIndex(snapshot))
     started = now()
+    code = code_identity()
     records = [await runner.run(c.id, c.turns[0], config) for c in dataset.cases]
     return make_experiment(dataset=dataset, source=source, snapshot=snapshot, manifest=manifest,
         split=dataset.cases[0].split, config=config, dependencies=runner.identity(),
         executions=[r[0] for r in records], traces=[r[1] for r in records],
-        run_id=run_id, mode=mode, code=code_identity(), started_at=started, finished_at=now(),
+        run_id=run_id, mode=mode, code=code, started_at=started, finished_at=now(),
         setup={'storage':'injected isolated runner; default synthetic in-memory', 'selection':'B is an engineering default, not a measured winner'})
 
 
@@ -72,6 +74,7 @@ async def execute(args, suite, output, config, ids):
     if args.mode == 'real' and source.mode != 'real' and not args.allow_mixed:
         raise ValueError('real generation requires real source or explicit --allow-mixed')
     started = now()
+    code = code_identity()
     gen = judge = None
     try:
         gen = AnswerProvider('generation') if args.mode == 'real' else FixedModel(args.model_fixture)
@@ -81,7 +84,7 @@ async def execute(args, suite, output, config, ids):
         rows = await execute_answers(suite, source, gen, judge, config, ids, output.name)
         report = make_answer_report(suite=suite, source=source, rows=rows, case_ids=ids,
             config=config, dependencies=dependencies(source, gen, judge), run_id=output.name,
-            code=code_identity(), started_at=started, finished_at=now())
+            code=code, started_at=started, finished_at=now())
         save(output, report, suite)
         print(f'{len(ids)} cases; modes={report.dependencies}; generation/Judge/quality denominators in report.json')
         return exit_code(report)
@@ -93,6 +96,7 @@ async def execute(args, suite, output, config, ids):
 
 
 def save(output, report, suite):
+    write_source_bundle(ROOT, output, report.code)
     write(output/'report.json', report)
     write(output/'review.json', report.review)
     write(output/'annotations.json', suite[0])

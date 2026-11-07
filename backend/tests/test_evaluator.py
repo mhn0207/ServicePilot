@@ -146,6 +146,8 @@ def test_partial_report_excludes_failed_scores_and_preserves_baseline(tmp_path):
         ev._judge, _ = judge_for(response(json.dumps(VALID)))
         complete = await ev.run(dialog_cases=[{'question':'问题'}])
         assert complete.status == 'complete'
+        assert not ev._baseline_path.exists()
+        ev.promote_baseline(complete)
         baseline = ev._baseline_path.read_text(encoding="utf-8")
         ev._judge, _ = judge_for(response(json.dumps(VALID)), response('{}'), response('{}'))
         partial = await ev.run(dialog_cases=[{'question':'问题'}, {'question':'第二个问题'}])
@@ -229,6 +231,7 @@ def test_regression_only_compares_matching_suite_and_scoring_config(tmp_path):
         ev._judge, _ = judge_for(response(json.dumps(good)))
         a = await ev.run(dialog_cases=[{'question':'A'}])
         assert a.regression_note and not a.regressions
+        ev.promote_baseline(a)
         ev._judge, _ = judge_for(response(json.dumps(low)))
         b = await ev.run(dialog_cases=[{'question':'B'}])
         assert a.suite_id != b.suite_id and not b.regressions
@@ -239,6 +242,7 @@ def test_regression_only_compares_matching_suite_and_scoring_config(tmp_path):
         ev._judge._model = 'another-model'
         changed = await ev.run(dialog_cases=[{'question':'A'}])
         assert changed.suite_id != same.suite_id and not changed.regressions
+        ev.promote_baseline(changed)
         restored = ev._load_baseline()
         assert restored.suite_id == changed.suite_id
     asyncio.run(run())

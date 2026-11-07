@@ -516,7 +516,8 @@ async def search(query: str = Query(min_length=1, max_length=2000), top_k: int =
     if _tool_manager is None:
         raise HTTPException(503, "服务未就绪")
     result = await _tool_manager.search_with_rewrite("knowledge_search", query, top_k=top_k)
-    return {"query": query, "results": result.data, "reranked": result.reranked, "cached": result.cached}
+    return {"query": query, "results": result.data, "reranked": result.reranked, "cached": result.cached,
+            "success": result.success}
 
 
 class DocInput(BaseModel):
@@ -725,6 +726,27 @@ async def get_eval_job(job_id: str):
     return job
 
 
+class BaselinePromotionInput(BaseModel):
+    model_config = {"extra": "forbid"}
+    timestamp: str = Field(min_length=1, max_length=80)
+
+
+@app.post('/eval/baseline')
+async def promote_eval_baseline(body: BaselinePromotionInput):
+    if _evaluator is None:
+        raise HTTPException(503, '服务未就绪')
+    reports = [r for r in _evaluator.history if r.timestamp == body.timestamp]
+    if len(reports) != 1:
+        raise HTTPException(404, '没有唯一对应的本进程评测报告')
+    try:
+        _evaluator.promote_baseline(reports[0])
+    except ValueError as ex:
+        raise HTTPException(409, str(ex)) from ex
+    except OSError as ex:
+        raise HTTPException(503, '基线写入失败，原基线保留') from ex
+    return {'timestamp': reports[0].timestamp, 'suite_id': reports[0].suite_id, 'promoted': True}
+
+
 async def _execute_eval(body: Optional[EvalRunInput] = None, progress=None):
     """运行内置评测用例，返回评测报告。"""
     if _evaluator is None:
@@ -757,6 +779,7 @@ async def _execute_eval(body: Optional[EvalRunInput] = None, progress=None):
         progress=progress,
     )
     return {
+        "timestamp":      report.timestamp,
         "pass_rate":       report.pass_rate,
         "scope":           "orchestrator",
         "status":          report.status,

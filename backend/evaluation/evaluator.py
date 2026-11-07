@@ -394,8 +394,18 @@ class EndToEndEvaluator:
         return hashlib.sha256(serialize(payload).encode()).hexdigest()
 
     def _comparison_baseline(self, suite_id):
-        candidates = list(reversed(self._history)) + ([self._baseline] if self._baseline else [])
+        candidates = [self._baseline] if self._baseline else []
         return next((r for r in candidates if r.status == "complete" and not r.regressions and r.suite_id == suite_id and suite_id), None)
+
+    def promote_baseline(self, report: EvalReport) -> None:
+        """Explicit local/admin decision; normal evaluations never move the reference."""
+        if self._run_lock.locked():
+            raise ValueError('评测运行中不能晋升基线')
+        if not any(report is item for item in self._history):
+            raise ValueError('只能晋升本进程已完成的评测报告')
+        if report.status != 'complete' or report.regressions or not report.suite_id:
+            raise ValueError('未完成、评分失败或已退化的报告不能晋升')
+        self._save_baseline(self._report_from_dict(asdict(report)))
 
     async def _run(
         self,
@@ -501,7 +511,6 @@ class EndToEndEvaluator:
             regression_note=regression_note,
         )
         self._history.append(report)
-        self._save_baseline(report)
         return report
 
     async def _evaluate_dialog_case(self, case: Dict[str, Any], case_idx: int) -> List[EvalResult]:
@@ -669,7 +678,10 @@ class EndToEndEvaluator:
             return None
 
     def _save_baseline(self, report: EvalReport) -> None:
-        if not self._baseline_path or report.status != "complete" or report.regressions:
+        if report.status != "complete" or report.regressions:
+            return
+        if not self._baseline_path:
+            self._baseline = report
             return
         try:
             self._baseline_path.parent.mkdir(parents=True, exist_ok=True)
@@ -684,6 +696,7 @@ class EndToEndEvaluator:
             self._baseline = report
         except Exception as ex:
             logger.warning(f"保存评测基线失败: {ex}")
+            raise
 
     @staticmethod
     def _report_from_dict(data: Dict[str, Any]) -> EvalReport:

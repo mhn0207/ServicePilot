@@ -25,7 +25,7 @@ class FixedModel:
         from evaluation.answer_quality import protocol_identity
         if (self.fixture.get('annotation_hash') != suite[0].annotation_hash
                 or self.fixture.get('knowledge_hash') != suite[2].knowledge_hash
-                or self.fixture.get('prompts') not in (protocol_identity(), protocol_identity(legacy=True))):
+                or self.fixture.get('prompts') not in (protocol_identity(), protocol_identity(span_coverage=False), protocol_identity(legacy=True))):
             raise ValueError('fixture input identity mismatch')
 
     async def call(self, stage, payload, parameters):
