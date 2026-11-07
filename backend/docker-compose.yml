@@ -57,6 +57,8 @@ services:
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
+    secrets:
+      - metrics_token
     restart: unless-stopped
     networks:
       - zhiying-network
@@ -84,12 +86,15 @@ services:
       - CHROMA_PERSIST_DIRECTORY=/app/data/chroma
       - EVAL_BASELINE_PATH=/app/data/eval/baseline.json
       - ZHIYING_SKILLS_DIR=/app/skills
+      - ZHIYING_METRICS_TOKEN_FILE=/run/secrets/metrics_token
     volumes:
       - ./data/chroma:/app/data/chroma
       - ./data/eval:/app/data/eval
       - ./skills:/app/skills
       - ./config/mcp_servers.json:/app/config/mcp_servers.json:ro
       - ./logs:/app/logs
+    secrets:
+      - metrics_token
     depends_on:
       redis:
         condition: service_healthy
@@ -143,3 +148,7 @@ volumes:
   chromadb-data:
   prometheus-data:
   nginx-logs:
+
+secrets:
+  metrics_token:
+    file: ${ZHIYING_METRICS_TOKEN_PATH:-./config/prometheus.token.example}

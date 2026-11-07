@@ -15,6 +15,7 @@
 升级机制：
   - Agent 置信度低于阈值 → 自动升级到更高级 Agent 或转人工
 """
+from core.retrieval_policy import requires_knowledge
 import asyncio
 import copy
 from contextvars import ContextVar
@@ -394,14 +395,7 @@ class BaseAgent:
                 # Business policy must come from the current knowledge tool, rather
                 # than generic model knowledge or workflow-only Skills. Corrections
                 # and greetings alone do not require retrieval.
-                policy_question = (
-                    re.search(
-                        r'退款|退费|退钱|退订|续费|续订|订阅|自动扣(?:费|款)|'
-                        r'(?:钱|款|费用|金额).{0,12}(?:退回|返还)|'
-                        r'(?:退回|返还).{0,12}(?:钱|款|费用|金额)|'
-                        r'重复扣款|企业合同|套餐|登录|认证|\b401\b|\b403\b', req.message)
-                    and re.search(r'[?？]|是否|怎么|如何|什么|多少|多久|吗|请(?:说明|介绍|解释)|能否|能保证|政策|规则|流程|时效|资格|条件', req.message)
-                )
+                policy_question = requires_knowledge(req.message)
                 if _ == 0 and not reused and policy_question and 'search_knowledge_base' in tools:
                     request_kwargs['tool_choice'] = {'type': 'tool', 'name': 'search_knowledge_base'}
                 resp = await asyncio.wait_for(

@@ -22,7 +22,7 @@ if _ROOT not in sys.path:
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Response, UploadFile, File, Query, Request as HTTPRequest
+from fastapi import FastAPI, HTTPException, Response, UploadFile, File, Query, Path as ApiPath, Request as HTTPRequest
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field, model_validator
@@ -261,17 +261,19 @@ app.add_middleware(
 
 @app.middleware("http")
 async def access_control(request: HTTPRequest, call_next):
-    from core.access import identity
+    from core.access import identity, metrics_authorized
     from fastapi.responses import JSONResponse
     try:
         account = identity(request.headers.get("authorization", ""))
+        scrape_access = (request.method == 'GET' and request.url.path == '/metrics'
+                         and metrics_authorized(request.headers.get('authorization', '')))
     except (ValueError, TypeError):
         return JSONResponse({"detail": "服务鉴权配置无效"}, status_code=503)
     request.state.account = account
-    if account is not None and request.url.path != "/health" and request.method != "OPTIONS":
+    if account is not None and not scrape_access and request.url.path != "/health" and request.method != "OPTIONS":
         if not account:
             return JSONResponse({"detail": "需要有效 Bearer Token"}, status_code=401)
-        reader = request.url.path in {"/chat", "/search", "/knowledge/stats", "/skills", "/mcp", "/mcp/"}
+        reader = request.url.path in {"/chat", "/conversation/history", "/search", "/knowledge/stats", "/skills", "/mcp", "/mcp/"}
         if not reader and account["role"] != "admin":
             return JSONResponse({"detail": "该接口需要管理员权限"}, status_code=403)
     is_chat = request.url.path == "/chat" and request.method == "POST"
@@ -335,8 +337,18 @@ class RecentToolTracesResponse(BaseModel):
 # ── 路由 ──────────────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health():
-    if _orchestrator is None:
+    tool = _tool_manager._tools.get('knowledge_search') if _tool_manager else None
+    if _orchestrator is None or _memory is None or tool is None:
         raise HTTPException(503, "服务未就绪")
+    try:
+        async with asyncio.timeout(2):
+            memory_ok, knowledge_ok = await asyncio.gather(
+                _memory.check_health(), tool.handler.__self__.check_health(),
+            )
+        if not memory_ok or not knowledge_ok:
+            raise ValueError('storage unavailable')
+    except Exception:
+        raise HTTPException(503, '存储依赖未就绪') from None
     return {"status": "ok", "agents": {} if os.getenv("ZHIYING_API_TOKENS") else _orchestrator.get_stats()}
 
 
@@ -357,6 +369,25 @@ async def reload_skills():
     if _orchestrator is not None:
         _orchestrator.set_skill_manager(_skill_manager)
     return _skill_manager.summary()
+
+
+@app.get("/conversation/history")
+async def conversation_history(http_request: HTTPRequest,
+                               conv_id: str = Query(min_length=1, max_length=128),
+                               user_id: str = Query(default="anonymous", min_length=1, max_length=128)):
+    """Recent committed Redis messages; authenticated identity always owns the read."""
+    from fastapi.responses import JSONResponse
+    account = getattr(http_request.state, "account", None)
+    owner = account["user_id"] if account else user_id
+    if _memory is None:
+        raise HTTPException(503, "会话存储未就绪")
+    try:
+        async with asyncio.timeout(3):
+            messages = await _memory.get_history(owner, conv_id)
+    except Exception as ex:
+        raise HTTPException(503, "历史消息暂不可用，请重试") from ex
+    return JSONResponse({"conv_id": conv_id, "messages": messages, "scope": "recent_committed"},
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -660,6 +691,59 @@ async def upload_knowledge(file: UploadFile = File(...)):
         "added_chunks": count,
         "total_chunks": total,
     }
+
+
+def _knowledge_documents_store():
+    tool = _tool_manager._tools.get('knowledge_search') if _tool_manager else None
+    if tool is None:
+        raise HTTPException(503, '知识库未初始化')
+    return tool.handler.__self__
+
+
+async def _knowledge_document_operation(method, *args):
+    from fastapi.responses import JSONResponse
+    from tooling.knowledge_documents import DocumentMissing, DocumentConflict, DocumentLimit
+    try:
+        data = await asyncio.to_thread(method, *args)
+        return JSONResponse(data, headers={'Cache-Control': 'no-store'})
+    except DocumentMissing as ex:
+        raise HTTPException(404, '文档不存在，请刷新列表') from ex
+    except DocumentConflict as ex:
+        raise HTTPException(409, '文档已变化或片段信息不完整，请刷新核验后再删除') from ex
+    except DocumentLimit as ex:
+        raise HTTPException(503, '知识片段超过管理界面上限（5000），请缩小知识库后重试') from ex
+    except Exception as ex:
+        raise HTTPException(503, '知识管理操作未完成，请刷新核对后重试') from ex
+
+
+@app.get('/knowledge/documents', tags=['知识库'])
+async def list_knowledge_documents():
+    return await _knowledge_document_operation(_knowledge_documents_store().list_documents)
+
+
+@app.get('/knowledge/documents/{document_id}', tags=['知识库'])
+async def get_knowledge_document(document_id: str = ApiPath(pattern=r'^[0-9a-f]{64}$')):
+    return await _knowledge_document_operation(_knowledge_documents_store().get_document, document_id)
+
+
+@app.delete('/knowledge/documents/{document_id}', tags=['知识库'])
+async def delete_knowledge_document(document_id: str = ApiPath(pattern=r'^[0-9a-f]{64}$'),
+                                    expected_version: str = Query(pattern=r'^[0-9a-f]{64}$')):
+    kb = _knowledge_documents_store()
+    loop = asyncio.get_running_loop()
+    managers = (_tool_manager, _eval_tool_manager)
+    def evict():
+        for manager in managers:
+            if manager is not None:
+                manager.invalidate_cache('knowledge_search')
+    def remove():
+        try:
+            return dict(document_id=document_id, deleted_chunks=kb.delete_document(document_id, expected_version))
+        finally:
+            # Cancelling an HTTP wait cannot stop a synchronous Chroma write.
+            # Evict on the event loop AFTER the worker settles, even on error.
+            loop.call_soon_threadsafe(evict)
+    return await _knowledge_document_operation(remove)
 
 
 @app.get("/knowledge/stats", tags=["知识库"])

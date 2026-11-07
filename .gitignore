@@ -13,6 +13,7 @@
 !.env.example
 *.pem
 *.key
+*.token
 # Generated files and local environments
 **/__pycache__/
 *.py[cod]
@@ -44,3 +45,18 @@ Thumbs.db
 **/.git-initialization-backup/
 
 .local-review/
+
+# Local coverage, scratch files and database artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.tsbuildinfo
+*.tmp
+*.bak
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.rdb
+*.aof

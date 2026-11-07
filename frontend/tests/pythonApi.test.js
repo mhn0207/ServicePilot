@@ -1,9 +1,34 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  createInitialSettings, saveSettings, requestChat, requestHealth,
-  requestSearch, addKnowledge, uploadKnowledge, requestToolTrace, runEvaluation
+  createInitialSettings, saveSettings, requestChat, requestHealth, requestHistory,
+  requestSearch, addKnowledge, uploadKnowledge, requestToolTrace, runEvaluation,
+  requestKnowledgeDocuments, requestKnowledgeDocument, deleteKnowledgeDocument
 } from '../src/lib/api.js'
+
+test('knowledge administration sends the current token and previewed version', async t => {
+  const calls=[]
+  replaceGlobal(t,'fetch',async(url,options)=>{calls.push({url,options});return json({documents:[],deleted_chunks:1})})
+  const config={endpoint:'/api/zhiying',userId:'admin',pythonToken:'admin-token'}
+  await requestKnowledgeDocuments(config)
+  await requestKnowledgeDocument(config,'a'.repeat(64))
+  await deleteKnowledgeDocument(config,'a'.repeat(64),'b'.repeat(64))
+  assert.equal(calls[0].url,'/api/zhiying/knowledge/documents')
+  assert.equal(calls[2].options.method,'DELETE')
+  assert.equal(new URL(calls[2].url,'http://local').searchParams.get('expected_version'),'b'.repeat(64))
+  assert.ok(calls.every(c=>new Headers(c.options.headers).get('authorization')==='Bearer admin-token'))
+})
+
+test('history uses current identity, encoded conversation and access token', t => {
+  replaceGlobal(t, 'fetch', async (url, options) => {
+    const parsed = new URL(url, 'http://local')
+    assert.equal(parsed.searchParams.get('conv_id'), 'a/b & c')
+    assert.equal(parsed.searchParams.get('user_id'), 'alice')
+    assert.equal(new Headers(options.headers).get('authorization'), 'Bearer test-token')
+    return json({ messages: [] })
+  })
+  return requestHistory({endpoint:'/api/zhiying',userId:'alice',conversationId:'a/b & c',pythonToken:'test-token'})
+})
 
 function storage() {
   const data = new Map()
@@ -73,7 +98,7 @@ test('knowledge, upload and trace requests follow the Python API contract', asyn
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     calls.push({ url, options })
     return json(url.includes('/trace/') ? { request_id: 'r/1', found: true,
-      trace: { tools_used: ['search_knowledge_base'], tool_calls: [{ tool_name: 'search_knowledge_base' }] } } : { status: 'ok' })
+      trace: { tools_used: ['search_knowledge_base'], tool_calls: [{ tool_name: 'search_knowledge_base' }] } } : { status: 'ok', success: true, results: [] })
   })
   await requestHealth(settings)
   await requestSearch(settings, '退款 规则', 3)
@@ -106,4 +131,16 @@ test('resumes a Python evaluation job without submitting again and clears the co
   assert.deepEqual(await runEvaluation(settings, null, { interval: 0 }), { total: 3 })
   assert.deepEqual(calls.map(call => call.url), ['/api/zhiying/eval/run', '/api/zhiying/eval/jobs/python-job'])
   assert.equal(session.getItem('zhiying.eval:python:/api/zhiying:u-test'), null)
+})
+
+test('search execution failure is rejected even when HTTP succeeds', async t => {
+  t.mock.method(globalThis, 'fetch', async () => json({ success: false, results: [], cached: false, reranked: false }))
+  await assert.rejects(requestSearch(settings, 'failed search'), /检索.*失败/)
+})
+
+test('a successful search with no matching documents stays a valid empty result', async t => {
+  t.mock.method(globalThis, 'fetch', async () => json({ success: true, results: [], cached: false, reranked: false }))
+  const result = await requestSearch(settings, 'empty search')
+  assert.equal(result.success, true)
+  assert.deepEqual(result.results, [])
 })

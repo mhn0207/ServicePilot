@@ -24,6 +24,11 @@ export async function requestHealth(settings) {
   return requestFor(settings, '/health')
 }
 
+export async function requestHistory(settings) {
+  const query = new URLSearchParams({ conv_id: settings.conversationId, user_id: settings.userId })
+  return requestFor(settings, `/conversation/history?${query}`)
+}
+
 export async function requestMonitor(settings) {
   return requestFor(settings, '/monitor')
 }
@@ -38,6 +43,18 @@ export async function reloadSkills(settings) {
 
 export async function requestKnowledgeStats(settings) {
   return requestFor(settings, '/knowledge/stats')
+}
+
+export async function requestKnowledgeDocuments(settings) {
+  return requestFor(settings, '/knowledge/documents')
+}
+
+export async function requestKnowledgeDocument(settings, documentId) {
+  return requestFor(settings, `/knowledge/documents/${encodeURIComponent(documentId)}`)
+}
+
+export async function deleteKnowledgeDocument(settings, documentId, version) {
+  return requestFor(settings, `/knowledge/documents/${encodeURIComponent(documentId)}?${new URLSearchParams({expected_version:version})}`, {method:'DELETE'})
 }
 
 export async function runEvaluation(settings, body = null, options = {}) {
@@ -63,7 +80,9 @@ export async function runEvaluation(settings, body = null, options = {}) {
 
 export async function requestSearch(settings, query, topK = 5) {
   const params = new URLSearchParams({ query, top_k: String(topK) })
-  return requestFor(settings, `/search?${params}`, { method: 'POST' })
+  const result = await requestFor(settings, `/search?${params}`, { method: 'POST' })
+  if (result?.success !== true) throw new Error('知识检索执行失败，请稍后重试')
+  return result
 }
 
 export async function ragTaskKey(settings) {

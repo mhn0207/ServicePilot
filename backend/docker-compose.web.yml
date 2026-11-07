@@ -24,4 +24,4 @@ services:
       - ./config/nginx/web-gateway.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       frontend:
-        condition: service_started
+        condition: service_healthy

@@ -32,6 +32,7 @@ from anthropic import AsyncAnthropic
 from core.llm_utils import create_message, extract_text_content
 from core.performance import record_event
 from core.concurrency import KeyedLocks, redis_lease
+from core.storage_health import ChromaHealthProbe
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +114,7 @@ class MemoryManager:
         self._request_locks = KeyedLocks()
 
         # ChromaDB：优先连接独立服务（docker compose 模式），连不上则降级为本地嵌入式
+        remote_chroma = False
         try:
             # HttpClient 默认也会初始化 ChromaDB telemetry；显式关闭避免 posthog 兼容性错误日志。
             chroma = chromadb.HttpClient(
@@ -121,6 +123,7 @@ class MemoryManager:
                 settings=chromadb.Settings(anonymized_telemetry=False),
             )
             chroma.heartbeat()  # 测试连接
+            remote_chroma = True
             logger.info(f"ChromaDB 已连接: {chroma_host}:{chroma_port}")
         except Exception as ex:
             if os.getenv("ZHIYING_ENV", "development").lower() == "production":
@@ -135,6 +138,15 @@ class MemoryManager:
         self._episodic = chroma.get_or_create_collection("episodic")
         # 用户画像：存储提炼出的偏好和实体
         self._profile  = chroma.get_or_create_collection("user_profile")
+        api_path = chroma.get_settings().chroma_server_api_default_path if remote_chroma else '/api/v2'
+        self._health_probe = ChromaHealthProbe(
+            self._episodic, host=chroma_host if remote_chroma else None, port=chroma_port,
+            api_path=api_path,
+        )
+        self._profile_health_probe = ChromaHealthProbe(
+            self._profile, host=chroma_host if remote_chroma else None, port=chroma_port,
+            api_path=api_path,
+        )
 
     @asynccontextmanager
     async def conversation(self, user_id: str, conv_id: str):
@@ -407,6 +419,12 @@ class MemoryManager:
                                 timestamp=datetime.fromisoformat(d["ts"]), metadata=d.get("metadata", {})))
         return msgs
 
+    async def get_history(self, user_id: str, conv_id: str) -> List[Dict[str, str]]:
+        """Read recent committed messages only; never trigger migration, LLM or maintenance."""
+        raws = await self._redis.lrange(self._wm_key(user_id, conv_id), 0, self.WORKING_MAX - 1)
+        return [{"role": m.role.value, "content": m.content, "timestamp": m.timestamp.isoformat()}
+                for m in self._messages_from_raw(raws) if m.role in (MsgRole.USER, MsgRole.ASSISTANT)]
+
     async def _get_working_memory(self, user_id: str, conv_id: str) -> List[Message]:
         await self._migrate_legacy_keys(user_id, conv_id)
         raws = await self._redis.lrange(self._wm_key(user_id, conv_id), 0, self.WORKING_MAX - 1)
@@ -468,6 +486,16 @@ class MemoryManager:
         except Exception:
             pass
         return {}
+
+    async def check_health(self) -> bool:
+        """Probe storage only; no embeddings, model calls or writes."""
+        try:
+            redis_ok, chroma_ok, profile_ok = await asyncio.gather(
+                self._redis.ping(), self._health_probe.check(), self._profile_health_probe.check(),
+            )
+            return redis_ok is True and chroma_ok and profile_ok
+        except Exception:
+            return False
 
     async def close(self) -> None:
         """关闭异步 Redis 连接。"""

@@ -71,8 +71,10 @@ def test_production_storage_connection_failure_never_switches_to_local(cls, modu
 def test_empty_production_knowledge_base_does_not_seed_demo_policies(monkeypatch):
     import tooling.knowledge_base as module
     monkeypatch.setenv("ZHIYING_ENV", "production")
-    collection = SimpleNamespace(count=lambda: 0)
-    remote = SimpleNamespace(heartbeat=lambda: None, get_or_create_collection=lambda **kwargs: collection)
+    collection = SimpleNamespace(count=lambda: 0, tenant='default_tenant',
+                                 database='default_database', id='empty-production-collection')
+    remote = SimpleNamespace(heartbeat=lambda: None, get_or_create_collection=lambda **kwargs: collection,
+                             get_settings=lambda: SimpleNamespace(chroma_server_api_default_path='/api/v2'))
     monkeypatch.setattr(module.chromadb, "Settings", Mock(return_value=None), raising=False)
     monkeypatch.setattr(module.chromadb, "HttpClient", Mock(return_value=remote), raising=False)
     seed = Mock()

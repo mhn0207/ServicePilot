@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+from pathlib import Path
 
 
 def identity(authorization):
@@ -23,3 +24,21 @@ def identity(authorization):
         if hmac.compare_digest(hashlib.sha256(token.encode()).digest(), digest):
             return account
     return {}
+
+
+def metrics_authorized(authorization: str) -> bool:
+    """A separate file-backed scrape credential never grants an API identity."""
+    path = os.getenv('ZHIYING_METRICS_TOKEN_FILE', '').strip()
+    if not path:
+        return False
+    try:
+        token = Path(path).read_text(encoding='utf-8').strip()
+    except (OSError, UnicodeError) as ex:
+        raise ValueError('指标采集凭据文件不可用') from ex
+    if not token:
+        return False  # Empty example file supports unauthenticated local development.
+    if len(token) < 24 or any(char.isspace() for char in token):
+        raise ValueError('指标采集凭据无效')
+    supplied = authorization[7:] if authorization.startswith('Bearer ') else ''
+    return hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(),
+                               hashlib.sha256(token.encode()).digest())

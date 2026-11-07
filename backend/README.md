@@ -2,345 +2,206 @@
 
 Python 3.12 / FastAPI / Redis / ChromaDB / Anthropic SDK / MCP。
 
-整体架构、部署入口、来源说明和四批次 RAG 评测计划见[根 README](../README.md)。
+本页描述当前接口、验证入口和实验边界。项目功能、最短演示与来源说明见 [根 README](../README.md)。
 
-## 配置与启动
+## 配置与运行
 
-在本目录复制 `.env.example` 为 `.env`，填写 `ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL` 和兼容 Anthropic Messages 的 `ANTHROPIC_BASE_URL`。真实凭据不得提交。`ZHIYING_ENV=development` 仅用于本机演示；production 要配置 `ZHIYING_API_TOKENS` 并使用独立凭据。
+从本目录使用 `.env.example` 建立本机 `.env`，已有文件不覆盖。填写 `ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL` 与兼容 Anthropic Messages 的 `ANTHROPIC_BASE_URL`。模型凭据不提交、不传给前端。
 
 ```powershell
-docker compose -p servicepilot-local -f docker-compose.yml -f docker-compose.web.yml up -d --build
+docker compose -p servicepilot-local -f docker-compose.yml -f docker-compose.web.yml up -d --build --wait --wait-timeout 180
 ```
 
-聊天 API 为 `POST /chat`，重试沿用 `client_request_id`；检索为 `POST /search?query=...&top_k=3`。`/health` 只验证应用与相关依赖状态，不能证明模型 Key、额度或模型名称可用。
+示例配置的 `ZHIYING_ENV=development` 用于本机演示，并允许空库导入 `data/demo_docs/sample_knowledge.json`。production 必须设置 `ZHIYING_API_TOKENS`；ChromaDB 连接失败时中止，禁止回退到本地库。外部 MCP 由示例配置中的 `MCP_EXTERNAL_ENABLED=false` 关闭；直接使用进程环境启动时也应显式设置此值。
 
-`/eval/run` 提交现有意图与对话评测，返回 202 任务；`/eval/jobs/{job_id}` 查询进度。当前对话质量评测范围是 Orchestrator，不代表完整 HTTP 链路评测。
+若容器调用模型需要宿主机代理，须单独配置容器可访问的代理地址。容器中的 `127.0.0.1` 指向容器自身，不能直接复用宿主机回环代理。不要为排查连接问题关闭证书校验。
 
-`/monitor` 查看运行统计，`/metrics` 提供 Prometheus 指标，`/trace/tool/{request_id}` 查询工具轨迹。`/skills/reload` 重载 Markdown 或 JSON 业务规则。外部 MCP 默认关闭，可按需配置 `config/mcp_servers.json` 并启用 `MCP_EXTERNAL_ENABLED`。
+## 主要接口与身份
 
-## 测试
+| 接口 | 用途 |
+| --- | --- |
+| `POST /chat` | 聊天；重试沿用 `client_request_id` |
+| `GET /conversation/history?conv_id=...` | 当前用户、当前会话已提交的近期消息；不调用模型 |
+| `POST /search?query=...&top_k=3` | 当前业务 RAG 流水线；会改写查询并可能重排 |
+| `POST /knowledge/add`、`POST /knowledge/upload` | 导入 JSON、TXT 或 Markdown，上传限制 10 MB |
+| `GET /knowledge/stats` | 知识片段数量 |
+| `GET /knowledge/documents` | 管理员文档列表及待核验旧片段 |
+| `GET /knowledge/documents/{document_id}` | 管理员查看版本与有序片段 |
+| `DELETE /knowledge/documents/{document_id}?expected_version=...` | 管理员按预览版本删除整篇文档 |
+| `GET /skills`、`POST /skills/reload` | 查看/重新加载业务规则 |
+| `GET /trace/tool/{request_id}`、`GET /trace/tools` | 单次/最近工具轨迹 |
+| `GET /monitor`、`GET /metrics` | 运行摘要及 Prometheus 指标 |
+| `POST /eval/run`、`GET /eval/jobs/{job_id}` | 意图和对话评测的异步任务 |
+| `POST /eval/baseline` | 管理员显式选择已完成报告作为基线 |
+| `POST /eval/rag/run`、`GET /eval/rag/runs` | 固定 Agent 离线 suite 及历史报告 |
+| `/mcp/` | 标准 MCP 知识 Tools / Resources |
+
+启用鉴权后，聊天用户身份由 Token 映射决定，覆盖请求正文中的 `user_id`；管理、轨迹及评测接口需要管理员权限。知识库在当前应用范围内共享，不是独立租户知识库。
+
+### 知识维护
+
+文档管理沿用导入时生成的文档身份摘要，不使用标题作为删除定位，也不接收磁盘路径。列表只读取元数据，正文在展开文档时读取；接口禁止缓存。管理员确认删除时提交所查看的内容版本；已更新或身份/片段不完整返回 409，不存在返回 404，非法身份/版本返回 422，存储异常返回通用 503。
+
+删除清理该文档全部片段，不能撤销；文档中的知识可能影响所有聊天用户。缺少文档身份的旧片段单独只读展示，缺版本、混合版本或缺片段的文档禁止删除，不自动迁移或猜测归属。管理扫描上限为 5000 片，超限明确报错，不静默截断列表。
+
+导入与版本检查/删除共用当前进程的写锁；这不是多 worker 的全局事务。删除工作线程结束后，不论成功或异常，都会在事件循环清除业务与旧评测工具缓存；即使 HTTP 等待被取消，也在实际存储操作结束后清理。HTTP 失败可能表示结果未知，应刷新核对，不自动重放删除；已经取得证据的在途请求并不因此被撤回。
+
+`/health` 在两秒总预算内检查 Redis、记忆/画像及知识库正在使用的 Chroma collection。远端 Chroma 采用有一秒传输超时的独立异步 count 请求，API 版本跟随实际客户端；本地模式合并未完成探测，避免取消等待后重复创建阻塞线程。未初始化、依赖异常或超时返回 503，恢复后返回 200；不会调用模型、生成 embedding 或写业务数据，也不证明模型 Key、额度或模型名称可用。
+
+### Prometheus 采集身份
+
+无鉴权 development 模式默认使用空的 `config/prometheus.token.example`。开启 API 鉴权后，为采集生成独立随机令牌文件，不要复用模型 Key：
+
+```powershell
+# 从 backend 执行；文件已存在时拒绝覆盖。
+python -c "from pathlib import Path; import secrets; Path('config/prometheus.token').open('x', encoding='utf-8').write(secrets.token_urlsafe(32) + '\n')"
+```
+
+在本机 `.env` 设置 `ZHIYING_METRICS_TOKEN_PATH=./config/prometheus.token`，再使用相同 Compose 命令更新服务。Compose 将该文件作为 secret 同时提供给应用和 Prometheus；应用读取 `ZHIYING_METRICS_TOKEN_FILE=/run/secrets/metrics_token`，Prometheus 使用 `authorization.credentials_file`。非 Compose 启动时，直接设置应用的 `ZHIYING_METRICS_TOKEN_FILE` 为本机文件路径。
+
+令牌至少 24 字符、不可含空白，只授权 `GET /metrics`，不能作为聊天、轨迹或管理身份。管理员 API Token 仍可读取指标，普通用户无此权限。凭据文件缺失或格式错误会拒绝采集；空文件不在启用 API 鉴权时提供访问能力。真实 `*.token` 同时被 Git 和后端镜像构建排除，不将凭据提交或写入前端。
+
+## 聊天的提交与失败语义
+
+同一用户和会话由进程内锁与 Redis 租约串行化，租约定期续租；失锁时取消持有者。成功轮次把用户消息、助手消息、业务状态和回执放入同一 Redis 事务。失败轮次保留回执，不提交成功历史。
+
+- 成功请求重试返回原回执；同一 ID 携带不同消息返回 409。
+- 可重试失败允许相同 ID 再次执行，因此失败重试不一定返回相同响应。
+- 副作用工具执行前保存不可自动重放的待核验标记；当前内置业务工具本身不连接退款、订单或工单系统。
+- 全轮超时与阶段预算分别控制；HTTP 超时不表示供应商或外部工具肯定未执行。
+
+后台压缩用快照与 WATCH 提交，避免覆盖新增消息；画像更新按用户合并并节流。上述机制不是跨 Redis、ChromaDB 与外部工具的全局事务，也不等于任意故障下 exactly-once。
+
+历史读取只返回 Redis 当前保留的最多 20 条用户/助手消息，按时间顺序排列，不返回内部 metadata、画像或工具轨迹；启用鉴权时身份由 Token 决定，传入其他 `user_id` 不改变读取对象，管理员也只读自己的会话。响应禁止缓存。工作记忆 TTL 为 24 小时，后台压缩可能只保留更少的近期消息，因此这不是完整聊天归档；不存在或已过期的工作记忆返回空列表。读取异常或超时返回 503，不把依赖故障伪装成空会话。
+
+## 离线测试
+
+使用项目自己的虚拟环境；安装步骤仅在准备环境时执行：
 
 ```powershell
 python -X utf8 -m pip install -r requirements-dev.txt
-python -m pytest tests -q
+python -X utf8 -m pytest tests -q
 ```
 
-已有测试使用模拟服务，不能代替真实 Redis / ChromaDB / 模型联调。`scripts/verify_*.py` 与在线检索脚本属于额外验证，使用前确认目标环境。
+`tests/conftest.py` 阻止导入 `api.main` 时加载本机 `.env`。单元测试以固定模型、FakeRedis、MockTransport 或注入的 embedding 为主；不能由测试通过推导真实模型质量或真实存储在所有故障下的行为。`tests/verify_*.py` 与在线脚本是额外入口，执行前确认隔离环境。
 
-## 第一批：证据级检索评测
+2026-11-08 的本地回归在额外网络/私有文件防护下得到 **508 passed、1 skipped、4 deselected**。主动排除了 stdio 子进程、真实内存 Chroma 及两项另起子进程的测试，未把这些项目计作通过。回归覆盖建议式/更正语义、存储探测、超时取消、指标权限、近期会话读取及知识维护。知识维护另用新 Redis/Chroma、不可调用模型的测试配置和真实浏览器验证权限、版本冲突、缓存预热后删除及片段展示；没有在线模型质量结论。结果绑定当时源码及环境，不是未来版本保证。
 
-本批实现完成，真实模型效果尚未验证。旧 `scripts/evaluate_retrieval.py` 的参数、`evaluation/rag_cases.json` 的 12 条标题级样例保持原含义。新协议为 `rag-evidence-v1`，24 条开发用例位于 `evaluation/rag_evidence_cases.v1.json`，与旧标题指标分开使用。
+## 评测入口
 
-所有命令从本目录执行。若使用本项目虚拟环境，将 `python` 换成 `.venv/Scripts/python`。Windows 安装依赖使用 `-X utf8`，避免含中文注释的 requirements 被按 GBK 解码。
+以下命令从 `backend/` 执行；Windows 可将 `python` 替换为 `.venv/Scripts/python`。默认命令不读 `.env`、不调用供应商模型。
+
+### 检索证据
 
 ```powershell
-# 1. 从固定的 sample_knowledge.json 导出快照，先查看原文和 chunk_id，再人工标注
-python -X utf8 scripts/evaluate_retrieval_evidence.py --export-snapshot
-
-# 2. 默认重算仓库内固定模拟结果，不启动服务、不读 .env、不连接数据库或模型
 python -X utf8 scripts/evaluate_retrieval_evidence.py
-
-# 3. 运行相关验收；测试入口阻止 api.main 加载本机 .env
-python -X utf8 -m pytest tests/test_retrieval_evidence.py tests/test_knowledge_base.py tests/test_hybrid_retrieval.py tests/test_tool_manager.py -q
-
-# 4. 使用既有运行产物重新计算；替换 <run_id> 为实际目录名
-python -X utf8 scripts/evaluate_retrieval_evidence.py --fixture data/eval/rag/<run_id>/executions.json
 ```
 
-默认 fixture 是人工固定的模拟输出，包含空结果、重复、fallback、第三名命中、部分覆盖和一次故意模拟的执行错误。默认命令的预期退出码是 **1**，表示报告已生成且含执行错误；**0** 表示无执行错误（不表示全部命中），**2** 表示输入/协议/写入校验失败。模拟延迟的 0ms 是占位值，不能视为真实测量。
+使用 6 篇中文演示知识、6 个片段和 24 条回归用例。默认 fixture 故意含一次执行错误，预期退出码 **1**；0 表示无执行错误，2 表示输入/协议校验失败。退出 0 不等于全部命中。
 
-报告追加到被忽略的 `data/eval/rag/<run_id>/`，目录已存在则拒绝覆盖。每次保存 `snapshot.json`、`dataset.json`、可重算的 `executions.json` 和含逐条分数的 `report.json`。记录协议、知识内容哈希、数据集哈希、Git HEAD/分支/工作区状态、Top-K、UTC 起止时间、执行状态、返回片段和延迟；错误只保存固定错误码，不保存 Token、异常正文或未知资料正文。`--run-id` 可指定未使用过的目录名。
+切片与在线入库共用 `tooling/knowledge_chunks.py`。证据 ID 包含文档身份、原文 SHA-256 版本和片段序号；评分核对实际 ID、标题和正文，拒绝未知/过期证据。旧 Chroma 存储 ID 不变；缺元数据的旧片段不猜造证据 ID。
 
-知识快照只来自 `data/demo_docs/sample_knowledge.json`，共 6 篇短文、6 个片段，没有扩大政策范围。入库和离线导出共用纯切片函数。Chroma 原存储 ID 保持不变，检索结果新增 `chunk_id = document_id:content_version:chunk_index`，内容版本是原文 SHA-256；同一语料重建稳定，内容变化会使旧证据 ID 失效。缺失身份/版本元数据的旧片段不会伪造 ID，需在独立示例环境中重新导入正确原文。
-
-每个证据组表示一个需要覆盖的依据，组内 ID 为可替代片段；`source_quote` 保存人工核对的原文摘录。协议校验要求摘录存在于每个替代片段中，未知/过期标注 ID、缺失必需标注、重复用例、同源组跨 split 均拒绝。`turns` 预留多轮结构，但本批执行器只接受单轮。`required_facts`、`forbidden_claims` 只是预留标注，本批不评分回答。
-
-| 指标 | 定义 |
+| 指标 | 含义 |
 | --- | --- |
-| Hit@K | 前 K 个实际排名中至少覆盖一组证据为 1，否则为 0 |
-| Evidence Recall@K | 已覆盖证据组数 / 标注的必需证据组数 |
-| MRR@K | 第一个相关片段实际排名的倒数；未命中为 0 |
+| Hit@K | 前 K 名至少覆盖一组标注证据 |
+| Evidence Recall@K | 覆盖的必需证据组数 / 全部必需证据组数 |
+| MRR@K | 首个有效证据片段实际名次的倒数 |
 
-同组命中两个替代片段只算一组；一个片段可覆盖多组。重复片段不增加覆盖，也不删除排名位置后再补足 K。fallback 占据返回位置但不算证据。只有标注证据的 answerable/partial 用例进入正向指标；unanswerable 必须为 not_applicable，分数是 null。请求错误在 eligible 主指标中按未命中计，同时呈现全体执行错误率和成功执行子集；空分母为 null。返回的非 fallback 片段必须与快照的 ID、标题、正文匹配，否则记为 snapshot_mismatch，不能凭正确标题通过。
+两个证据组只覆盖一个时，Hit=1、Recall=0.5。重复片段不增加覆盖，也不删除排名后补足 K；fallback 不算证据。错误保留在主指标分母，并另报错误率和成功子集；无答案题不进入正向召回分母。
 
-只有显式 `--online` 才请求现有默认 `/search`，鉴权只读取进程环境变量 `ZHIYING_EVAL_TOKEN`，不会加载 `.env` 或把 Token 写入报告。请自行将令牌安全注入进程环境，并指向独立、只导入本示例快照的 ServicePilot 环境：
+旧 `scripts/evaluate_retrieval.py` 的 12 条标题级冒烟保留原含义。证据级在线入口需显式 `--online --base-url ...`，只从进程环境读取 `ZHIYING_EVAL_TOKEN`；它调用业务 `/search`，可能消耗改写和重排额度，不是纯向量基线。
+
+### 独立策略对比
 
 ```powershell
-python -X utf8 scripts/evaluate_retrieval_evidence.py --online --base-url http://127.0.0.1:8000 --top-k 3
+python -X utf8 scripts/evaluate_retrieval_strategies.py --validate-suite
+python -X utf8 scripts/evaluate_retrieval_strategies.py --matrix --run-id example-dev-matrix
+python -X utf8 scripts/evaluate_retrieval_strategies.py --split validation --candidate B --with-baselines --run-id example-validation-B
 ```
 
-该模式可能调用查询改写与重排模型，并沿用现有缓存；第一批不绕过缓存，不新增策略开关。逐条保留服务返回的 cached/reranked 标记，但没有完整模型配置、阶段耗时或 token 对比。客户端只校验实际返回片段，不能证明远端整个数据库恰好等于快照。`/search` 现在额外暴露底层 `success`，不改变原有字段或HTTP状态；证据级在线入口把内部失败记为执行错误，缺少此字段的旧服务记为invalid_response，不从HTTP 200推断成功。本批未执行在线实验，未获得业务默认流水线质量基线。
-
-## 第二批：独立检索策略实验
-
-实现和离线验收完成，真实收益待实验。没有回答生成/Judge、Agent 多轮评测或新生产 API。第一批文件、默认命令、原 12/24 条回归用例及其故意退出 1 的 fixture 均保留。
-
-静态资料在 `evaluation/corpora/`：`service_rules.v2.json` 原文、`snapshot.v2.json` 完整快照、`sources.v2.json` 合成声明与原始分节、`cases.v2.json` 静态证据标注、`suite.v2.json` 分组/冻结清单。24 篇英语合成规则用既有 500 字切片得到 72 片；每篇三个不同条件或流程片段，不靠重复填充。文档涉及认证/权限/租户、错误处理、支付开通、冻结/扣款、续费/退款、发票/交接，以及身份生命周期、争议、汇款、区域迁移等。无外部转载或私人数据，不进入线上演示 seed；这是英语检索实验，不能推断中文效果。
-
-40 条 dev（36 eligible，4 无答案）、20 条 validation（18 eligible，2 无答案），另含部分可答与跨文档证据。分组按问题来源及政策族整组划分，复合问题与相关来源放在同一 split。validation 使用新增业务场景，没有把 v1 看过的问法改写为验证数据。先查看完整快照再人工标注，数据在实验前冻结。修改原文、分组或标注必须重新复核并另立版本，不能只刷新哈希。
-
-| 策略 | 实际步骤 |
+| 策略 | 步骤 |
 | --- | --- |
-| A | 仅向量召回 → 最终 Top-K |
-| B | 向量 + 词面召回 → 名次融合 → 最终 Top-K |
-| C | 原查询及改写查询分别混合召回 → 跨查询名次融合 → 最终 Top-K |
-| D | C 的实际候选 → 模型重排 → 最终 Top-K |
+| A | 向量召回 |
+| B | 向量 + 词面召回，RRF 融合 |
+| C | 原查询与改写查询分别混合召回，再跨查询融合 |
+| D | C 的候选加模型重排 |
 
-默认 `top_k=3`、`candidate_k=20`、`vector_k=20`、`lexical_k=20`、最多两个额外改写，`cache_mode=bypass`。预算须满足 `top_k <= candidate_k <= vector_k`，混合策略还需 `candidate_k <= lexical_k`。向量/词面各按分支预算取候选；单查询融合后截断到 candidate_k，跨查询联合池最多为查询数乘 candidate_k。最终所有策略返回相同 Top-K，候选不足则保留实际数量及原因。C/D 多出的查询和候选是实际额外成本。
+默认 Top-K=3，candidate/vector/lexical 预算各 20，cache=bypass。显式区分分支候选、单查询融合候选和最终返回数量；不相加不同查询的原始相似度。词面排序使用有限冻结语料内的全匹配片段，再取前 K；算法身份为 `all-matches-bm25-before-top-k-v2`，旧算法报告不能直接混比。
 
-词面分支的 `lexical_k` 是相关性排序后的返回上限。模拟与 Chroma 适配器都先读取当前冻结快照内的全部匹配片段（当前最多72片），执行词面排序后取前 K，不再先对存储顺序使用 `[:k]` 或 `get(limit=k)`。这是小规模离线基准的全匹配评分，不承诺大型语料的扫描开销；扫描范围与返回预算不同。新依赖身份保存 `lexical=all-matches-bm25-before-top-k-v2`，缺此字段的历史报告按 `match-prefix-limit-v1` 识别，可校验/重放，但检索与回答比较均拒绝新旧算法混比。算法身份也参与实例缓存键。线上 `KnowledgeBase.search` 和 ToolManager 行为未改。
+该执行器独立于线上 ToolManager，使用自己的依赖、缓存、统计和知识快照。**实验 B 与业务默认混合流水线不是完全相同的实现**，实验分数不能直接当作 `/chat` 收益。模拟向量是 64 维特征哈希，模拟改写/重排是固定规则，不是语义模型效果。
 
-词面分词与 BM25 标题加权排序由 `tooling/retrieval_ranking.py` 供生产和评测共用，线上默认搜索行为保持兼容。评测将分支名次用 RRF（`1/(60+rank)`）等权融合，再对不同查询结果做相同名次融合，不相加不可比的原始相似度。各阶段同分按 chunk_id 排序。模型重排只看到查询、候选索引、标题前 160 字和正文前 400 字，ID 映射保留在程序中；有效索引去重、遗漏补齐，越界或输出截断则降级到原排序。
+validation 禁止默认矩阵，需显式固定候选。比较要求知识、标注、split、Top-K、模式与依赖身份兼容；错误、降级、缓存命中和完整执行率分别报告，不自动选优或晋升。
 
-所有命令从本目录执行，`--run-id` 指定的目录必须未使用。默认单策略 B、dev、模拟依赖；矩阵也是 dev。
+真实 A/B 需要 `--mode real --onnx-cache <已有模型缓存目录>`；不会下载模型或使用业务库。C/D 还需要 `--enable-provider` 及进程环境中的 `SERVICEPILOT_EVAL_API_KEY`、`SERVICEPILOT_EVAL_MODEL`，可选 `SERVICEPILOT_EVAL_BASE_URL`。真实模式可能收费，应先限定样本和配置。
 
-```powershell
-# 原第一批回归：预期退出 1，故意保留一个 fixture_error
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_evidence.py
-
-# 扩充语料：导出快照，再核对静态标注/整组划分/冻结身份
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --suite evaluation/corpora/suite.v2.json --corpus evaluation/corpora/service_rules.v2.json --export-snapshot
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --validate-suite
-
-# 模拟依赖单策略和 dev 矩阵；无模型加载或网络调用
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --strategy A --run-id example-dev-A
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --matrix --cache-mode bypass --run-id example-dev-matrix
-
-# 重放矩阵中的单策略记录；没有新的检索/模型调用
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --fixture data/eval/rag/experiments/example-dev-matrix/D --run-id example-replay
-
-# 显式选两个已完成、身份兼容报告进行比较；不覆盖/晋升基线
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --compare data/eval/rag/experiments/example-dev-matrix/A/report.json data/eval/rag/experiments/example-dev-matrix/B/report.json --run-id example-comparison
-
-# 显式验证候选，附固定 A/B；D 只是模拟验收示例，不代表获胜方案
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --split validation --candidate D --with-baselines --run-id example-validation-D
-
-# 相关测试及后端完整回归（全部离线，不读真实 .env）
-.venv/Scripts/python -X utf8 -m pytest tests/test_retrieval_strategies.py tests/test_retrieval_evidence.py tests/test_hybrid_retrieval.py tests/test_knowledge_base.py tests/test_tool_manager.py -q
-.venv/Scripts/python -X utf8 -m pytest tests -q
-```
-
-模拟向量是 64 维特征哈希 + cosine，用于执行召回代码；模拟改写是固定查询变换、模拟重排用词面排序。它们不是语义 embedding 或真实模型质量。`synthetic`、`real` 和 `fixture` 在报告模式中区分；重放保留原数据的模式并另记 `observation=replayed`，其耗时/用量来自原记录，不是重放耗时。不可把模拟与真实报告混合比较。
-
-真实入口仅供另行明确授权后执行，本批未运行以下命令。只读取显式进程环境，不加载 `.env`：C/D 需要 `SERVICEPILOT_EVAL_API_KEY`、`SERVICEPILOT_EVAL_MODEL`，可选 `SERVICEPILOT_EVAL_BASE_URL`；通过安全方式注入，不把密钥写进命令或报告。向量模式须提供已缓存 all-MiniLM-L6-v2 目录（包含 `onnx/` 的全部模型文件）；缺文件会拒绝，下载入口被禁止，也不会切换模型。
+### 成对回答质量
 
 ```powershell
-# 将路径替换为已准备好的评测模型目录；以下命令未执行
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --mode real --strategy A --onnx-cache 'D:/models/eval-minilm' --run-id real-dev-A
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --mode real --strategy B --onnx-cache 'D:/models/eval-minilm' --run-id real-dev-B
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --mode real --strategy C --onnx-cache 'D:/models/eval-minilm' --enable-provider --run-id real-dev-C
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --mode real --strategy D --onnx-cache 'D:/models/eval-minilm' --enable-provider --run-id real-dev-D
+python -X utf8 scripts/evaluate_answer_quality.py --validate-annotations
+python -X utf8 scripts/evaluate_answer_quality.py --run-id example-answer-dev
 ```
 
-真实工厂只创建新的内存 Chroma collection，显式注入本地 embedding；使用全库 get 校验 ID、正文、标题、数量与冻结快照后才评测，结束删除自己的 collection。所有同步 Chroma 操作在线程中执行。没有默认 KnowledgeBase 初始化、远端连接/本地回退、自动 seed、用户会话或线上 ToolManager；模型直接使用独立 SDK 客户端，避开会更新模块全局统计的生产调用封装。SDK 内部重试关闭，统计是实际逻辑调用；未返回的 token 保留 null，没有调用才汇总为 0。费用因没有核实价格保留 null。
+默认使用 B 模拟检索和 v4 固定生成/Judge fixture，报告明确记录混合依赖。retrieved_context 与 oracle_context 独立生成；生成器看不到参考、事实 ID、禁项或另一分支回答。oracle 是诊断对照，不是部署方案。
 
-两层结果缓存只存在于评测实例内。bypass 不读不写；use 的键包含规范化策略、知识哈希、依赖身份、查询和相关上下文，配置或知识变更不复用旧项。降级结果不写流水线缓存；缓存命中的步骤标记 skipped。单次 CLI 为冷实例，不提供跨进程缓存或独立缓存性能实验；测试显式重复查询验证两层行为。索引构建/模型加载时间在 setup 单列，不当作结果缓存预热。
+正确性 Judge 看参考并逐事实/禁项判断；grounding Judge 只看实际展示材料，检查答案断言的依据。引用、回答 span、覆盖和身份可确定性校验，语义蕴含与充分抽取仍需真实 Judge 和人工校准。错误与 uncertain 保留，N/A 不填成 0，不合成一个混合粒度总准确率。
 
-输出追加到被忽略的 `data/eval/rag/experiments/<run_id>/`。每个策略有完整快照、完整/过滤数据集、suite、执行结果、轨迹和 `report.json`；矩阵另有比较与完成清单。实验协议 `rag-experiment-v2` 包装第一批 `rag-evidence-v1` 评分结果，不改默认流水线报告。保存完整 `source_dataset_hash`、过滤后 `evaluated_dataset_hash`、case_set、知识/冻结哈希和每次 run/config 身份。比较要求知识、标注、split、Top-K、模式、embedding 与非研究预算一致；策略开关本身允许不同。缺关键样本/未完成/身份不匹配时拒绝，有执行错误时不判回归通过；基线不会自动晋升。
+默认 fixture 故意保留漏答、矛盾、违规和未决；退出 1 表示执行/评价有错误或未决，不等同于未生成报告。退出 0 也不表示质量全部合格。当前正式回答协议为英语单轮，不能冒充中文多轮回答评分。
 
-主指标保留执行失败的 eligible 分母，另报成功 eligible 子集。共同成功子集给出明确 case_id 与两个分母（全部共同成功数、其中 eligible 数）。逐例列出 Recall 主判据的胜/平/负和 Hit/Recall/MRR 变化及退化证据。每例保存计划配置、实际步骤、改写列表、分支预算结果、去重/截断数量、降级原因、阶段耗时、缓存读写和实际模型观测。合法空结果、底层请求失败、改写失败回原查询、候选不足跳过重排、重排异常降级分别记录。完整执行率排除失败、降级及流水线缓存命中；无需重排的合法跳过可算完成。
+真实回答入口需要显式 `--mode real --enable-provider` 与 `--limit` 或 `--case`，生成/Judge 凭据使用 `SERVICEPILOT_ANSWER_GENERATION_*` / `SERVICEPILOT_ANSWER_JUDGE_*` 进程环境。真实生成消费模拟检索时另需 `--allow-mixed`；不会加载真实 `.env`。
 
-P50/P95 使用 nearest rank，记录样本数，计时是单次顺序执行的请求墙钟时间（含实际结果缓存路径、不含 setup）；小样本不代表生产延迟。后续补做了本地缓存ONNX embedding的A/B实验，见末节；没有付费改写/重排或生成/Judge的效果基线，也没有重复实验波动结论。测试另覆盖真实内存 Chroma 引擎配注入假 embedding 的全库一致性，该测试仍不是实际模型效果验证。
-
-## 第三批：单轮回答质量
-
-实现和离线验收完成，真实收益待实验。新协议独立于检索报告与旧四维对话 Judge：`rag-answer-dataset-v1`、`rag-answer-fixture-v1`、`rag-answer-report-v1`、`rag-answer-comparison-v1`。没有修改旧 `/eval`、`/chat`、异步任务、前端或在线模型统计。
-
-`evaluation/corpora/answers.v4.json` 为默认回答标注：原 60 个英语问题、40 dev / 20 validation、118 项必答事实、146 项可选补充、133 项结构化禁止项，保持原 group_id/split，包含 3 个 partial 和 6 个 unanswerable。每个事实带稳定 ID、正文摘录和快照片段 ID；未知内容、可答范围、下一步与参考均独立记录。完整 source_dataset_hash、split 的 source_evaluated_dataset_hash、实际子集 evaluated_dataset_hash/case_set、知识与两个冻结身份都保留，不能混合 dev/validation。v1–v3 静态标注及对应 fixture 全部保留，不原地修改旧哈希。v2 拆分复合事实并补虚构动作/日期禁项，v3 修正 only 措辞，v4 在只观察固定离线向量后按原问题逐例复核必答范围；没有依据真实模型输出改答案，没有改动第二批冻结知识和检索标注。
-
-v4 的 `facts` 只列当前问题不可缺少的结论，`optional_facts` 保留原事实/ID/证据作为可选补充，`scope_rationale` 给出每例取舍。例如 v2-020 不再要求讲已开票更正，v2-041 不再要求讲API令牌重发；v2-023 明确询问交接清单与秘密移除，仍要求全部清单项。可选事实不进入正确性 Judge 的预期ID/参考或 oracle 构建，省略不扣事实覆盖分；若回答额外断言仍须经过完整 grounding 与禁止项检查。未删除原264项事实，没有通过放宽禁止结论来抬分；实际评分合理性仍待独立人工校准。
-
-默认标注哈希 `c88ffa6bada4e55079e532d92750d93b334f773abc74aba44698968fd1024e3b`，回答冻结哈希 `dde0a9d74393463a3a6115a1544d5c068ddb27183e79512aba6775e4219110ca`。静态校验重建全部原文和所有split，核对每条问题/检索用例哈希，并检查必答与可选两组的ID去重和全部引用。没有金额、价格、时效或合同条款时明确未知，partial仍须回答已知核心规则。
+### Agent 与工作台
 
 ```powershell
-# 所有命令均从 backend 执行；默认不会读取 .env、调用模型或连接用户库
-.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --validate-annotations
-.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --run-id answer-dev
-.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --case v2-001 --run-id answer-one
-
-# 消费第二批完整单策略报告；与当前 suite/split/Top-K/实际片段严格核对
-# 固定 fixture 只认识预先录入的精确请求，其他上下文须提供相应fixture或显式真实依赖
-# 默认v4 fixture按修复后的B词面算法制作，上面的example-dev-matrix应由当前代码生成
-.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --source-report data/eval/rag/experiments/example-dev-matrix/B/report.json --run-id answer-from-B
-
-# validation 明确指定一个候选；B为工程默认，不扫描策略矩阵
-.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --split validation --candidate B --case v2-058 --run-id answer-validation-one
-
-# 纯fixture评分记录重放/重新校验汇总，无生成、Judge或检索新请求
-.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --fixture data/eval/rag/answers/answer-dev --run-id answer-replay
-.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --compare data/eval/rag/answers/answer-dev/report.json data/eval/rag/answers/answer-replay/report.json --run-id answer-compare
-
-# 显式选择历史标注，重放既有v3回答报告；不重新运行旧算法或调用模型
-.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --annotations evaluation/corpora/answers.v3.json --fixture data/eval/rag/answers/batch3-final-dev --run-id answer-v3-replay
-
-# 必要相关验收和完整回归
-.venv/Scripts/python -X utf8 -m pytest tests/test_answer_quality.py tests/test_retrieval_evidence.py tests/test_retrieval_strategies.py -q
-.venv/Scripts/python -X utf8 -m pytest tests -q
+python -X utf8 scripts/evaluate_agents.py --validate-annotations
+python -X utf8 scripts/evaluate_agents.py --run-id example-agent-dev
 ```
 
-单策略来源可以是第二批 `ExperimentReport`，或 `retrieval_source(..., runner=显式执行器, config=策略, mode=实际模式)` 注入；继续复用第二批执行状态/轨迹及第一批检索评分器。默认 B + SyntheticIndex，所有阶段分别记录依赖身份；synthetic 检索 + fixture 生成/Judge 明确标记 mixed，不能伪装全真实基线。固定 fixture 是预录入答案和逐项判断，通过实际请求哈希查表；它不做语义理解，也不根据运行中的参考临时打分。
+固定 `agent-dev-v1` 使用真实 Orchestrator 和工具循环，搭配固定模型与 synthetic 检索。检查多轮实体、角色、检索调用及证据，记录 `scope=orchestrator`；不代表完整 `/chat` 或真实模型质量。
 
-两个分支使用相同生成规则、temperature（默认 0）、max_tokens（默认 2048），彼此无会话历史。生成输入仅问题和本分支实际上下文。上下文采用规范 JSON，保留片段 ID/标题/完整正文；默认上限 16000 字符，包括 JSON 格式开销，可用 `--context-chars` 调整。超预算整分支明确拒绝，无隐式截断；`context_shown=false` 时保存的是未展示的候选文本，没有发送给生成器。oracle 按 fact_id 顺序、每事实最小替代 chunk_id、跨事实稳定去重构建，不从检索输出或模型答案选择。oracle 不硬截 Top-K，记录实际片段数、字符数、文本/哈希及预算，因此不是公平的检索方案。无正向依据的 unanswerable 的 oracle=N/A；retrieved 仍评估诚实处理。检索错误不冒充合法空集，不调用该分支生成，不被 oracle 成功掩盖；合法空召回仍可请求限制说明。
+前端 RAG 区块通过异步任务接口运行同一 suite。报告追加到 `data/eval/rag/agents/`，历史终态可跨重启读取；进程内运行中任务不恢复。固定 Judge 判定只做 fixture 验收，不是独立语义模型或人工校准。
 
-正确性 Judge 与 grounding Judge 是两次独立调用，默认各 8192 输出 token，可用 `--judge-tokens` 设置。前者看标注、逐事实 covered/not_covered/contradicted/uncertain、逐禁止项 violation/no_violation/uncertain 和范围处理 pass/fail/uncertain；后者不接收参考或 oracle 标注，只看本分支实际上下文、实际回答及确定性的句子审计单位，逐断言返回 supported/unsupported/uncertain。每个单位必须被覆盖；需要标注 extraction=complete/partial/unknown。引用的回答 span 和证据 quote 必须真实存在；未知片段、未展示证据、重复断言/ID、遗漏事实、无证据 supported、非法 JSON/重复键/NaN/布尔偏移、空响应和未完成输出均不能评分通过。确定性检查只核对结构/引用/完整性，语义蕴含、否定、断言抽取是否充分仍需真实 Judge 与人工校准；stub 输入隔离测试不证明真实模型抗注入。
+所有运行产物写入被忽略的 `data/eval/`，目录拒绝覆盖。报告保留数据/知识/依赖/评分身份，部分入口保存源码白名单归档；不把密钥、业务数据或 `.env` 纳入归档。旧静态标注和 fixture 保留用于兼容性回归与重放。
 
-句子审计单位同时识别标点和 LF/CRLF/CR 换行，未带句末标点的段落也必须检查，避免漏审整行业务断言。新报告的提示词/评分身份增加 `sentence-units-v2`；历史只有三项提示词哈希的报告按原单位规则重放，保留历史评分口径，不能冒充已修复的完整性验收，也不能与新规则报告直接比较。固定fixture仍按实际请求哈希匹配，不改写旧fixture哈希。
+## 数据与已有实验结论
 
-| 报告项 | 分子、分母与限制 |
-| --- | --- |
-| generation_success_rate | 正常完成生成数 / 全部适用分支；检索失败和预算拒绝也留在分母 |
-| judge_coverage | 两个 Judge 完整有效且无 uncertain/不完整抽取的任务数 / 全部适用分支；另列 valid/generated |
-| end_to_end_complete | 完整有效评判任务数 / 全部适用任务；完成不等于内容正确 |
-| end_to_end_success | 事实全覆盖、无禁项、范围处理通过、所有事实断言有据且无未决的任务数 / 全部适用任务 |
-| fact_coverage_micro_lower | scored 子集 covered 事实数 / 该子集全部必要事实数，uncertain 不当 covered；macro 是有事实样本覆盖比例的均值 |
-| forbidden_violations | violation 数 / scored 子集所有禁项，另列 uncertain；关键违规逐例单列，不被均分抵消 |
-| grounding_supported_lower | 抽取完整且可评分子集中 supported 事实断言数 / 该子集事实断言数；uncertain 不当 supported；partial/unknown 抽取不产生整段比例 |
+| 数据 | 规模与划分 | 当前证据边界 |
+| --- | --- | --- |
+| 中文演示 | 6 篇 / 6 片；24 条证据回归 | 线上开发 seed，不是业务真实政策 |
+| 英语合成规则 `suite.v2.json` | 24 篇 / 72 片；40 dev、20 validation | 虚构企业规则；36/18 条正向题 |
+| `public_zh.v1` | 12 篇短摘要 / 12 片；16 dev、8 validation | GitHub、阿里云与 Stripe 来源；验证正向题 7 条，按供应商分组 |
+| `public_zh_hard.v1` | Redis 资料整理 6 篇 / 12 片；两个 split 各 15 题 | 24 条正向题；来源与语义标注待人工核验，未运行正式策略/生成实验 |
 
-scored 是两个 Judge 均通过结构/证据校验的子集，允许保留 uncertain 用于保守覆盖统计；valid 进一步排除未决。两个集合均明确列任务 ID、完整分母、缺失/未决数量。Judge 异常不填 0 或满分，不混入有效质量均值。零事实、零断言、零禁止项为 null/N/A；没有可核验断言不默认为 100% 有据。成对报告列共同生成/共同有效交集及分母、每例上下文/失败/差异，同时保留全部主分母。比较固定同一回答标注、知识、问题集合/split、Judge/生成配置、上下文政策和阶段模式，研究变量为检索配置；A/B/C/D 本身差异不造成误拒绝，其他模型混杂变量拒绝。缺样本/未完成拒绝，评分不完整或有关键未决则 inconclusive；没有自动通过或晋升基线。
+冻结身份校验只保证数据一致，不证明来源现行有效、语义标注正确或人工独立性。中文资料与初始题目由 AI 整理；`public_zh.v1` 的展示标注获维护者认可，不等于逐一审计源网页或校准模型答案。hard 集人工字段仍为空，不覆盖旧集。
 
-输出只追加到 ignored 的 `data/eval/rag/answers/<run_id>/`，已存在即拒绝。保存 `report.json`、快照、标注、来源检索报告、`review.json`。报告记录 Git HEAD/工作区、来源 run/config/trace、各阶段依赖与实际调用/请求哈希/参数/耗时/供应商用量，重放保留原模式、原调用观测并另记 observation/replay_of/replayed_at，不是本次实测。供应商没返回 token 为 null，没调用才汇总为 0；解析失败也保留已返回用量。SDK 与业务重试都为 0，没有估算不可见尝试和费用。review 清单覆盖高分、低分、uncertain、关键违规，包含问题、实际上下文、回答、判定和待填 human_verdict/disagreement/reviewer；没有替用户完成复核。
+### 本地检索记录
 
-退出码：**2** 为输入/配置/身份/报告/目录校验失败，**1** 为报告写入成功但存在阶段错误或未决，**0** 为没有阶段错误/未决；均不代表所有回答质量通过。默认 dev fixture 故意包含 uncertain，因此预期 1。
+以下为维护者本地报告摘要，原始运行产物未随仓库分发。固定 MiniLM 缓存、Top-K=3、预算各 20、bypass；每个 split 单次运行，不含建库，也不是生产尾延迟测试。
 
-真实小样本入口已提供，以下命令本批没有执行，需用户另行明确授权。只从安全注入的进程环境读取 `SERVICEPILOT_ANSWER_GENERATION_MODEL/API_KEY/BASE_URL` 和 `SERVICEPILOT_ANSWER_JUDGE_MODEL/API_KEY/BASE_URL`；BASE_URL 可省略，不读取真实 `.env`，报告只保留模型 ID 和端点哈希。独立 SDK 直接调用，绕开线上全局统计/缓存/熔断，DeepSeek 端点显式关闭隐式 thinking。真实模式必须 `--enable-provider` 且给出 `--limit` 或 `--case`；默认要求第二批真实来源报告，真实生成消费模拟检索时必须额外 `--allow-mixed`，始终标为 mixed，不能与全真实报告判优。
+| 数据 / split | 正向分母 | A / B 证据 Recall@3 | 判断 |
+| --- | --- | --- | --- |
+| 英语 dev | 36 | 1.0 / 1.0 | 未证明 B 的主指标收益 |
+| 英语 validation | 18 | 1.0 / 1.0 | 按预先规则保留较简单 A |
+| 中文短摘要 dev | 16 | 0.6875 / 1.0 | 差异集中在少量资料主题 |
+| 中文短摘要 validation | 7 | 0.9286 / 1.0 | 一题造成主要差异，不推导稳定或大库收益 |
 
-```powershell
-# 先通过第二批独立环境准备真实 B 报告，再经另行授权执行本条；最多1例、每适用分支1次生成+2次Judge
-.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --mode real --enable-provider --limit 1 --source-report data/eval/rag/experiments/real-dev-B/B/report.json --generation-tokens 2048 --judge-tokens 8192 --run-id real-answer-one
+中文候选池仅 12 片，主要体现 Top-3 排序，不能据此证明大规模候选召回。两类实验都没有据验证结果调生产默认策略。C/D 真实收益、完整中文回答指标和独立人工校准仍未建立。
 
-# 显式混合实验入口示例，真实生成/Judge + 默认模拟检索；不是全真实基线，本批未执行
-.venv/Scripts/python -X utf8 scripts/evaluate_answer_quality.py --mode real --enable-provider --allow-mixed --case v2-035 --run-id mixed-answer-one
-```
+### 真实 Flash 与工程冒烟
 
-英语合成资料不代表生产政策；没有真实效果、费用、重复实验波动、中文收益或真实样本人工校准。本批仅单轮独立 RAG，第四批可复用身份、执行记录、上下文与逐项评分接口，但没有实现多轮 Agent 或展示闭环。
+已有四题 × A/B/oracle 共 12 次独立中文生成记录，返回 `deepseek-flash`；它是召回后选择的小样本诊断，部分人工核验只涉及指定维度。已确认有额外断言依据不足的具体样本，不按整篇或整集报告通过率。
 
-## 数据边界
+2026-11-07 的隔离容器审查连接新 Redis/ChromaDB，并用当前源码执行 FastAPI 路由：验证回执、实体更正、用户隔离、版本化知识、真实续租和失锁取消。两个独立记忆管理器对同一 Redis 会话正确串行。随后两个 Flash 聊天样本走通技术角色和技术/账单并行汇总；成功请求重试新增模型调用为 0。
 
-`data/demo_docs/sample_knowledge.json` 是线上默认演示知识；`evaluation/corpora/` 是显式评测专用静态资料，不能自动 seed 到线上库。数据库、会话、画像、日志、历史评测和本机 `.env` 不提交。development 空库可自动导入原示例；production 不自动导入。工具不执行真实退款或创建工单。
+这两题共 10 次成功模型调用，供应商字段分列为 input_tokens=7968、output_tokens=1808、cache_read_input_tokens=12800。另有最小连接探测和未取得用量的超时尝试；不估算费用，不把小样本换成准确率或性能提升。最初使用已有镜像依赖、当前源码和容器内 ASGITransport。随后补做浏览器 → Nginx → Uvicorn → 当前源码 → 新 Redis/ChromaDB 的实际 HTTP 冒烟：一条 Flash 问题完成知识工具调用，成功回执通过代理重试保持一致；知识导入后片段由 6 增至 7，并能检索到新内容；固定 Agent 离线任务完成并在页面显示。该次浏览器聊天另有 5 次成功 Flash 调用，input_tokens=915、output_tokens=485、cache_read_input_tokens=6656。测试关闭后台画像并限制调用，未从零构建后端镜像；不代表全新机器 Compose、生产鉴权或模型质量验收通过。
 
-## 第四批：Agent 离线执行与页面
+ChromaDB 0.5.23 的现有 telemetry/posthog 组合出现过 `capture` 签名兼容日志；不能将成功检索描述为“无告警验收”。
 
-新增固定 `agent-dev-v1` 开发协议样例。外部模型使用脚本化 SDK 响应，检索使用第二批 StrategyRunner 的 B 策略、Top-K=3 和内存特征哈希向量；这是实验适配器，不是业务默认搜索算法。真实 AgentOrchestrator 负责角色路由、工具白名单、工具循环及 Composer。中文样例只引用原有六篇演示资料，不能解释为中文质量基准。
+## 本地修复与剩余边界
 
-从 backend 使用本项目 Python 3.12 环境：
+已修复建议式/清单式知识请求的强制检索缺口，按子句区分纯字段更正与更正后的真实提问。前端主动开始新对话时分配新会话 ID；同操作失败重试仍沿用请求 ID。搜索适配检查 `success`，将执行失败与合法空结果分开呈现。健康检查探测实际存储，Prometheus 通过独立只读凭据采集。
 
-```powershell
-.venv/Scripts/python -X utf8 scripts/evaluate_agents.py
-.venv/Scripts/python -X utf8 -m pytest tests/test_agent_evaluation.py tests/test_agent_api.py tests/test_chat_reliability.py -q
-```
+修复后在隔离 Docker 与真实浏览器中验证：Redis/Chroma 停止时 `/health` 为 503，恢复后为 200；无响应 HTTP 探测在约一秒内失败，六个并发探测合并为一次连接且可恢复；专用指标令牌只能读指标，Prometheus 有效/错误/恢复凭据为 up=1/0/1；处理中开启新对话并发送相同首句得到两份独立会话回执；检索执行失败显示明确错误。原先漏检索的复合建议问题使用 Flash 回归，技术与账单角色均成功检索后汇总。
 
-追加报告保存在 ignored 的 `data/eval/rag/agents/<run_id>/`。检索调用覆盖、角色、实体污染、返回/实际展示证据与回答检查分别呈现分子分母；无适用项为 N/A，未完成的语义 Judge 保留未决，不用零分或总分掩盖。报告保存实际生成输入，Composer 仅看到子 Agent 文本时不宣称其直接看到了原始证据。模拟依赖调用计数不是供应商用量；没有调用真实模型或证明真实收益。
+该 Flash 回归包含 11 次底层调用尝试，10 次取得响应、1 次取消且无用量；已报告字段合计 input_tokens=10608、output_tokens=1537、cache_read_input_tokens=9216，不把未知用量补成 0，不估费。这里只证明所测问法与链路行为，不是回答准确率或性能收益。
 
-`POST /eval/rag/run` 只接受 `{"suite":"agent-dev-v1"}`（也可省略 body），返回 202、job_id 和 run_id；复用 `GET /eval/jobs/{job_id}` 查询有界串行队列。`GET /eval/rag/runs` 与 `GET /eval/rag/runs/{run_id}` 读取终态报告；使用固定目录，拒绝路径穿越及链接逃逸。配置 Bearer 鉴权时均沿用 admin 权限。进程重启不恢复运行中的任务，终态磁盘报告可继续读取。新入口不调用旧 `/eval/run` Judge 链路。
-
-现有评测页新增 RAG 区块，支持明确启动、已知任务恢复、历史报告和逐轮展开。HTTP 聊天验收单独标记 `scope=http_chat_fixture`，用 fakeredis 与固定模型验证实际路由回执和实体隔离；它不代表真实 Redis/Chroma、生产并发或业务模型验收。真实小样本和人工校准需要后续授权。
-
-第四批重放：`.venv/Scripts/python -X utf8 scripts/evaluate_agents.py --replay batch4-final-offline`，只读取已保存报告并重新汇总，不发模型/检索请求；Judge fixture 或评分代码身份改变时明确拒绝重放，历史原报告仍可读取。`--validate-annotations` 校验七场景九轮及知识身份。CLI 退出 0 表示执行终态完成，不表示检查全通过或质量回归通过。
-
-## 真实验证后的定点修复
-
-金额提取与会话合并现在识别明确撤回，例如“金额不是99元”“99元不属于这笔订单”；被撤回的金额不会重新写入新订单，同一订单也会清除对应旧值及来源。“不是99元，是199元”保留新金额；“没有收到99元退款”仍保留待核验金额。这是针对明确表达的确定性规则，不宣称通用自然语言否定理解。
-
-提供 `search_knowledge_base` 工具时，包含退款/续费/重复扣款/企业合同/套餐/登录认证主题且带明确咨询表达的请求，首次模型调用使用指定检索工具的 `tool_choice`。模型仍生成实际查询，工具返回沿用原调用循环；后续回答不会重复强制检索。问候、单纯订单更正和不含业务政策主题的字段收集保持可直接处理。该规则以当前中文业务场景为范围，不将全体请求都视为必须检索。
-
-退款与订阅主题也识别退费、退钱、退订、续订、订阅、自动扣费/扣款，以及相邻的资金退回/返还表达。例如“取消自动扣费后，已经支付的钱会自动退回吗”同样要求先检索；单纯更正自动扣费金额、快递退回等非资金问题不因这些词自动触发。规则仍要求明确咨询表达，不代表通用自然语言语义识别。
-
-Agent 统计保留 `total` 为已开始的请求数，新增 `in_flight`（在途）与 `completed`（已结束）。成功率与平均耗时只以已结束请求为分母，避免监控把等待中的请求误报为失败；没有已结束样本时沿用成功率1、平均耗时0的空样本约定。这只是监控约定，不代表已验证可用率。失败、取消和不完整回答仍在结束后按原规则计入结果，近期窗口及恢复探测规则保留。
-
-精简 Docker 镜像不需要安装 Git 才能运行 Agent 评测：Git 不可用时 HEAD/dirty 记 null，保留源码模块哈希。真实小样本验证与单元测试分开记录在 ignored 的 `.local-review/`；只允许 Flash 的实验不切换 Pro。
-
-## 聊天请求时间预算
-
-`/chat` 保留50秒外层保护，另设置45秒内部请求截止时间；锁等待和记忆读取消耗这段时间，模型阶段不会各自获得新的整轮预算。主Agent阶段最多28秒，并为汇总与提交预留时间；意图5秒、查询改写2秒、模型重排3秒、单次Agent生成最多15秒、Composer最多5秒，均进一步受剩余时间约束。没有聊天预算上下文的旧CLI/调用者沿用其原有上限。
-
-改写/重排在剩余预算不足18秒时跳过，使用原查询/已有排序；由预算引起的降级结果不写普通共享缓存。请求预算到期不计入工具连续故障或打开熔断器；被取消的半开探测释放后可由后续请求重新探测。工具自身错误/超时仍按原故障规则处理。
-
-专业Agent失败后，剩余不足11秒不再启动完整降级；允许降级时最多8秒并预留收尾时间。本轮成功知识检索可供有当前工具权限的降级角色复用，要求同一handler且知识缓存revision未变，保留原query/参数/返回和原tool_use_id关联。缓存只在当前Request内保存；不复用副作用工具，不跨用户/会话传播。
-
-响应 `performance.budget_events` 记录阶段开始/成功/失败/超时/未调用、跳过原因、`phase_remaining_s` 与 `request_remaining_s`。低预算失败仍沿用503/可重试回执，失败轮不写入正常历史；50秒外层超时仍保留504保护，不编造成功或改变副作用工具的未知结果语义。取消本地等待不等于远端供应商已停止计算，真实耗时/费用仍以实际观测为准。
-
-## 评测可信度修复与本地真实 A/B
-
-回答报告新增评分身份 `span-coverage-v3`：声明完整抽取时，断言摘录范围的并集必须覆盖回答中所有非空白、非标点字符；不能仅与一句话相交就视为整句已审。该检查不判断语义蕴含，Judge把整句错误标为supported仍需人工校准。历史v1/v2报告按旧规则读取；新旧评分身份不能直接比较，不篡改历史fixture或成绩。
-
-Agent离线入口现在通过业务 `build_shared_rag_tools` 装配 `search_knowledge_base`，SDK fixture显式提供Top-K=3，经真实参数检查与工具结果回传，政策咨询会进入业务 `tool_choice` 分支。检索依赖仍为内存实验B、模型仍为脚本，不声称验证真实模型自主查询质量；故意漏调/工具错误fixture仍保留为负例。
-
-旧 `/eval/run` 不再自动创建或替换基线，也不把最近历史当作正式基线。完成报告的响应新增 `timestamp`；确认报告后，管理员可显式请求 `POST /eval/baseline`，body为 `{"timestamp":"该报告的timestamp"}`。只能选本进程已有的唯一完整报告，评分错误、已报告回归或评测运行中拒绝晋升；生产鉴权沿用admin规则。基线原子写盘，进程重启仍可加载；没有同suite正式基线时只展示结果，不虚报回归通过。没有自动替用户晋升。
-
-新运行记录源码白名单manifest/总哈希、Python和已安装依赖版本，并保存 `source.zip`，包含后端运行Python与requirements，不含.env、数据、凭据或本地复盘材料。运行前采集源码身份，归档时复核字节，源码变化则报错。重排调用记录有序候选正文/ID、query、n、参数与有界合法模型索引；旧记录缺少这些信息时不补造。源码归档不等于模型服务可复现：供应商服务变化和随机性仍需单独控制。
-
-2026-11-06补做本地已缓存MiniLM ONNX真实embedding实验；新建内存Chroma collection，不下载、不接业务库、不调用供应商。固定suite.v2，Top-K=3、candidate/vector/lexical预算均20、cache=bypass，各split单次顺序运行。开发选型预先固定：仅当B的主指标证据组Recall严格高于A且Hit不降时选B，否则保留A。先完成dev决定，再运行validation；没有依据验证结果调参或修改业务默认策略。
-
-| split | 全部 / 正向分母 | A / B Hit@3 | A / B 证据组Recall@3 | A / B MRR@3 |
-| --- | --- | --- | --- | --- |
-| dev | 40 / 36 | 1.0 / 1.0 | 1.0 / 1.0 | 0.9861 / 1.0 |
-| validation | 20 / 18 | 1.0 / 1.0 | 1.0 / 1.0 | 0.9444 / 0.9722 |
-
-四组执行均0错误，各组模型供应商调用0，embedding查询次数等于全部用例数。B首条相关证据排序略好，但主指标没有收益，按预先规则保留A。开发A/B单次P95分别约33.0/43.6ms，验证约32.2/47.8ms；不含建库，不代表/chat延迟、重复实验波动或生产性能。英语合成小语料出现召回天花板，不足以选出生产最优方案，也不能证明中文或最终回答收益。C/D及真实生成/Judge未运行。
-
-以下实验数字为维护者本地运行记录摘要，原始报告未随仓库分发，不能视为已公开独立复核的结果。本地报告目录为 `data/eval/rag/experiments/trust-dev-local-ab-20261106/`、`trust-validation-local-a-20261106/`（Git忽略）。读者可使用仓库内冻结数据、现有入口和已缓存模型重新运行；不同环境耗时可能不同，复跑时使用新run-id：
-
-```powershell
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --mode real --candidate B --with-baselines --onnx-cache <已有模型缓存目录> --top-k 3 --candidate-k 20 --vector-k 20 --lexical-k 20 --cache-mode bypass --run-id <新dev目录>
-# 固定开发决定后，仅运行明确候选及A/B，不循环按validation调参
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --mode real --split validation --candidate A --with-baselines --onnx-cache <已有模型缓存目录> --top-k 3 --candidate-k 20 --vector-k 20 --lexical-k 20 --cache-mode bypass --run-id <新validation目录>
-```
-
-`answers/trust-paired-fixture-20261106/` 是新评分协议的fixture成对报告，不是真实生成实验。另备10问题/20分支（19适用）的 `human-review-packet.json`，含原文、参考、实际上下文、固定Judge判定和AI证据复核建议；human字段仍空，不能报告为已完成人工校准。Chroma运行存在现有telemetry兼容告警；不将告警掩饰为无警告验收。
-
-## 官方公开来源中文资料草稿
-
-`evaluation/corpora/public_zh.v1/` 是2026-11-07新增的数据准备，不修改原合成集或线上seed。12个官方来源来自GitHub、阿里云和Stripe，保存短摘录、中文摘要、适用产品/版本、访问日期、小节和摘要哈希；没有保存完整网页，不伪称有原网页哈希或官方背书。各产品规则仅适用于其注明范围，不能混成ServicePilot自己的业务政策。
-
-24题包含条件区分、口语改写、跨来源多证据、部分可答和无答案。GitHub/阿里云16题为dev，Stripe8题为候选validation；来源URL不跨split，但这是按供应商分组的分布变化，不能声称随机同分布或完全独立的人工作题。摘要、问题和初始标签由AI整理；维护者已逐题查看并明确认可24题展示标注，已按当前case哈希记录到 `annotation-review.json`。009此前的C意见促成产品、数据、按量计费和欠费后续规则补充，原C及修订认可保留在review_history。认可范围为展示的问题和参考要求，不等于维护者逐一审计源网页或校准真实生成答案。检索及Flash小样本见下文；没有实际回答的人工通过率或Judge分数，不能把标注认可写成模型效果通过。
-
-本批12份短摘要各一个片段，不支持长文切片或同文错片段的效果结论。只复用现有检索协议；`answer_data.py` 的英语回答协议没有被假装扩展为中文。无答案的not_applicable仅表示没有正向证据分母，不是在要求业务Agent绝对不能检索。
-
-题目、核心要求和审核记录见仓库内 `evaluation/corpora/public_zh.v1/annotation-review.json`；来源见同目录 `sources.json`。24题展示标注已获认可，原始实验报告仍仅保存在本地。后续数据修订须记录具体版本和实际认可范围。冻结suite中的执行状态文字保留冻结时的历史事实，不作为实时进度；最新运行事实见报告和下述说明。先用dev选候选，再一次验证，不依据验证结果继续调参，不需要增加新评测模块。
-
-2026-11-07已按预先固定预算运行该集dev A/B：本地缓存MiniLM-L6-v2、每策略新内存Chroma、Top-K=3、candidate/vector/lexical预算20、cache=bypass，不调用供应商。16题全部适用，A/B的Hit@3为0.75/1.0，按问题宏平均的证据组Recall@3为0.6875/1.0，MRR@3为0.6771/0.8542，完整证据为10/16与16/16，执行错误均0。主Recall改善6题、持平10题；收益集中在GitHub私有资源/限流和阿里资源包两个摘要，不能当成6个独立政策族。B在004的首证据名次反而由1退至3。
-
-各次候选池实际含全部12片，本轮主要衡量小候选池的Top-3排序，不证明大库候选召回。固定MiniLM的中文适用性没有被预设，结果不能推广到其他embedding。单次P50/P95为A28.76/32.68ms、B39.93/45.70ms，不含建库；16样本nearest-rank P95为最大值，不代表稳定尾延迟。按预先规则B成为下一步候选后，先保存决定和配置，再原样一次运行候选validation及固定A/B，没有改生产配置、依据验证结果调参或自动晋升基线。
-
-候选验证集共8题，其中7题有正向证据、1题无答案不计正向召回。A/B的Hit@3均1.0，证据组Recall@3为0.9286/1.0，MRR@3为0.9286/1.0，完整证据为6/7与7/7，执行错误均0。差异主要来自022：A只拿到退款资料，B还补到贷记与实际退款的区分依据。单次P50/P95为A28.30/29.31ms、B41.88/53.84ms。只有1题造成证据Recall差距，不能推导稳定或大样本收益；没有生成024的回答，也未验证其拒答质量。
-
-报告追加在ignored的 `data/eval/rag/experiments/public-zh-dev-ab-20261107/` 与 `public-zh-validation-b-20261107/`，有A/B逐例报告、原始观察、源码归档、来源与人工标注副本、预先配置、`diagnostics.json`和`summary.txt`。开发目录的`answer-inputs/`保留执行前的4题×A/B/oracle共12个中文生成输入，参考另置；其空回答是准备时的历史状态，实际生成结果另存于下述新run，不覆盖原输入包。
-
-## Flash中文回答小样本（真实生成，已做部分人工核验）
-
-2026-11-07完成004/009/012/016四题的A实际检索上下文、B实际检索上下文、oracle标注证据三组独立请求。显式调用官方 `deepseek-flash`，temperature=0、max_tokens=1024、thinking disabled、SDK/业务重试均0；不调用Judge/C/D、不使用工具或会话历史。每次生成只接收问题和实际片段，不接收参考、禁项、分支名、其他回答。
-
-12次均返回 `deepseek-flash`、stop_reason=end_turn，输出均未超1024token。供应商返回字段分列为input_tokens=6181、output_tokens=3690、cache_read_input_tokens=1920、cache_creation_input_tokens=0；没有估算费用，也不把缓存用量混成一个未经核对的总输入值。
-
-本节是本地诊断摘要，原始输出及人工反馈未随仓库分发。产物 `data/eval/rag/answers/public-zh-flash-20261107/` 含原输入、逐次响应、参数/请求哈希/耗时/供应商用量、源码及一次性runner、`review-with-answers.json` 和 `reading-comparison.txt`。这是独立诊断记录，不冒充原英语AnswerReport；4题是看过召回后的诊断抽样，不代表整集回答准确率。维护者对009三组回答给出“还可以”的总体反馈，记录为overall_acceptable，未推断分项覆盖/grounding/关键错误均通过；009分项仍为空。012三组的两个核心必答点已获维护者确认，记录在 `human-feedback-012.json`；只核验核心覆盖，不代表附加建议或整篇grounding通过。004的B与016的A另有单项问题核验；其余回答和维度仍待核验，不按整份回答统计通过率。
-
-初步阅读：009和016的A回答明确承认证据不足，B/oracle能覆盖资源包后续规则或两类退订比较；不能把A的诚实保留直接判作幻觉。004与012三组均给出主要要点。维护者已确认两处具体问题：016的A把不可撤销加强为数据不可恢复；004的B把未被资料明确支持的低并发方案说成可确认的稳妥做法。分别记录在 `human-finding-016A.json` 与 `human-finding-004B.json`，不推断整篇通过/失败，也不认定低并发技术上必错。其余AI笔记仍只是待核验提示，不是Judge或人工判定，也不报告通过率。模型别名实际服务版本可能随供应商更新，单轮差异不能证明唯一因果。
-
-## 中文多片段难例集（待人工核验）
-
-`evaluation/corpora/public_zh_hard.v1/` 为2026-11-07补充的数据草稿，复用现有 `rag-evidence-v1` 与 `rag-suite-v2`，没有新增检索、生成或Judge模块，不修改旧集、旧报告和业务入库。16个Redis官方页面整理为6篇中文资料，分别讲事务、过期、淘汰、持久化、Pub/Sub及Streams；每篇约800—950字符，固定500字符规则各切出2片，共12片。它是多片段整理资料，不是完整官方长文或大库基准；候选池仍只有12片，不能据此声称验证了大库候选召回或候选预算的压力边界。
-
-30题中12题区分相近命令或前提，6题要求同文档两个片段，6题部分可答，6题无答案。18题完全可答加6题部分可答，正向检索分母为24；无答案中4题缺少实例观测、2题缺少快照未收录的产品规则。无答案仅相对于给定快照，不声称整个官方站点没有答案。`required_facts`和`forbidden_claims`仍只是核验要求，不能自动评分中文回答；没有生成回答也不能报告拒答通过率。
-
-dev为事务/过期/淘汰各5题，validation为持久化/Pub/Sub/Streams各5题。来源URL、文档及主题组不跨split；两组检索时使用同一个完整知识快照，这是同库不同题目划分，不是把验证文档从索引中移除。主题分布有差异，不能当成随机同分布验证；资料与题目仍由同一AI整理，作者看过两组题，不能声称双盲或独立人工作题。新来源URL与旧 `public_zh.v1` 不重合，不代表标注方法已独立校准。
-
-`sources.json` 保存官方URL、小节、访问日期、短摘录，以及每段中文整理在文档中的字符范围和来源编号。中文整理包含解释和推论，不是官方逐字原文；未保存完整网页或伪造原页哈希。`annotation-review.json` 的人工字段保持为空，逐题提供事实、禁止结论、未知范围和证据来源。`hard-negatives.json` 给12题各标出一个同文同标题、但不支持所需结论的干扰片段；这12项语义判断也待人工复核。
-
-本批只做数据及评分契约验证：重建快照、校验引用/摘录/分组/冻结身份；注入12条同标题错片段结果，确认不会命中证据；对6道跨片段题只给一个正确片段，确认覆盖率严格小于1；确认6道无答案不进入正向分母。这些人为构造的返回结果不是实际检索结果，不能把检查通过写成模型召回率。检查记录在ignored的 `data/eval/rag/data_checks/public-zh-hard-20261107/`，正式策略对照、生成和Judge均未运行，也未追加付费请求。
-
-```powershell
-# 从backend执行；只校验数据，不加载embedding、访问数据库或调用供应商
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --suite evaluation/corpora/public_zh_hard.v1/suite.json --validate-suite
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --suite evaluation/corpora/public_zh_hard.v1/suite.json --split validation --validate-suite
-```
-
-当前冻结身份为 `e56772461fe83a951846946323158f4524ee27d3060b81581763ec97ba44cbc2`。它锁定待审数据内容，不代表人工验收通过。后续先核对来源和标注；若需修改，保存修订身份和原因，不能覆盖旧运行后沿用原身份。完整30题、必答要求、禁止结论、未知范围和证据来源均在仓库内同目录的 `annotation-review.json`，官方URL见 `sources.json`。审核时分别记录标签是否合理、是否独立核对原始来源，未审核字段保持空值；尚不依据验证集分数调参、扩大候选或自动晋升基线。
-
-公开中文集可直接用现有入口校验与复跑（以下校验不执行检索或供应商调用）：
-
-```powershell
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --suite evaluation/corpora/public_zh.v1/suite.json --validate-suite
-.venv/Scripts/python -X utf8 scripts/evaluate_retrieval_strategies.py --suite evaluation/corpora/public_zh.v1/suite.json --split validation --validate-suite
-# 如需本地真实A/B，将前文真实检索命令增加 --suite evaluation/corpora/public_zh.v1/suite.json
-# Redis难例集先完成来源与标注核验；当前没有策略收益或回答质量结论。
-```
+检索判定仍是有范围的规则，不能覆盖所有自然语言表达，也不能保证生成器不增加无依据断言。单进程缓存失效和知识写锁未验证多 worker 一致性。项目内置业务工具仍只给建议，静态身份映射和有限小语料不等于生产多租户客服平台。

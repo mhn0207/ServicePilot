@@ -39,11 +39,19 @@ def test_retraction_clears_same_order_amount_even_when_incoming_is_empty(message
  ('款项可以返还吗？',True),
  ('重复扣款需要什么资料？',True),
  ('退款多久到账',True),('请介绍退款政策',True),
+ ('企业服务登录报错 401，而且订单 #44444 疑似重复扣款99元。请分别给出登录排障和账单核验建议。',True),
+ ('请给出重复扣款的核验清单',True),
+ ('列出企业订阅退费的处理步骤',True),
+ ('登录返回401，帮我排查一下',True),
+ ('金额不是99元，是199元；退款需要什么材料？',True),
  ('退款金额需要改为99元',False),
  ('自动扣费金额改为99元',False),
  ('退回的金额改为99元',False),
  ('快递退回仓库了吗？',False),
  ('你好',False),('订单号改为22222',False),
+ ('更正一下，登录排障那条记录的订单号改为22222。',False),
+ ('更正：重复扣款核验清单对应的订单号改为22222',False),
+ ('更正登录排障记录订单号为22222；请列出后续排查步骤',True),
 ])
 def test_policy_questions_require_actual_knowledge_tool_before_answer(message,required):
     calls=[]; returns=[]

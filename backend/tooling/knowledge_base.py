@@ -22,11 +22,13 @@ from typing import Any, Dict, List, Optional
 import chromadb
 from tooling.knowledge_chunks import chunk_text, content_version, document_identity, evidence_id
 from tooling.retrieval_ranking import RetrievalRanking
+from core.storage_health import ChromaHealthProbe
+from tooling.knowledge_documents import KnowledgeDocuments
 
 logger = logging.getLogger(__name__)
 
 
-class KnowledgeBase(RetrievalRanking):
+class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
     """
     基于 ChromaDB 的 RAG 知识库。
 
@@ -70,6 +72,10 @@ class KnowledgeBase(RetrievalRanking):
         self._collection = self._client.get_or_create_collection(
             name=self.COLLECTION_NAME,
             metadata={"description": "ServicePilot RAG 知识库"},
+        )
+        self._health_probe = ChromaHealthProbe(
+            self._collection, host=chroma_host if self._use_server else None, port=chroma_port,
+            api_path=self._client.get_settings().chroma_server_api_default_path if self._use_server else '/api/v2',
         )
 
         # 如果知识库为空，导入默认文档
@@ -207,6 +213,9 @@ class KnowledgeBase(RetrievalRanking):
     async def doc_count_async(self) -> int:
         """异步获取文档片段数量。"""
         return await asyncio.to_thread(self._collection.count)
+
+    async def check_health(self) -> bool:
+        return await self._health_probe.check()
 
     # ── MCP 工具 handler ─────────────────────────────────────────────────────
 

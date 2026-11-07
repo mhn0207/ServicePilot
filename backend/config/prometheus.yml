@@ -19,6 +19,9 @@ scrape_configs:
           service: 'zhiying'
     scrape_interval: 10s
     metrics_path: '/metrics'
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/metrics_token
 
   # Prometheus 自监控
   - job_name: 'prometheus'

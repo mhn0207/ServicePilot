@@ -81,6 +81,8 @@
             </button>
           </div>
         </div>
+        <p v-if="historyError" role="alert">{{ historyError }} <button @click="restoreConversation" :disabled="busy">重试恢复</button>，或选择“新对话”。</p>
+        <p v-else-if="busy && pendingAction === 'history'" role="status">正在恢复近期消息…</p>
         <div class="conversation-layout" :class="{ 'has-conversation': messages.length }">
           <section class="conversation" :class="{ 'is-empty': !messages.length }" aria-label="服务协同对话">
             <div class="messages" ref="messageList" role="log" aria-label="对话消息" aria-live="polite" :aria-busy="busy && pendingAction === 'chat'">
@@ -162,7 +164,7 @@
                     <button
                       class="send-button"
                       type="submit"
-                      :disabled="busy || !draft.trim()"
+                      :disabled="busy || !!historyError || !draft.trim()"
                       :aria-label="busy && pendingAction === 'chat' ? '处理中' : '发送'"
                       :title="busy && pendingAction === 'chat' ? '处理中' : '发送'"
                     >
@@ -205,6 +207,7 @@
             <span>知识片段</span>
           </div>
         </div>
+        <KnowledgeDocuments :settings="settings" :revision="knowledgeRevision" @changed="knowledgeChanged" @access="knowledgeManageAccess = $event" />
         <div class="knowledge-layout">
           <section class="workspace-card search-workspace">
             <div class="card-heading">
@@ -235,11 +238,11 @@
             </div>
             <div v-else class="workspace-empty">
               <AppIcon name="book" />
-              <h3>{{ searched ? '暂未找到相关知识' : '搜索你的知识库' }}</h3>
-              <p>{{ searched ? '尝试换一个问题，或添加更多知识文档。' : '输入业务请求，查看最相关的知识片段。' }}</p>
+              <h3>{{ searchError ? '检索失败' : searched ? '暂未找到相关知识' : '搜索你的知识库' }}</h3>
+              <p>{{ searchError || (searched ? '尝试换一个问题，或添加更多知识文档。' : '输入业务请求，查看最相关的知识片段。') }}</p>
             </div>
           </section>
-          <section class="workspace-card import-workspace">
+          <section v-if="knowledgeManageAccess === 'allowed'" class="workspace-card import-workspace">
             <div class="card-heading">
               <div>
                 <span class="kicker">INGESTION</span>
@@ -460,6 +463,7 @@ import {
   reloadSkills,
   requestChat,
   requestHealth,
+  requestHistory,
   requestKnowledgeStats,
   requestMonitor,
   requestSearch,
@@ -473,6 +477,7 @@ import {
 import AppIcon from './components/AppIcon.vue'
 import RequestInspector from './components/RequestInspector.vue'
 import RagEvaluation from './components/RagEvaluation.vue'
+import KnowledgeDocuments from './components/KnowledgeDocuments.vue'
 
 import { createRequestState } from './lib/requestState'
 
@@ -480,12 +485,15 @@ const settings = reactive(createInitialSettings())
 const requestState = createRequestState(settings)
 const activeView = ref('chat')
 const messages = ref([])
+const historyError = ref('')
 const draft = ref('')
 const busy = ref(false)
 const healthOk = ref(false)
 const healthLabel = ref('未检查')
 const statusText = ref('')
 const knowledgeCount = ref('-')
+const knowledgeRevision = ref(0)
+const knowledgeManageAccess = ref('unknown')
 const searchQuery = ref('退款多久能到账')
 const searchResults = ref([])
 const docTitle = ref('')
@@ -497,6 +505,7 @@ const inspectorDialog = ref(null)
 const connectionDraft = reactive({ endpoint: '', userId: '', conversationId: '', pythonToken: '' })
 const pendingAction = ref('')
 const searched = ref(false)
+const searchError = ref('')
 const views = [
   { id: 'chat', label: '对话', icon: 'chat' },
   { id: 'knowledge', label: '知识库', icon: 'book' },
@@ -516,13 +525,14 @@ const evalData = ref(null)
 const toast = ref('')
 let toastTimer
 let messageSequence = 0
+let knowledgeSearchRevision = 0
 
 const currentApiUrl = computed(() => apiBaseUrl(settings))
 const docsUrl = computed(() => `${currentApiUrl.value}/docs`)
 const userInitial = computed(() => (settings.userId || 'U').slice(0, 1).toUpperCase())
 
 watch(() => settings.conversationId, persist)
-onMounted(refreshConsole)
+onMounted(() => { restoreConversation(); refreshConsole() })
 onBeforeUnmount(() => {
   requestState.invalidate()
   clearTimeout(toastTimer)
@@ -566,6 +576,7 @@ function saveConnection() {
     lastTrace.value = null
     searchResults.value = []
     searched.value = false
+    searchError.value = ''
     evalData.value = null
     monitorData.value = { agent_stats: {}, tool_stats: {}, active_alerts: [], suggestions: [] }
     skillsData.value = { count: 0, skills: [], errors: [] }
@@ -581,6 +592,7 @@ function saveConnection() {
   settings.conversationId = identityChanged && connectionDraft.conversationId.trim() === settings.conversationId ? '' : connectionDraft.conversationId.trim()
   persist()
   connectionDialog.value.close()
+  if (changed) restoreConversation()
   refreshConsole()
   showToast('连接配置已保存')
 }
@@ -662,9 +674,29 @@ async function reloadSkillSet() {
   } finally { if (request.isCurrent()) busy.value = false }
 }
 
+async function restoreConversation() {
+  const request = requestState.begin('action')
+  historyError.value = ''
+  if (!request.settings.conversationId) return
+  busy.value = true
+  pendingAction.value = 'history'
+  try {
+    const data = await requestHistory(request.settings)
+    if (!request.isCurrent()) return
+    messages.value = data.messages.map(item => ({ id: createMessageId(), role: item.role,
+      content: item.content, meta: '已恢复的近期消息' }))
+    await nextTick()
+    if (request.isCurrent()) messageList.value?.scrollTo({ top: messageList.value.scrollHeight })
+  } catch {
+    if (request.isCurrent()) historyError.value = '近期消息恢复失败，请检查连接及访问令牌后重试。'
+  } finally {
+    if (request.isCurrent()) busy.value = false
+  }
+}
+
 async function sendMessage() {
   const content = draft.value.trim()
-  if (!content || busy.value) return
+  if (!content || busy.value || historyError.value) return
   messages.value.push({ id: createMessageId(), role: 'user', content })
   draft.value = ''
   lastResponse.value = null
@@ -705,22 +737,28 @@ function clearConversation() {
   messages.value = []
   lastResponse.value = null
   lastTrace.value = null
-  settings.conversationId = ''
+  settings.conversationId = crypto.randomUUID()
+  historyError.value = ''
   persist()
 }
 
 async function searchKnowledge() {
   if (!searchQuery.value.trim() || busy.value) return
   const request = requestState.begin('action')
+  const revision = knowledgeSearchRevision
+  searchError.value = ''
+  searchResults.value = []
+  searched.value = false
   busy.value = true
   try {
     const data = await requestSearch(request.settings, searchQuery.value, 5)
-    if (!request.isCurrent()) return
+    if (!request.isCurrent() || revision !== knowledgeSearchRevision) return
     searchResults.value = data.results || []
     searched.value = true
     showToast(`检索完成，返回 ${searchResults.value.length} 条结果`)
   } catch (error) {
-    if (!request.isCurrent()) return
+    if (!request.isCurrent() || revision !== knowledgeSearchRevision) return
+    searchError.value = error.message
     statusText.value = error.message
     showToast('检索失败，请检查连接')
   } finally { if (request.isCurrent()) busy.value = false }
@@ -734,14 +772,23 @@ async function submitKnowledge() {
     const data = await addKnowledge(request.settings, [{ title: docTitle.value.trim(), content: docContent.value.trim() }])
     if (!request.isCurrent()) return
     statusText.value = JSON.stringify(data, null, 2)
-    await loadStats()
+    await knowledgeChanged()
     if (!request.isCurrent()) return
     showToast('文档已添加')
+    knowledgeRevision.value += 1
   } catch (error) {
     if (!request.isCurrent()) return
     statusText.value = error.message
     showToast('文档导入失败')
   } finally { if (request.isCurrent()) busy.value = false }
+}
+
+async function knowledgeChanged() {
+  knowledgeSearchRevision += 1
+  searchResults.value = []
+  searched.value = false
+  searchError.value = ''
+  await loadStats()
 }
 
 async function handleUpload(event) {
@@ -755,9 +802,10 @@ async function handleUpload(event) {
     const data = await uploadKnowledge(request.settings, file)
     if (!request.isCurrent()) return
     statusText.value = JSON.stringify(data, null, 2)
-    await loadStats()
+    await knowledgeChanged()
     if (!request.isCurrent()) return
     showToast(`${file.name} 导入成功`)
+    knowledgeRevision.value += 1
   } catch (error) {
     if (!request.isCurrent()) return
     statusText.value = error.message
