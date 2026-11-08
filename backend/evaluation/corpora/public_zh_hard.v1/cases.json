@@ -1,0 +1,839 @@
+{
+  "protocol_version": "rag-evidence-v1",
+  "knowledge_hash": "aa798744d95049759b04464cabc0b3a601125c3f36ac798a7a585fe3b830b678",
+  "cases": [
+    {
+      "id": "zhhard-001",
+      "group_id": "redis-hard:txn",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Redis事务里EXEC已经开始，中间一条WRONGTYPE，前面的SET会自动撤销吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "613a4cb364ce113abdb290c64b9b26f44337b5efdac80b057e465ac18d1014b8:078eb745e1cf954a8ec07fd0ae96bc4c2778d1e71daa90cd7b3ea30e448f0dd2:0"
+          ],
+          "source_quote": "Redis事务不支持自动回滚"
+        }
+      ],
+      "required_facts": [
+        "执行期错误不会自动回滚先前成功写入"
+      ],
+      "forbidden_claims": [
+        "声称整批自动回滚"
+      ]
+    },
+    {
+      "id": "zhhard-002",
+      "group_id": "redis-hard:txn",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "先WATCH再提交就是给键上了互斥锁吗？别的客户端还能改吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "613a4cb364ce113abdb290c64b9b26f44337b5efdac80b057e465ac18d1014b8:078eb745e1cf954a8ec07fd0ae96bc4c2778d1e71daa90cd7b3ea30e448f0dd2:1"
+          ],
+          "source_quote": "而不是阻止其他客户端写入的互斥锁"
+        }
+      ],
+      "required_facts": [
+        "WATCH是乐观监视，不阻塞别的客户端修改"
+      ],
+      "forbidden_claims": [
+        "声称WATCH阻止其他客户端写入"
+      ]
+    },
+    {
+      "id": "zhhard-003",
+      "group_id": "redis-hard:txn",
+      "category": "multi_evidence",
+      "split": "dev",
+      "turns": [
+        "排队时语法报错和WATCH后键过期，都可以不看版本直接当成必然整批执行吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "613a4cb364ce113abdb290c64b9b26f44337b5efdac80b057e465ac18d1014b8:078eb745e1cf954a8ec07fd0ae96bc4c2778d1e71daa90cd7b3ea30e448f0dd2:0"
+          ],
+          "source_quote": "从Redis 2.6.5起"
+        },
+        {
+          "id": "e2",
+          "acceptable_chunk_ids": [
+            "613a4cb364ce113abdb290c64b9b26f44337b5efdac80b057e465ac18d1014b8:078eb745e1cf954a8ec07fd0ae96bc4c2778d1e71daa90cd7b3ea30e448f0dd2:1"
+          ],
+          "source_quote": "过期触发中止从Redis 6.0.9开始适用"
+        }
+      ],
+      "required_facts": [
+        "2.6.5起排队错误导致EXEC拒绝执行",
+        "被监视键过期导致中止适用于6.0.9及以后，不能忽略版本"
+      ],
+      "forbidden_claims": [
+        "声称两种情形必然整批执行",
+        "声称任意老版本过期都会触发WATCH中止"
+      ]
+    },
+    {
+      "id": "zhhard-004",
+      "group_id": "redis-hard:txn",
+      "category": "partial",
+      "split": "dev",
+      "turns": [
+        "EXEC执行中有命令报错会回滚吗？也查一下我昨天session:42到底写成功没有。"
+      ],
+      "answerability": "partial",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "613a4cb364ce113abdb290c64b9b26f44337b5efdac80b057e465ac18d1014b8:078eb745e1cf954a8ec07fd0ae96bc4c2778d1e71daa90cd7b3ea30e448f0dd2:0"
+          ],
+          "source_quote": "Redis事务不支持自动回滚"
+        }
+      ],
+      "required_facts": [
+        "说明执行期错误不自动回滚",
+        "具体键昨天的写入结果无法由这些通用资料确认"
+      ],
+      "forbidden_claims": [
+        "编造session:42昨日状态"
+      ]
+    },
+    {
+      "id": "zhhard-005",
+      "group_id": "redis-hard:txn",
+      "category": "unanswerable",
+      "split": "dev",
+      "turns": [
+        "Redis 7.2里FUNCTION LOAD的REPLACE怎样处理已存在的函数库？请只按所给资料回答。"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [
+        "所给快照没有FUNCTION LOAD及REPLACE规则，应说明资料不足"
+      ],
+      "forbidden_claims": [
+        "把未收入资料的函数库替换规则说成资料已有结论"
+      ]
+    },
+    {
+      "id": "zhhard-006",
+      "group_id": "redis-hard:expiry",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Redis计数器已经有TTL，之后只做INCR，会自动续成完整30分钟吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "839b968e374e83ba6adf172fef7e6b254305a31fcdf896dab99f255b5111bcbb:a377af2d3932d37960f0ac0290cc8dd863fd8f52fa2070be8f9c91900eeee37f:0"
+          ],
+          "source_quote": "也不会仅因为发生写入就重新开始完整有效期"
+        }
+      ],
+      "required_facts": [
+        "INCR保留原TTL，不会自动重置成完整30分钟"
+      ],
+      "forbidden_claims": [
+        "承诺INCR自动续期"
+      ]
+    },
+    {
+      "id": "zhhard-007",
+      "group_id": "redis-hard:expiry",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Redis 7里一个无TTL的键，EXPIRE key 60 GT就能给它加一分钟期限吧？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "839b968e374e83ba6adf172fef7e6b254305a31fcdf896dab99f255b5111bcbb:a377af2d3932d37960f0ac0290cc8dd863fd8f52fa2070be8f9c91900eeee37f:1"
+          ],
+          "source_quote": "没有过期时间的键按无限TTL处理"
+        },
+        {
+          "id": "e2",
+          "acceptable_chunk_ids": [
+            "839b968e374e83ba6adf172fef7e6b254305a31fcdf896dab99f255b5111bcbb:a377af2d3932d37960f0ac0290cc8dd863fd8f52fa2070be8f9c91900eeee37f:1"
+          ],
+          "source_quote": "不能用GT给这种键加上有限TTL"
+        }
+      ],
+      "required_facts": [
+        "无TTL按无限TTL比较，GT不能这样设置有限期限"
+      ],
+      "forbidden_claims": [
+        "声称该GT条件一定能设置成功"
+      ]
+    },
+    {
+      "id": "zhhard-008",
+      "group_id": "redis-hard:expiry",
+      "category": "multi_evidence",
+      "split": "dev",
+      "turns": [
+        "普通SET覆盖与EXPIRE传0都会让键变成永久存在吗？TTL的-1和-2分别表示什么？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "839b968e374e83ba6adf172fef7e6b254305a31fcdf896dab99f255b5111bcbb:a377af2d3932d37960f0ac0290cc8dd863fd8f52fa2070be8f9c91900eeee37f:0"
+          ],
+          "source_quote": "普通SET成功覆盖键值时会丢弃原来的生存时间"
+        },
+        {
+          "id": "e2",
+          "acceptable_chunk_ids": [
+            "839b968e374e83ba6adf172fef7e6b254305a31fcdf896dab99f255b5111bcbb:a377af2d3932d37960f0ac0290cc8dd863fd8f52fa2070be8f9c91900eeee37f:1"
+          ],
+          "source_quote": "传入非正超时会删除键"
+        },
+        {
+          "id": "e3",
+          "acceptable_chunk_ids": [
+            "839b968e374e83ba6adf172fef7e6b254305a31fcdf896dab99f255b5111bcbb:a377af2d3932d37960f0ac0290cc8dd863fd8f52fa2070be8f9c91900eeee37f:1"
+          ],
+          "source_quote": "返回-1表示键存在但没有过期时间，返回-2表示键不存在"
+        }
+      ],
+      "required_facts": [
+        "普通SET覆盖可清掉旧TTL，EXPIRE 0是删键",
+        "-1是存在无过期，-2是不存在，不能混淆"
+      ],
+      "forbidden_claims": [
+        "声称EXPIRE 0变永久",
+        "混淆-1与-2"
+      ]
+    },
+    {
+      "id": "zhhard-009",
+      "group_id": "redis-hard:expiry",
+      "category": "partial",
+      "split": "dev",
+      "turns": [
+        "Redis 7无TTL的键能用GT设置60秒吗？再告诉我生产login:7现在还剩几秒。"
+      ],
+      "answerability": "partial",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "839b968e374e83ba6adf172fef7e6b254305a31fcdf896dab99f255b5111bcbb:a377af2d3932d37960f0ac0290cc8dd863fd8f52fa2070be8f9c91900eeee37f:1"
+          ],
+          "source_quote": "不能用GT给这种键加上有限TTL"
+        }
+      ],
+      "required_facts": [
+        "说明GT与无限TTL的比较规则",
+        "生产键当前TTL未知"
+      ],
+      "forbidden_claims": [
+        "编造login:7当前TTL"
+      ]
+    },
+    {
+      "id": "zhhard-010",
+      "group_id": "redis-hard:expiry",
+      "category": "unanswerable",
+      "split": "dev",
+      "turns": [
+        "生产login:7昨天究竟被谁删了？请给出操作者和精确时间。"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [
+        "通用命令资料不能确定操作者和删除时间"
+      ],
+      "forbidden_claims": [
+        "编造用户或时间"
+      ]
+    },
+    {
+      "id": "zhhard-011",
+      "group_id": "redis-hard:eviction",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Redis达到maxmemory并且是noeviction，是不是连GET已有键也全部拒绝？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "2fab104e3062c9959826c1ac904dbcc108cf172d6586c1c269a2299740c6ac9b:bc4a3597f922dee7c52851d85077fc648b1d078f941d07a4ef0835898fbab2f6:0"
+          ],
+          "source_quote": "只读取已有数据的命令仍可正常工作"
+        }
+      ],
+      "required_facts": [
+        "noeviction达到上限时，已有数据读取仍可工作"
+      ],
+      "forbidden_claims": [
+        "声称所有GET均被内存策略拒绝"
+      ]
+    },
+    {
+      "id": "zhhard-012",
+      "group_id": "redis-hard:eviction",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Redis的volatile-lru满了，但所有键都没TTL，会自动改淘汰无TTL键吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "2fab104e3062c9959826c1ac904dbcc108cf172d6586c1c269a2299740c6ac9b:bc4a3597f922dee7c52851d85077fc648b1d078f941d07a4ef0835898fbab2f6:0"
+          ],
+          "source_quote": "当没有任何键带过期时间时，volatile类策略会表现得像noeviction"
+        }
+      ],
+      "required_facts": [
+        "无可选TTL键时按noeviction表现，不会自动淘汰无TTL键"
+      ],
+      "forbidden_claims": [
+        "声称会自动切成allkeys-lru"
+      ]
+    },
+    {
+      "id": "zhhard-013",
+      "group_id": "redis-hard:eviction",
+      "category": "multi_evidence",
+      "split": "dev",
+      "turns": [
+        "volatile-lru会不会提前删掉尚未到期的键？expired_keys和evicted_keys能混着统计吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "2fab104e3062c9959826c1ac904dbcc108cf172d6586c1c269a2299740c6ac9b:bc4a3597f922dee7c52851d85077fc648b1d078f941d07a4ef0835898fbab2f6:0"
+          ],
+          "source_quote": "volatile-lru只选择带TTL的键"
+        },
+        {
+          "id": "e2",
+          "acceptable_chunk_ids": [
+            "2fab104e3062c9959826c1ac904dbcc108cf172d6586c1c269a2299740c6ac9b:bc4a3597f922dee7c52851d85077fc648b1d078f941d07a4ef0835898fbab2f6:1"
+          ],
+          "source_quote": "evicted_keys记录因maxmemory限制而淘汰的键数，expired_keys记录因过期而移除的键数"
+        }
+      ],
+      "required_facts": [
+        "有TTL的键仍可能在自然到期前被淘汰",
+        "两种统计分别指内存淘汰和过期，不能混为同一原因"
+      ],
+      "forbidden_claims": [
+        "声称TTL内保证不被淘汰",
+        "把两个字段定义互换"
+      ]
+    },
+    {
+      "id": "zhhard-014",
+      "group_id": "redis-hard:eviction",
+      "category": "partial",
+      "split": "dev",
+      "turns": [
+        "noeviction满了能继续读已有键吗？顺便算出我库最近一分钟淘汰了几个。"
+      ],
+      "answerability": "partial",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "2fab104e3062c9959826c1ac904dbcc108cf172d6586c1c269a2299740c6ac9b:bc4a3597f922dee7c52851d85077fc648b1d078f941d07a4ef0835898fbab2f6:0"
+          ],
+          "source_quote": "只读取已有数据的命令仍可正常工作"
+        }
+      ],
+      "required_facts": [
+        "说明读取仍可工作",
+        "缺少前后计数不能计算一分钟淘汰量"
+      ],
+      "forbidden_claims": [
+        "编造最近一分钟淘汰数量"
+      ]
+    },
+    {
+      "id": "zhhard-015",
+      "group_id": "redis-hard:eviction",
+      "category": "unanswerable",
+      "split": "dev",
+      "turns": [
+        "我的Redis应该把maxmemory精确设成多少字节，才能保证业务P99低于20毫秒？"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [
+        "资料没有实例容量、负载和压测，无法给出该数值或延迟保证"
+      ],
+      "forbidden_claims": [
+        "编造容量及P99承诺"
+      ]
+    },
+    {
+      "id": "zhhard-016",
+      "group_id": "redis-hard:persistence",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "Redis开了AOF everysec，掉电时就能保证一条已确认写入都不丢吧？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "cc6833186eaf806e1d0f77c074df502d35c098295f3d01c7bf32094778e72940:c0247decd330fa5204d02069af6b1f97f3f8e02350add089134c40fae78a3339:0"
+          ],
+          "source_quote": "故障时仍可能丢失约一秒数据，不能承诺零丢失"
+        }
+      ],
+      "required_facts": [
+        "everysec仍有丢数据窗口，不能保证零丢失"
+      ],
+      "forbidden_claims": [
+        "保证零丢失"
+      ]
+    },
+    {
+      "id": "zhhard-017",
+      "group_id": "redis-hard:persistence",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "正在AOF重写时，普通BGSAVE与BGSAVE SCHEDULE都会立即保存完成吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "cc6833186eaf806e1d0f77c074df502d35c098295f3d01c7bf32094778e72940:c0247decd330fa5204d02069af6b1f97f3f8e02350add089134c40fae78a3339:1"
+          ],
+          "source_quote": "普通BGSAVE会返回错误"
+        },
+        {
+          "id": "e2",
+          "acceptable_chunk_ids": [
+            "cc6833186eaf806e1d0f77c074df502d35c098295f3d01c7bf32094778e72940:c0247decd330fa5204d02069af6b1f97f3f8e02350add089134c40fae78a3339:1"
+          ],
+          "source_quote": "SCHEDULE的OK可能只表示已排期"
+        }
+      ],
+      "required_facts": [
+        "普通BGSAVE会报错",
+        "SCHEDULE可能接受排期，不能当成快照已经成功完成"
+      ],
+      "forbidden_claims": [
+        "把排期OK当成备份完成",
+        "声称普通BGSAVE此时也会正常立即保存"
+      ]
+    },
+    {
+      "id": "zhhard-018",
+      "group_id": "redis-hard:persistence",
+      "category": "multi_evidence",
+      "split": "validation",
+      "turns": [
+        "Redis仅靠RDB能保证最近写入不丢吗？AOF重写期间BGSAVE SCHEDULE回OK又能证明快照已经成功吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "cc6833186eaf806e1d0f77c074df502d35c098295f3d01c7bf32094778e72940:c0247decd330fa5204d02069af6b1f97f3f8e02350add089134c40fae78a3339:0"
+          ],
+          "source_quote": "异常停机可能丢失最近一次快照以后的更新"
+        },
+        {
+          "id": "e2",
+          "acceptable_chunk_ids": [
+            "cc6833186eaf806e1d0f77c074df502d35c098295f3d01c7bf32094778e72940:c0247decd330fa5204d02069af6b1f97f3f8e02350add089134c40fae78a3339:1"
+          ],
+          "source_quote": "SCHEDULE的OK可能只表示已排期"
+        }
+      ],
+      "required_facts": [
+        "RDB可能丢快照后更新",
+        "SCHEDULE的OK可能仅表示排期，不能证明快照完成"
+      ],
+      "forbidden_claims": [
+        "保证RDB零丢失",
+        "把排期接受当完成"
+      ]
+    },
+    {
+      "id": "zhhard-019",
+      "group_id": "redis-hard:persistence",
+      "category": "partial",
+      "split": "validation",
+      "turns": [
+        "AOF everysec有丢失窗口吗？我们昨晚机器故障具体丢了哪几笔订单？"
+      ],
+      "answerability": "partial",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "cc6833186eaf806e1d0f77c074df502d35c098295f3d01c7bf32094778e72940:c0247decd330fa5204d02069af6b1f97f3f8e02350add089134c40fae78a3339:0"
+          ],
+          "source_quote": "故障时仍可能丢失约一秒数据，不能承诺零丢失"
+        }
+      ],
+      "required_facts": [
+        "解释everysec可能有丢失窗口",
+        "具体订单损失无法由通用文档确认"
+      ],
+      "forbidden_claims": [
+        "编造损失订单清单"
+      ]
+    },
+    {
+      "id": "zhhard-020",
+      "group_id": "redis-hard:persistence",
+      "category": "unanswerable",
+      "split": "validation",
+      "turns": [
+        "我这台Redis最近一次成功备份的文件路径、完成时间和SHA256是什么？"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [
+        "缺少现场配置与备份记录，不能提供实际路径时间哈希"
+      ],
+      "forbidden_claims": [
+        "编造文件路径时间或SHA256"
+      ]
+    },
+    {
+      "id": "zhhard-021",
+      "group_id": "redis-hard:pubsub",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "Redis Pub/Sub客户端离线五分钟，重新订阅后会自动补齐这五分钟的消息吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "07926f2dafe4498d0c331b4598783d62226f010a62e14aeee8cd6d25b3667eed:e529dc5609e1e10aa273c4425f9dd19ab2c2f0b068847db845402b1e5afe8c38:0"
+          ],
+          "source_quote": "漏掉的消息不能靠重新订阅补回来"
+        }
+      ],
+      "required_facts": [
+        "普通Pub/Sub不会自动补发离线消息"
+      ],
+      "forbidden_claims": [
+        "承诺重连自动补齐"
+      ]
+    },
+    {
+      "id": "zhhard-022",
+      "group_id": "redis-hard:pubsub",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "Redis Cluster的PUBLISH返回2，是否说明全群恰好两个消费者都完成了业务？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "07926f2dafe4498d0c331b4598783d62226f010a62e14aeee8cd6d25b3667eed:e529dc5609e1e10aa273c4425f9dd19ab2c2f0b068847db845402b1e5afe8c38:1"
+          ],
+          "source_quote": "返回计数只包括与发布客户端连接在同一节点的客户端"
+        },
+        {
+          "id": "e2",
+          "acceptable_chunk_ids": [
+            "07926f2dafe4498d0c331b4598783d62226f010a62e14aeee8cd6d25b3667eed:e529dc5609e1e10aa273c4425f9dd19ab2c2f0b068847db845402b1e5afe8c38:1"
+          ],
+          "source_quote": "不是业务处理完成的确认数"
+        }
+      ],
+      "required_facts": [
+        "该计数是同节点收到发送的客户端计数，不能代表全集群总数",
+        "不能证明业务处理完成"
+      ],
+      "forbidden_claims": [
+        "认定全集群恰好两个",
+        "认定两笔业务完成"
+      ]
+    },
+    {
+      "id": "zhhard-023",
+      "group_id": "redis-hard:pubsub",
+      "category": "multi_evidence",
+      "split": "validation",
+      "turns": [
+        "我们只用db 1和db 10隔离同名频道，同时PUBLISH返回数能作为业务完成确认吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "07926f2dafe4498d0c331b4598783d62226f010a62e14aeee8cd6d25b3667eed:e529dc5609e1e10aa273c4425f9dd19ab2c2f0b068847db845402b1e5afe8c38:0"
+          ],
+          "source_quote": "在db 10发布的消息可以被db 1中订阅同名频道的客户端收到"
+        },
+        {
+          "id": "e2",
+          "acceptable_chunk_ids": [
+            "07926f2dafe4498d0c331b4598783d62226f010a62e14aeee8cd6d25b3667eed:e529dc5609e1e10aa273c4425f9dd19ab2c2f0b068847db845402b1e5afe8c38:1"
+          ],
+          "source_quote": "不是业务处理完成的确认数"
+        }
+      ],
+      "required_facts": [
+        "数据库编号不隔离频道，应另设频道命名范围",
+        "发送计数不等于业务完成确认"
+      ],
+      "forbidden_claims": [
+        "声称SELECT能隔离同名频道",
+        "将发送计数当业务ACK"
+      ]
+    },
+    {
+      "id": "zhhard-024",
+      "group_id": "redis-hard:pubsub",
+      "category": "partial",
+      "split": "validation",
+      "turns": [
+        "普通Pub/Sub断线会补发吗？帮我列出消费者c7今早具体漏收的消息ID。"
+      ],
+      "answerability": "partial",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "07926f2dafe4498d0c331b4598783d62226f010a62e14aeee8cd6d25b3667eed:e529dc5609e1e10aa273c4425f9dd19ab2c2f0b068847db845402b1e5afe8c38:0"
+          ],
+          "source_quote": "漏掉的消息不能靠重新订阅补回来"
+        }
+      ],
+      "required_facts": [
+        "说明无自动补发",
+        "缺少业务接收日志，无法列出实际漏收ID"
+      ],
+      "forbidden_claims": [
+        "编造漏收ID"
+      ]
+    },
+    {
+      "id": "zhhard-025",
+      "group_id": "redis-hard:pubsub",
+      "category": "unanswerable",
+      "split": "validation",
+      "turns": [
+        "Redis 7.2分片Pub/Sub如何用哈希槽定位频道，SSUBSCRIBE具体有哪些路由限制？只按所给资料答。"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [
+        "快照未收入分片Pub/Sub与SSUBSCRIBE路由规则，应说明资料不足"
+      ],
+      "forbidden_claims": [
+        "将普通Pub/Sub频道规则直接当成分片路由规则"
+      ]
+    },
+    {
+      "id": "zhhard-026",
+      "group_id": "redis-hard:streams",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "Streams用了XREADGROUP NOACK，还能靠PEL完整找回读取后崩溃没处理的任务吧？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "f0028ed31897d5da878a9da16b8e920a64b6f560463ed5c944178ea94102d7de:b3fe68b7ce004b4dbaafb289212d4efc3ab6fd5932e751a5c279f11add2e2763:0"
+          ],
+          "source_quote": "NOACK会跳过加入PEL，相当于读取时就确认"
+        }
+      ],
+      "required_facts": [
+        "NOACK不进入PEL，不能靠对应PEL记录保证找回"
+      ],
+      "forbidden_claims": [
+        "承诺NOACK仍完整保留待确认任务"
+      ]
+    },
+    {
+      "id": "zhhard-027",
+      "group_id": "redis-hard:streams",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "XAUTOCLAIM设COUNT 100却只拿到3条，是命令一定出错吗？返回0-0代表以后永远没积压吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "f0028ed31897d5da878a9da16b8e920a64b6f560463ed5c944178ea94102d7de:b3fe68b7ce004b4dbaafb289212d4efc3ab6fd5932e751a5c279f11add2e2763:1"
+          ],
+          "source_quote": "实际返回条目少于COUNT"
+        },
+        {
+          "id": "e2",
+          "acceptable_chunk_ids": [
+            "f0028ed31897d5da878a9da16b8e920a64b6f560463ed5c944178ea94102d7de:b3fe68b7ce004b4dbaafb289212d4efc3ab6fd5932e751a5c279f11add2e2763:1"
+          ],
+          "source_quote": "一次0-0不保证以后永远没有待处理消息"
+        }
+      ],
+      "required_facts": [
+        "少于COUNT可能由扫描与空闲条件造成，不代表必然失败",
+        "0-0只表示本轮扫描结束，后续仍可能有可接管记录"
+      ],
+      "forbidden_claims": [
+        "认定不足COUNT必然错误",
+        "认定0-0永久无待处理"
+      ]
+    },
+    {
+      "id": "zhhard-028",
+      "group_id": "redis-hard:streams",
+      "category": "multi_evidence",
+      "split": "validation",
+      "turns": [
+        "BLOCK 0是不是立即超时？XACK成功后是不是原始流消息也被物理删除了？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "f0028ed31897d5da878a9da16b8e920a64b6f560463ed5c944178ea94102d7de:b3fe68b7ce004b4dbaafb289212d4efc3ab6fd5932e751a5c279f11add2e2763:0"
+          ],
+          "source_quote": "BLOCK为0表示无限等待，不代表立即超时"
+        },
+        {
+          "id": "e2",
+          "acceptable_chunk_ids": [
+            "f0028ed31897d5da878a9da16b8e920a64b6f560463ed5c944178ea94102d7de:b3fe68b7ce004b4dbaafb289212d4efc3ab6fd5932e751a5c279f11add2e2763:1"
+          ],
+          "source_quote": "不能说XACK会删除原始流条目"
+        }
+      ],
+      "required_facts": [
+        "BLOCK 0无限等待",
+        "XACK移除对应PEL记录，并非删除原始流条目"
+      ],
+      "forbidden_claims": [
+        "声称立即超时",
+        "声称XACK删除原始流消息"
+      ]
+    },
+    {
+      "id": "zhhard-029",
+      "group_id": "redis-hard:streams",
+      "category": "partial",
+      "split": "validation",
+      "turns": [
+        "NOACK会留下待确认记录吗？我们昨晚重复扣费是不是XAUTOCLAIM导致的？"
+      ],
+      "answerability": "partial",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "e1",
+          "acceptable_chunk_ids": [
+            "f0028ed31897d5da878a9da16b8e920a64b6f560463ed5c944178ea94102d7de:b3fe68b7ce004b4dbaafb289212d4efc3ab6fd5932e751a5c279f11add2e2763:0"
+          ],
+          "source_quote": "NOACK会跳过加入PEL，相当于读取时就确认"
+        }
+      ],
+      "required_facts": [
+        "说明NOACK不会加入PEL",
+        "无法用通用命令语义确定重复扣费的现场原因"
+      ],
+      "forbidden_claims": [
+        "断定XAUTOCLAIM造成该次重复扣费"
+      ]
+    },
+    {
+      "id": "zhhard-030",
+      "group_id": "redis-hard:streams",
+      "category": "unanswerable",
+      "split": "validation",
+      "turns": [
+        "我的消费组billing现在PEL精确有多少条，哪条最老？"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [
+        "没有现场XPENDING或其他观测，无法给出数量和最老记录"
+      ],
+      "forbidden_claims": [
+        "编造PEL数量或ID"
+      ]
+    }
+  ]
+}

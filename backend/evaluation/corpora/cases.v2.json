@@ -1,0 +1,1306 @@
+{
+  "protocol_version": "rag-evidence-v1",
+  "knowledge_hash": "3be14a78911ca8d5a7ab2857348e8a95b4c647795b8c2bcb9f5e6f067179fb9e",
+  "cases": [
+    {
+      "id": "v2-001",
+      "group_id": "dev-auth",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "Why does a missing bearer token return 401 and what should support inspect?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "access-token-0",
+          "acceptable_chunk_ids": [
+            "f6bace27484d8abf6b6db34e7e0cafca05fdbdf13288e9b5b18288ddf8d4e333:9488956a8516922a78d8f93ab214b004eab7a9d2e9f8b08cc86280d1e3f2b7aa:0"
+          ],
+          "source_quote": "A missing bearer token produces HTTP 401 before tenant routing. The support operator checks whether the Authorization header reached the gateway and whether a proxy removed it. Collect only the request identifier and the token fingerprint; never request the raw credential in a ticket."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-002",
+      "group_id": "dev-auth",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "The token is fresh but audience_mismatch remains. Should I change tenant membership?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "access-token-2",
+          "acceptable_chunk_ids": [
+            "f6bace27484d8abf6b6db34e7e0cafca05fdbdf13288e9b5b18288ddf8d4e333:9488956a8516922a78d8f93ab214b004eab7a9d2e9f8b08cc86280d1e3f2b7aa:2"
+          ],
+          "source_quote": "A valid token for the wrong audience produces HTTP 401 with reason audience_mismatch. The audience must be servicepilot-api. Do not change tenant membership to fix this error. Reissuing a token for the correct audience requires the original authenticated identity."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-003",
+      "group_id": "dev-auth",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Can a project reader export audit records after refreshing a token?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "permission-0",
+          "acceptable_chunk_ids": [
+            "151e3cf937595c55aaf203bca0b3b0f79df25691b2e501e8b7ca111852d58426:5ce620844b9b10985424beb3d3fc33606600318bc0738b7f3cbe64b88a3a545d:0"
+          ],
+          "source_quote": "HTTP 403 means the identity was authenticated but the requested action was denied. The project reader role may view project status but may not export audit records. An export requires the audit_export capability assigned inside the same tenant, not merely a fresh access token."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-004",
+      "group_id": "dev-auth",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "May a tenant administrator approve their own audit_export grant?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "permission-1",
+          "acceptable_chunk_ids": [
+            "151e3cf937595c55aaf203bca0b3b0f79df25691b2e501e8b7ca111852d58426:5ce620844b9b10985424beb3d3fc33606600318bc0738b7f3cbe64b88a3a545d:1"
+          ],
+          "source_quote": "Tenant administrators can request capability grants but cannot approve their own audit_export grant. An independent tenant security approver must review the request identifier, requested scope and business reason. A grant becomes active only after approval is recorded."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-005",
+      "group_id": "dev-auth",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "I belong to two tenants. Why is the other tenant project returned as 404?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "tenant-0",
+          "acceptable_chunk_ids": [
+            "e74d405886225ea382cc4e7e70a9deebf03efc506df57e95e7903f5c3a7f8f0e:d704823ef5d3b00d3595a04839f2997b6a5c8ed5f9847f3194ada235d0f12e16:0"
+          ],
+          "source_quote": "Every project lookup uses the authenticated tenant identifier and the project identifier together. A project belonging to another tenant is returned as HTTP 404 to avoid disclosing its existence. A user who belongs to both tenants must explicitly switch the active tenant."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-006",
+      "group_id": "dev-auth",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Does accepting a Cedar invitation move Birch documents into Cedar?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "tenant-1",
+          "acceptable_chunk_ids": [
+            "e74d405886225ea382cc4e7e70a9deebf03efc506df57e95e7903f5c3a7f8f0e:d704823ef5d3b00d3595a04839f2997b6a5c8ed5f9847f3194ada235d0f12e16:1"
+          ],
+          "source_quote": "An invitation to tenant Cedar does not transfer resources from tenant Birch. The invited member sees only resources granted in Cedar after accepting the invitation. Support must not copy documents between tenants to make an invitation appear successful."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-007",
+      "group_id": "dev-operations",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "What should a read client collect and how often retry HTTP 500 internal_fault?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "server-errors-0",
+          "acceptable_chunk_ids": [
+            "d684447d6abbe63b4b21704583efaf6e65eaffde3f2b940681764319b981c940:5878c68b616d4e3a2415fed2d305dfe06ab7d210583d404f295396e797c44218:0"
+          ],
+          "source_quote": "HTTP 500 with reason internal_fault is a server failure, not proof that a payment failed. Capture the request identifier, endpoint and UTC time. For read requests, retry at most twice with increasing delay. Never include Authorization headers in diagnostic attachments."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-008",
+      "group_id": "dev-operations",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "A write returned 500. Can I retry with a new idempotency key?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "server-errors-1",
+          "acceptable_chunk_ids": [
+            "d684447d6abbe63b4b21704583efaf6e65eaffde3f2b940681764319b981c940:5878c68b616d4e3a2415fed2d305dfe06ab7d210583d404f295396e797c44218:1"
+          ],
+          "source_quote": "A write request that returns HTTP 500 may already have committed. Query its receipt using the same idempotency key before retrying. A new idempotency key represents a new operation and can cause a second charge. Support escalates if the receipt remains indeterminate."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-009",
+      "group_id": "dev-money",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "A settled payment exists but the workspace is not ready. Which state should be inspected?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "activation-0",
+          "acceptable_chunk_ids": [
+            "d942c1175c2aa554fc3eb301a40f4ec2864a51ad09b4df37db3c999c81dd5bab:5fce498ab2c8b5f96375d62c23cd09b6eb891248ac6f8be4a804e7b582f5245b:0"
+          ],
+          "source_quote": "The fictional business has separate payment and provisioning states. A payment receipt marked settled allows provisioning to begin but does not prove that a workspace is ready. The operator checks the provisioning job identifier and its most recent state transition."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-010",
+      "group_id": "dev-money",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Provisioning says awaiting_capacity. Should we request another payment?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "activation-1",
+          "acceptable_chunk_ids": [
+            "d942c1175c2aa554fc3eb301a40f4ec2864a51ad09b4df37db3c999c81dd5bab:5fce498ab2c8b5f96375d62c23cd09b6eb891248ac6f8be4a804e7b582f5245b:1"
+          ],
+          "source_quote": "A provisioning job in awaiting_capacity is queued for an available workspace slot. Do not ask the customer to pay again. Collect the order identifier, settled receipt reference and job identifier for the provisioning team. No fixed activation deadline is guaranteed."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-011",
+      "group_id": "dev-money",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Does an authorized bank hold prove a captured charge?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "holds-0",
+          "acceptable_chunk_ids": [
+            "8063eb93852f7f1490d1c451c5d4bfcd25fdccf24cebdc2d45d33d96c21923f7:7c323d4e186b79a2fef36c376b88fee0edf40523e8a325e889ec588a88dd3a24:0"
+          ],
+          "source_quote": "An authorization hold reserves available funds but is not a captured charge. The payment ledger labels a hold authorized and a completed charge captured. A bank notification alone is insufficient to distinguish them; compare the merchant reference and ledger event type."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-012",
+      "group_id": "dev-money",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "How is a released hold labeled, and can support guarantee the bank display date?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "holds-1",
+          "acceptable_chunk_ids": [
+            "8063eb93852f7f1490d1c451c5d4bfcd25fdccf24cebdc2d45d33d96c21923f7:7c323d4e186b79a2fef36c376b88fee0edf40523e8a325e889ec588a88dd3a24:1"
+          ],
+          "source_quote": "A released hold is recorded as voided, not refunded. The release instruction can precede the bank display update. Support may provide the void reference after identity verification but cannot promise the bank posting date or create a refund for an uncaptured hold."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-013",
+      "group_id": "dev-money",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Two notifications arrived for one capture. Is that sufficient proof of duplicate payment?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "duplicate-0",
+          "acceptable_chunk_ids": [
+            "7fa0a998273224dac5c733b8b573aedacdf5c97ec1c2c57262403452607ed4b7:58f754e089d6d55fd0fe733eee0b2ada4e4eb77a1e2b1bc8b6bea88c2d33047b:0"
+          ],
+          "source_quote": "Two bank notifications with one captured ledger entry are not enough to establish a duplicate charge. Match currency, merchant reference and capture identifier. An authorization event followed by a capture event belongs to one payment lifecycle rather than two purchases."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-014",
+      "group_id": "dev-money",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "Two distinct captures exist for one order. What evidence goes to finance?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "duplicate-1",
+          "acceptable_chunk_ids": [
+            "7fa0a998273224dac5c733b8b573aedacdf5c97ec1c2c57262403452607ed4b7:58f754e089d6d55fd0fe733eee0b2ada4e4eb77a1e2b1bc8b6bea88c2d33047b:1"
+          ],
+          "source_quote": "Two distinct captured entries for the same order require reconciliation by finance. Collect both capture references and amounts, with card details redacted. The assistant records a suspected duplicate; it cannot declare a refund approved or execute either reversal."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-015",
+      "group_id": "dev-money",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "If automatic renewal is canceled, when does existing paid access end?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "renewal-0",
+          "acceptable_chunk_ids": [
+            "1ce796ac69d09714c9a39a0fdf32ba382f7c8656a455130151024d5cd989ec78:4dcc54a40400086a944c895d808ab52b7b155405d76ba504a2a2e6f5c57ff5d0:0"
+          ],
+          "source_quote": "Canceling automatic renewal changes the next billing instruction but leaves access active until the current paid term ends. The effective cancellation record includes the tenant, subscription identifier and confirmation timestamp. It is not an instruction to refund the paid term."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-016",
+      "group_id": "dev-money",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "The renewal was captured before cancellation. Does cancellation reverse it?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "renewal-1",
+          "acceptable_chunk_ids": [
+            "1ce796ac69d09714c9a39a0fdf32ba382f7c8656a455130151024d5cd989ec78:4dcc54a40400086a944c895d808ab52b7b155405d76ba504a2a2e6f5c57ff5d0:1"
+          ],
+          "source_quote": "A cancellation requested after the next renewal capture does not reverse that capture. The customer must open a separate refund review for the captured renewal. Support should collect the cancellation confirmation and renewal capture timestamps to establish their ordering."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-017",
+      "group_id": "dev-money",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Does submitting a refund review mean the refund is approved?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "refunds-0",
+          "acceptable_chunk_ids": [
+            "58fed1668b53cd0e23047ee43cec0474eb737e729bcb3b79230b7129b3ab7151:d510c96361a6f695247da76c1f04e71b184c23cce197dc2fc7ebec883f630cf8:0"
+          ],
+          "source_quote": "Refund review applies only to captured payments. A reviewer checks the capture reference, requested amount, currency and reason. Submission creates a review request, not an approved refund. The assistant must not promise approval, a fixed amount or a bank posting date."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-018",
+      "group_id": "dev-money",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "An approved refund was submitted_to_processor. What proves completion?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "refunds-1",
+          "acceptable_chunk_ids": [
+            "58fed1668b53cd0e23047ee43cec0474eb737e729bcb3b79230b7129b3ab7151:d510c96361a6f695247da76c1f04e71b184c23cce197dc2fc7ebec883f630cf8:1"
+          ],
+          "source_quote": "An approved refund is first marked approved and later submitted_to_processor. Only a processor confirmation marks it completed. Customer account access does not automatically change when a refund status changes; subscription termination is handled by its own workflow."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-019",
+      "group_id": "dev-documents",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "Which information is needed to request a legal entity invoice?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "invoice-0",
+          "acceptable_chunk_ids": [
+            "e10dd201e3db832e7573b73a3bb3552df3d4ae479f6c27487104f893bc6962f1:488b4cae6b141d0942b318c3e18f984d15fa0dff4ab3e8bcb97e472d95704eae:0"
+          ],
+          "source_quote": "A payment receipt confirms a payment event, while an invoice identifies the billed legal entity and taxable items. They are distinct records. To request an invoice, provide the order reference, verified company legal name and tax registration identifier through the billing portal."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-020",
+      "group_id": "dev-documents",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Can a payment authorization hold support an issued invoice?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "invoice-1",
+          "acceptable_chunk_ids": [
+            "e10dd201e3db832e7573b73a3bb3552df3d4ae479f6c27487104f893bc6962f1:488b4cae6b141d0942b318c3e18f984d15fa0dff4ab3e8bcb97e472d95704eae:1"
+          ],
+          "source_quote": "Invoices are issued only for captured billable amounts. An authorization hold cannot support an invoice request. A draft invoice is editable before issuance; an issued invoice requires the correction process and must not be silently replaced in a support attachment."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-021",
+      "group_id": "dev-documents",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "Can support edit the legal name in an already issued invoice PDF?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "invoice-fix-0",
+          "acceptable_chunk_ids": [
+            "ef0215fbeb7cd10c798feecf83518ce9d447db4c36a1c837683d2f02655a11e7:b0196580d5fd7883f4ecf5fab79c04fe03beecb0ee57714098e74f07de94ec39:0"
+          ],
+          "source_quote": "An issued invoice with a wrong legal name enters a correction review. The original invoice number remains in the audit trail. Billing staff decide whether a replacement invoice or credit note is required; the assistant cannot edit an issued PDF or invent a new invoice number."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-022",
+      "group_id": "dev-documents",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "A credit note exists. Does that prove money reached the bank?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "invoice-fix-1",
+          "acceptable_chunk_ids": [
+            "ef0215fbeb7cd10c798feecf83518ce9d447db4c36a1c837683d2f02655a11e7:b0196580d5fd7883f4ecf5fab79c04fe03beecb0ee57714098e74f07de94ec39:1"
+          ],
+          "source_quote": "A credit note references the original invoice and records a billing reduction. It is not itself proof of a bank refund. The operator checks the related refund transaction separately before saying that money was returned. A zero balance invoice can still have no refund transaction."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-023",
+      "group_id": "dev-operations",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "What belongs in a reliability handoff and what secrets must be removed?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "handoff-0",
+          "acceptable_chunk_ids": [
+            "7da7dc9fe3df8f998e7e4c50637d1f3fce4a5473db05ac5cad10d6ca0e0aa554:fee01cf2dfce65605fc95772243d0b25face7f98d5969b98e2769cb758a0b44a:0"
+          ],
+          "source_quote": "A reliability handoff includes the symptom, UTC timeline, request identifiers, affected endpoint and checks already performed. Summaries separate observed facts from hypotheses. Raw access tokens, complete card numbers and unrelated conversation history must be removed."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-024",
+      "group_id": "dev-operations",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "Can a finance handoff promise a real queue assignment?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "handoff-1",
+          "acceptable_chunk_ids": [
+            "7da7dc9fe3df8f998e7e4c50637d1f3fce4a5473db05ac5cad10d6ca0e0aa554:fee01cf2dfce65605fc95772243d0b25face7f98d5969b98e2769cb758a0b44a:1"
+          ],
+          "source_quote": "A finance handoff includes the order reference, currency, captured amounts and relevant receipt references. It must explicitly distinguish a requested refund from an approved refund. The assistant can prepare this summary but cannot create a real queue entry or promise staff assignment."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-025",
+      "group_id": "dev-operations",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "What happens when a retry has the same idempotency key and identical payload?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "idempotency-0",
+          "acceptable_chunk_ids": [
+            "354b3a60e98a0ca151d4173361d03b2604f865f53ad702b6ce07d3fab8e13850:f77ab17a0ec6bc680ba8dcae2447a7c631b54da3382d458ea1aea2ec853d1050:0"
+          ],
+          "source_quote": "A client retry with the same idempotency key and identical payload returns the original receipt. The key is scoped to the authenticated tenant and operation. Support compares the payload fingerprint, not raw sensitive request contents, when investigating a retry."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-026",
+      "group_id": "dev-operations",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "A reused key with a changed payload returns 409. Will token renewal fix it?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "idempotency-1",
+          "acceptable_chunk_ids": [
+            "354b3a60e98a0ca151d4173361d03b2604f865f53ad702b6ce07d3fab8e13850:f77ab17a0ec6bc680ba8dcae2447a7c631b54da3382d458ea1aea2ec853d1050:1"
+          ],
+          "source_quote": "Reusing an idempotency key with a different payload returns HTTP 409 conflict. This is not an authentication failure and renewing a token cannot solve it. The client must retrieve the original operation receipt before deciding whether a distinct operation is intended."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-027",
+      "group_id": "dev-money",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "A webhook signature check failed. May it update the payment ledger?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "webhook-0",
+          "acceptable_chunk_ids": [
+            "7969e05b0b411a99c11c85a0293f079a2f7855204e169760b8927c9e2686bf9d:946168e64b5eee680f4e0ee666fb8c33abf97a8c9887bcd83a2744e70666c9d3:0"
+          ],
+          "source_quote": "A payment webhook is trusted only after signature verification and timestamp tolerance checks. A signature failure records a rejected event and does not update the ledger. Support collects the event identifier and rejection reason without exposing the signing secret."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-028",
+      "group_id": "dev-money",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Does acknowledgement of a repeated verified payment event prove workspace activation?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "webhook-1",
+          "acceptable_chunk_ids": [
+            "7969e05b0b411a99c11c85a0293f079a2f7855204e169760b8927c9e2686bf9d:946168e64b5eee680f4e0ee666fb8c33abf97a8c9887bcd83a2744e70666c9d3:1"
+          ],
+          "source_quote": "Repeated delivery of a verified webhook with the same event identifier is deduplicated. A successful acknowledgement confirms receipt of the event, not workspace activation. The provisioning state must be checked separately using the associated order reference."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-029",
+      "group_id": "dev-operations",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "An invitation is unaccepted. Does it already represent an active seat assignment?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "seats-0",
+          "acceptable_chunk_ids": [
+            "8e544619d0d58505c0d88c178cc9aaaf4c2e7b67a3907177126c224326d5e848:a1a121bc604adef39371bae2e809e23e04bca756b291b35c4e446a7113f365c1:0"
+          ],
+          "source_quote": "Purchasing seat capacity and assigning a member are separate actions. A tenant with available capacity can invite a member, but the member gains access only after accepting and receiving a role. An unaccepted invitation is not an active seat assignment."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-030",
+      "group_id": "dev-operations",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "Does removing a member automatically reduce the contracted seat quantity?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "seats-1",
+          "acceptable_chunk_ids": [
+            "8e544619d0d58505c0d88c178cc9aaaf4c2e7b67a3907177126c224326d5e848:a1a121bc604adef39371bae2e809e23e04bca756b291b35c4e446a7113f365c1:1"
+          ],
+          "source_quote": "Removing a member revokes access but does not automatically reduce contracted seat capacity. The billing administrator reviews the next renewal quantity separately. Support cannot promise an immediate prorated refund merely because the member list became shorter."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-031",
+      "group_id": "dev-documents",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "Does a deletion request immediately erase financial audit records?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "retention-1",
+          "acceptable_chunk_ids": [
+            "5313ed63740a82c84e60d2b890e423cc6a565694edf4ec3f72566b3541aa4035:f94314f5df027e751af39a8fbea6b61f561295644d2a7da7936e3ce74200076d:1"
+          ],
+          "source_quote": "A deletion request enters privacy review and does not immediately erase financial audit records. Required retention exceptions are assessed by the privacy reviewer. The assistant can describe the review process but must not promise deletion of all records at a chosen date."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-032",
+      "group_id": "dev-documents",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "The project disappeared. Is that proof all retained records were erased?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "retention-2",
+          "acceptable_chunk_ids": [
+            "5313ed63740a82c84e60d2b890e423cc6a565694edf4ec3f72566b3541aa4035:f94314f5df027e751af39a8fbea6b61f561295644d2a7da7936e3ce74200076d:2"
+          ],
+          "source_quote": "A completed deletion review includes a scope statement listing retained categories and reasons. The customer receives that statement through the verified privacy contact. A missing project in the interface is insufficient evidence that every retained record was erased."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-033",
+      "group_id": "dev-money",
+      "category": "multi_evidence",
+      "split": "dev",
+      "turns": [
+        "How do I distinguish a partial capture remainder from a partially refunded capture balance?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "holds-2",
+          "acceptable_chunk_ids": [
+            "8063eb93852f7f1490d1c451c5d4bfcd25fdccf24cebdc2d45d33d96c21923f7:7c323d4e186b79a2fef36c376b88fee0edf40523e8a325e889ec588a88dd3a24:2"
+          ],
+          "source_quote": "A partial capture leaves the uncaptured remainder reserved until voided or expired. Reconciliation must separately list the captured amount and remaining authorization. Do not count their sum as two settled payments; refund eligibility is assessed only on the captured portion."
+        },
+        {
+          "id": "refunds-2",
+          "acceptable_chunk_ids": [
+            "58fed1668b53cd0e23047ee43cec0474eb737e729bcb3b79230b7129b3ab7151:d510c96361a6f695247da76c1f04e71b184c23cce197dc2fc7ebec883f630cf8:2"
+          ],
+          "source_quote": "A partially refunded capture retains a remaining refundable balance equal to captured amount minus completed refunds. Pending refund requests must also be inspected to avoid overlapping approvals. Currency must match the original capture, and the assistant cannot calculate exchange compensation."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-034",
+      "group_id": "dev-money",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "A workspace is paused and billing continues. How do pause and automatic renewal cancellation differ?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "renewal-2",
+          "acceptable_chunk_ids": [
+            "1ce796ac69d09714c9a39a0fdf32ba382f7c8656a455130151024d5cd989ec78:4dcc54a40400086a944c895d808ab52b7b155405d76ba504a2a2e6f5c57ff5d0:2"
+          ],
+          "source_quote": "A paused workspace and a subscription with automatic renewal disabled are different states. Pausing compute stops workload execution but does not change the renewal instruction. The operator checks the subscription renewal flag rather than treating paused compute as canceled billing."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-035",
+      "group_id": "dev-operations",
+      "category": "partial",
+      "split": "dev",
+      "turns": [
+        "How should HTTP 503 Retry-After be handled, and what exact recovery minute is guaranteed?"
+      ],
+      "answerability": "partial",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "server-errors-2",
+          "acceptable_chunk_ids": [
+            "d684447d6abbe63b4b21704583efaf6e65eaffde3f2b940681764319b981c940:5878c68b616d4e3a2415fed2d305dfe06ab7d210583d404f295396e797c44218:2"
+          ],
+          "source_quote": "HTTP 503 with Retry-After indicates planned overload handling. Read clients wait for the indicated interval. A persistent failure after the retry budget is exhausted is handed to reliability staff with the observed timeline; the assistant must not promise a recovery deadline."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-036",
+      "group_id": "dev-documents",
+      "category": "partial",
+      "split": "dev",
+      "turns": [
+        "How is a tax identifier corrected, and what is the exact legally required retention duration?"
+      ],
+      "answerability": "partial",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "invoice-fix-2",
+          "acceptable_chunk_ids": [
+            "ef0215fbeb7cd10c798feecf83518ce9d447db4c36a1c837683d2f02655a11e7:b0196580d5fd7883f4ecf5fab79c04fe03beecb0ee57714098e74f07de94ec39:2"
+          ],
+          "source_quote": "Tax identifier changes require verified company evidence and approval by billing staff. The corrected document is delivered only to a verified billing contact. Private supporting documents are submitted through the portal rather than pasted into an assistant conversation."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-037",
+      "group_id": "dev-unknown",
+      "category": "unanswerable",
+      "split": "dev",
+      "turns": [
+        "What is the enterprise annual plan price in JPY?"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-038",
+      "group_id": "dev-unknown",
+      "category": "unanswerable",
+      "split": "dev",
+      "turns": [
+        "Which discount percentage applies to an education nonprofit?"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-039",
+      "group_id": "dev-unknown",
+      "category": "unanswerable",
+      "split": "dev",
+      "turns": [
+        "Which named employee is on call next Sunday?"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-040",
+      "group_id": "dev-unknown",
+      "category": "unanswerable",
+      "split": "dev",
+      "turns": [
+        "What is the signed contractual uptime compensation percentage?"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-041",
+      "group_id": "validation-identity",
+      "category": "multi_evidence",
+      "split": "validation",
+      "turns": [
+        "During scheduled SSO certificate rotation, can both configured certificates validate assertions?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "sso-0",
+          "acceptable_chunk_ids": [
+            "8f6c4372dd4136b99d863e674ea117ff97fe8f1213440aa6998c2ee6aad41264:498104ff66d539d2cfd35781479744194c7b5a780c9431e5e1f095edc3d12826:0"
+          ],
+          "source_quote": "For a scheduled SSO signing certificate rotation, the identity administrator uploads the new public certificate while the previous certificate remains valid during an overlap window. Private signing keys never leave the identity provider. The assistant must not request them."
+        },
+        {
+          "id": "sso-1",
+          "acceptable_chunk_ids": [
+            "8f6c4372dd4136b99d863e674ea117ff97fe8f1213440aa6998c2ee6aad41264:498104ff66d539d2cfd35781479744194c7b5a780c9431e5e1f095edc3d12826:1"
+          ],
+          "source_quote": "During the overlap window either configured public certificate may verify an assertion. After the administrator closes the window, assertions signed only by the retired certificate are rejected. Reissuing an API token does not repair an SSO certificate mismatch."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-042",
+      "group_id": "validation-identity",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "For emergency SSO revocation, can we disable assertion signature verification?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "sso-2",
+          "acceptable_chunk_ids": [
+            "8f6c4372dd4136b99d863e674ea117ff97fe8f1213440aa6998c2ee6aad41264:498104ff66d539d2cfd35781479744194c7b5a780c9431e5e1f095edc3d12826:2"
+          ],
+          "source_quote": "An emergency certificate revocation ends the overlap immediately after security approval. The identity team documents the incident and verifies new assertions before restoring login. Support must not suggest disabling assertion signature verification as a workaround."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-043",
+      "group_id": "validation-identity",
+      "category": "direct",
+      "split": "validation",
+      "turns": [
+        "Can a service account inherit a personal account permissions through an invitation?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "service-account-0",
+          "acceptable_chunk_ids": [
+            "0f3bffaa902fe56684fba5925cb67b5fbdb94afcca3c04f7d4b6bb201b04bced:2f57dd672afa6c82969d4be0e7e998838f0fe0777af483ff435c056001f42653:0"
+          ],
+          "source_quote": "A service account belongs to one tenant and has an assigned human owner. It cannot accept a personal invitation or inherit another account permissions. Before granting automation access, the owner specifies the minimal capability and approved resource scope."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-044",
+      "group_id": "validation-identity",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "The automation owner left. Does renaming the service account transfer ownership?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "service-account-2",
+          "acceptable_chunk_ids": [
+            "0f3bffaa902fe56684fba5925cb67b5fbdb94afcca3c04f7d4b6bb201b04bced:2f57dd672afa6c82969d4be0e7e998838f0fe0777af483ff435c056001f42653:2"
+          ],
+          "source_quote": "When the human owner leaves, the tenant security administrator assigns a new accountable owner before renewing automation access. Changing the display name alone does not transfer ownership. Unowned automation is suspended pending review rather than silently assigned to a reader."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-045",
+      "group_id": "validation-settlement",
+      "category": "direct",
+      "split": "validation",
+      "turns": [
+        "A processor dispute is open. Why is a merchant refund put on coordination hold?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "dispute-0",
+          "acceptable_chunk_ids": [
+            "c68f0a114127119eb52039aaa555323cbc5e753f092621cdabaa88b611345f85:843faf36ad3dd01bba56afc1593e8e0e16099cf41d517eff865ba12ba05a050e:0"
+          ],
+          "source_quote": "A processor dispute and a merchant refund request are separate workflows for the same capture. If a dispute is open, finance places any new refund request on coordination hold to avoid duplicate compensation. The assistant must not promise that both paths will pay out."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-046",
+      "group_id": "validation-settlement",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "The dispute was withdrawn. Is the merchant refund automatically approved?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "dispute-1",
+          "acceptable_chunk_ids": [
+            "c68f0a114127119eb52039aaa555323cbc5e753f092621cdabaa88b611345f85:843faf36ad3dd01bba56afc1593e8e0e16099cf41d517eff865ba12ba05a050e:1"
+          ],
+          "source_quote": "A withdrawn dispute does not by itself approve a merchant refund. Finance verifies the processor status and then resumes refund review. The handoff includes the dispute reference, capture reference and coordination hold status without unredacted bank evidence."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-047",
+      "group_id": "validation-settlement",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "Does a purchase order reference prove payment for provisioning?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "purchase-order-0",
+          "acceptable_chunk_ids": [
+            "84cf11d6211e6e3e2aab34ab03132ec974c6a7c99ff406246d540bbc15121b54:4b46372ee1b90ab2253fd2a77e37fb6a587bff1c020547e099eacfaf39016da7:0"
+          ],
+          "source_quote": "A purchase order reference records a customer procurement commitment but is not proof of payment. A bank transfer is matched using the order reference, received currency and treasury receipt. Provisioning waits for treasury confirmation under this payment method."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-048",
+      "group_id": "validation-settlement",
+      "category": "direct",
+      "split": "validation",
+      "turns": [
+        "A bank transfer lacks an order reference. Can chat support assign it to a tenant?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "purchase-order-1",
+          "acceptable_chunk_ids": [
+            "84cf11d6211e6e3e2aab34ab03132ec974c6a7c99ff406246d540bbc15121b54:4b46372ee1b90ab2253fd2a77e37fb6a587bff1c020547e099eacfaf39016da7:1"
+          ],
+          "source_quote": "A transfer with a missing order reference enters unmatched_funds review. Treasury may request the payer legal name and redacted transfer reference through the secure portal. The assistant cannot assign unmatched money to a tenant based solely on a chat statement."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-049",
+      "group_id": "validation-migration",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "Does changing the billing address migrate workspace data to a new region?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "region-0",
+          "acceptable_chunk_ids": [
+            "321b757e425cd6c2fd7dba2cb636df4fd0833ab43a3989226e3bbbeb4af69224:0675d645c75f11ac5c4cc24f8541ba3cb9ee1a36b792c22b76ee64a61195ef77:0"
+          ],
+          "source_quote": "A requested workspace region change requires a migration review with an inventory of stored resources and a destination compatibility check. Updating the billing address does not move data. The assistant may collect a request but cannot start the actual migration."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-050",
+      "group_id": "validation-migration",
+      "category": "direct",
+      "split": "validation",
+      "turns": [
+        "Migration is scheduled. What is needed before treating the destination as authoritative?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "region-1",
+          "acceptable_chunk_ids": [
+            "321b757e425cd6c2fd7dba2cb636df4fd0833ab43a3989226e3bbbeb4af69224:0675d645c75f11ac5c4cc24f8541ba3cb9ee1a36b792c22b76ee64a61195ef77:1"
+          ],
+          "source_quote": "A migration scheduled for a maintenance window requires an approved rollback plan and an owner for verification. Existing region identifiers remain authoritative until the completion receipt is issued. A scheduled status is not evidence that data already moved."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-051",
+      "group_id": "validation-environment",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "Can a sandbox payment success activate a production workspace?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "sandbox-0",
+          "acceptable_chunk_ids": [
+            "5ac2dd00c38ae0050a1e7baf31a330a759a7f5baa548d4a99b4f438692437bf4:894312d1ab8a594a021cb81864b0ab8a860def31c7e205d33eb5a71162c4f23a:0"
+          ],
+          "source_quote": "Sandbox payment events use test ledger identifiers and never represent captured production funds. A sandbox success receipt cannot activate a production workspace. Support checks the environment label before reconciling any order or discussing financial consequences."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-052",
+      "group_id": "validation-environment",
+      "category": "direct",
+      "split": "validation",
+      "turns": [
+        "What requires approval when promoting sandbox configuration to production?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "sandbox-2",
+          "acceptable_chunk_ids": [
+            "5ac2dd00c38ae0050a1e7baf31a330a759a7f5baa548d4a99b4f438692437bf4:894312d1ab8a594a021cb81864b0ab8a860def31c7e205d33eb5a71162c4f23a:2"
+          ],
+          "source_quote": "Promoting a configuration from sandbox requires a fresh production approval and validation of callback destinations. Test receipts and sample customer records are excluded from the promotion. The assistant cannot convert a sandbox order identifier into a paid production order."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-053",
+      "group_id": "validation-partner",
+      "category": "direct",
+      "split": "validation",
+      "turns": [
+        "Who corrects an invoice for a reseller billed subscription?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "reseller-0",
+          "acceptable_chunk_ids": [
+            "819185d8c2459adf7da3c3bb60fdede4c037236c107b67999570fb647fd3f438:476e5b06c7edba937e927654d10be9d35218e75047a15862b54e73e30be1da1f:0"
+          ],
+          "source_quote": "For a subscription billed by a reseller, the reseller issues the customer invoice and handles the customer payment review. The platform can verify workspace status but cannot correct a reseller invoice. Support first checks the billing_owner field on the subscription."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-054",
+      "group_id": "validation-partner",
+      "category": "near_concept",
+      "split": "validation",
+      "turns": [
+        "Is the platform renewal cancellation request enough without reseller acknowledgement?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "reseller-1",
+          "acceptable_chunk_ids": [
+            "819185d8c2459adf7da3c3bb60fdede4c037236c107b67999570fb647fd3f438:476e5b06c7edba937e927654d10be9d35218e75047a15862b54e73e30be1da1f:1"
+          ],
+          "source_quote": "Disabling renewal at the platform for a reseller managed plan records a request pending reseller confirmation. The effective renewal change requires the reseller acknowledgement reference. A platform request timestamp alone does not prove the reseller stopped billing."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-055",
+      "group_id": "validation-emergency",
+      "category": "direct",
+      "split": "validation",
+      "turns": [
+        "Does a production incident automatically permit emergency access to another tenant?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "emergency-0",
+          "acceptable_chunk_ids": [
+            "4657934697cdb4e0bf65b0314c4cdd61103c26343454a072845fba58af028c87:5d9c53aff80f052d935c61c5fec12eb94cddcbb50c6d665afac5f17dc6f36438:0"
+          ],
+          "source_quote": "Emergency administrative access requires an incident identifier, named approver and explicit expiration time. It is limited to the approved tenant and investigation scope. A production incident does not automatically grant access to billing exports or other tenants."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-056",
+      "group_id": "validation-emergency",
+      "category": "multi_evidence",
+      "split": "validation",
+      "turns": [
+        "Does closing a reliability incident also close the related finance dispute?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "emergency-2",
+          "acceptable_chunk_ids": [
+            "4657934697cdb4e0bf65b0314c4cdd61103c26343454a072845fba58af028c87:5d9c53aff80f052d935c61c5fec12eb94cddcbb50c6d665afac5f17dc6f36438:2"
+          ],
+          "source_quote": "Incident closure requires a verified resolution statement and the status of temporary grants. A closed reliability incident does not automatically close a finance dispute or approve a refund. Separate owners confirm those workflows before the combined handoff is marked resolved."
+        },
+        {
+          "id": "dispute-0",
+          "acceptable_chunk_ids": [
+            "c68f0a114127119eb52039aaa555323cbc5e753f092621cdabaa88b611345f85:843faf36ad3dd01bba56afc1593e8e0e16099cf41d517eff865ba12ba05a050e:0"
+          ],
+          "source_quote": "A processor dispute and a merchant refund request are separate workflows for the same capture. If a dispute is open, finance places any new refund request on coordination hold to avoid duplicate compensation. The assistant must not promise that both paths will pay out."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-057",
+      "group_id": "validation-identity",
+      "category": "multi_evidence",
+      "split": "validation",
+      "turns": [
+        "How do service account credential overlap and SSO certificate overlap differ?"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "service-account-1",
+          "acceptable_chunk_ids": [
+            "0f3bffaa902fe56684fba5925cb67b5fbdb94afcca3c04f7d4b6bb201b04bced:2f57dd672afa6c82969d4be0e7e998838f0fe0777af483ff435c056001f42653:1"
+          ],
+          "source_quote": "Rotating a service account secret creates a replacement credential and a temporary overlap chosen by the security reviewer. The old credential is revoked at the end of that overlap. Support handles only fingerprints and cannot retrieve either secret from the account record."
+        },
+        {
+          "id": "sso-1",
+          "acceptable_chunk_ids": [
+            "8f6c4372dd4136b99d863e674ea117ff97fe8f1213440aa6998c2ee6aad41264:498104ff66d539d2cfd35781479744194c7b5a780c9431e5e1f095edc3d12826:1"
+          ],
+          "source_quote": "During the overlap window either configured public certificate may verify an assertion. After the administrator closes the window, assertions signed only by the retired certificate are rejected. Reissuing an API token does not repair an SSO certificate mismatch."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-058",
+      "group_id": "validation-migration",
+      "category": "partial",
+      "split": "validation",
+      "turns": [
+        "What happens if a destination region lacks a feature, and which exact regions offer it?"
+      ],
+      "answerability": "partial",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "region-2",
+          "acceptable_chunk_ids": [
+            "321b757e425cd6c2fd7dba2cb636df4fd0833ab43a3989226e3bbbeb4af69224:0675d645c75f11ac5c4cc24f8541ba3cb9ee1a36b792c22b76ee64a61195ef77:2"
+          ],
+          "source_quote": "If the destination lacks a required feature, the migration is blocked pending a revised plan. Support must not promise equivalent availability or residency behavior without review. Billing currency changes, if needed, follow a separate finance process."
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-059",
+      "group_id": "validation-unknown",
+      "category": "unanswerable",
+      "split": "validation",
+      "turns": [
+        "What is the current reseller contract commission percentage?"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "v2-060",
+      "group_id": "validation-unknown",
+      "category": "unanswerable",
+      "split": "validation",
+      "turns": [
+        "What is the sandbox data center street address?"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [],
+      "forbidden_claims": []
+    }
+  ]
+}

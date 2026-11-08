@@ -1,0 +1,29 @@
+# Prometheus 配置文件 — ServicePilot 智能客服系统
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'zhiying'
+    environment: 'production'
+
+rule_files:
+  - "alerts/*.yml"
+
+scrape_configs:
+  # ServicePilot 主应用指标
+  - job_name: 'zhiying-app'
+    static_configs:
+      - targets: ['zhiying:8000']
+        labels:
+          service: 'zhiying'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/metrics_token
+
+  # Prometheus 自监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

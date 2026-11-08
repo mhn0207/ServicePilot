@@ -1,0 +1,564 @@
+{
+  "protocol_version": "rag-evidence-v1",
+  "knowledge_hash": "c9043cbf452eb43568529331346988c88f267feea1f51e41d35e54538df1efc7",
+  "cases": [
+    {
+      "id": "scope_direct",
+      "group_id": "scope_roles",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "服务协调、技术可靠性、收入与合规 Agent 各负责什么？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "roles",
+          "acceptable_chunk_ids": [
+            "fb976e3c5979ccec6c2ac31807cf31c85bfe7147e89363e26bed1bcf0b12e51c:961ecc47b6c5e8af5dc35309640ccf02e4e4e8f2a703fac0a126534bbef8f888:0"
+          ],
+          "source_quote": "服务协调 Agent 负责澄清诉求和分流；技术可靠性 Agent 负责故障排查；收入与合规 Agent 负责账单核验要求及处理流程。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "scope_paraphrase",
+      "group_id": "scope_roles",
+      "category": "paraphrase",
+      "split": "dev",
+      "turns": [
+        "既有技术故障又有账单问题，是谁一起帮我处理呀？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "collaboration",
+          "acceptable_chunk_ids": [
+            "fb976e3c5979ccec6c2ac31807cf31c85bfe7147e89363e26bed1bcf0b12e51c:961ecc47b6c5e8af5dc35309640ccf02e4e4e8f2a703fac0a126534bbef8f888:0"
+          ],
+          "source_quote": "复合问题可由主辅 Agent 协作。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "order_direct",
+      "group_id": "activation",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "订单支付成功但服务未开通，先收集哪些信息？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "activation_check",
+          "acceptable_chunk_ids": [
+            "7a6f5ebd409f43c30f3cfb85fa5de1c4108bae4a0603db492a9d0ea588d5b60d:8f70137343c8f6b3979fd7c46ba784d9921fb41e974fdab6e0420ebec06f66b8:0"
+          ],
+          "source_quote": "先收集订单号、支付渠道和发生时间，交由有权限人员核验。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "order_paraphrase",
+      "group_id": "activation",
+      "category": "paraphrase",
+      "split": "dev",
+      "turns": [
+        "钱付了套餐还用不了，先给你啥信息去核实？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "activation_check",
+          "acceptable_chunk_ids": [
+            "7a6f5ebd409f43c30f3cfb85fa5de1c4108bae4a0603db492a9d0ea588d5b60d:8f70137343c8f6b3979fd7c46ba784d9921fb41e974fdab6e0420ebec06f66b8:0"
+          ],
+          "source_quote": "先收集订单号、支付渠道和发生时间，交由有权限人员核验。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "billing_direct",
+      "group_id": "duplicate_payment",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "重复扣款争议需要收集什么交易资料？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "transaction_check",
+          "acceptable_chunk_ids": [
+            "cce3643d320854a4ef390c711fee9c878b7bc8bacbc470ddf20abaa8116c8972:1b4f7ee0f3a45b27eb60e19e82db144ca5bf96caf94ddaba8d837b39bed8e840:0"
+          ],
+          "source_quote": "收集订单号、两笔交易的时间、金额、币种与支付渠道"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "billing_paraphrase",
+      "group_id": "duplicate_payment",
+      "category": "paraphrase",
+      "split": "dev",
+      "turns": [
+        "我怀疑被扣两回，除了订单编号，还要补哪两笔流水的信息？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "transaction_check",
+          "acceptable_chunk_ids": [
+            "cce3643d320854a4ef390c711fee9c878b7bc8bacbc470ddf20abaa8116c8972:1b4f7ee0f3a45b27eb60e19e82db144ca5bf96caf94ddaba8d837b39bed8e840:0"
+          ],
+          "source_quote": "收集订单号、两笔交易的时间、金额、币种与支付渠道"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "tech_direct",
+      "group_id": "auth_401",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "登录返回 401 应检查哪些项目？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "auth_check",
+          "acceptable_chunk_ids": [
+            "035363ed5617458e982a8c334e61622038ad17083fccaac9e0c9e66cab13d648:130aeecafee8f860875be0cd5be5452cb04dad94e578e306fc9c34d5302da177:0"
+          ],
+          "source_quote": "检查 Token 是否过期、认证方式、请求环境和设备时间，禁止索取完整密钥。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "tech_paraphrase",
+      "group_id": "auth_401",
+      "category": "paraphrase",
+      "split": "dev",
+      "turns": [
+        "认证过不了，凭证失效或者电脑时间有问题该看哪些地方？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "auth_check",
+          "acceptable_chunk_ids": [
+            "035363ed5617458e982a8c334e61622038ad17083fccaac9e0c9e66cab13d648:130aeecafee8f860875be0cd5be5452cb04dad94e578e306fc9c34d5302da177:0"
+          ],
+          "source_quote": "检查 Token 是否过期、认证方式、请求环境和设备时间，禁止索取完整密钥。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "invoice_direct",
+      "group_id": "invoice",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "企业发票重开前，需要核对哪些信息，由谁审核？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "invoice_check",
+          "acceptable_chunk_ids": [
+            "58acfb692bea7573cc9ca4c85792a880208f38e0b920561515a21c28416b7f16:e71b4562415cc821a1b7a687fe77dc91e477bc407c44551a10a9324b47e758c0:0"
+          ],
+          "source_quote": "企业发票需核对合同主体、抬头、税号、订单范围和实付金额；作废、重开和账单调整须由财务审核。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "invoice_paraphrase",
+      "group_id": "invoice",
+      "category": "paraphrase",
+      "split": "dev",
+      "turns": [
+        "公司票开错啦，抬头税号这些要核实什么，改票谁来审？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "invoice_check",
+          "acceptable_chunk_ids": [
+            "58acfb692bea7573cc9ca4c85792a880208f38e0b920561515a21c28416b7f16:e71b4562415cc821a1b7a687fe77dc91e477bc407c44551a10a9324b47e758c0:0"
+          ],
+          "source_quote": "企业发票需核对合同主体、抬头、税号、订单范围和实付金额；作废、重开和账单调整须由财务审核。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "handoff_direct",
+      "group_id": "handoff",
+      "category": "direct",
+      "split": "dev",
+      "turns": [
+        "人工审核交接摘要应该整理哪些内容？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "handoff_fields",
+          "acceptable_chunk_ids": [
+            "e5bb08e2f59f99d9c0cce6242494867c69670d7d086c53858f3849c868f87319:c96e27a5affe6f02877ff0afc1110d7e21b6b267e59cef40428be8fa1dc6b88c:0"
+          ],
+          "source_quote": "应整理诉求、订单标识、错误码、发生时间、已知证据和待核实项。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "handoff_paraphrase",
+      "group_id": "handoff",
+      "category": "paraphrase",
+      "split": "dev",
+      "turns": [
+        "想让人工继续看，帮我把问题、证据和还没确认的事整理好，要列啥？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "handoff_fields",
+          "acceptable_chunk_ids": [
+            "e5bb08e2f59f99d9c0cce6242494867c69670d7d086c53858f3849c868f87319:c96e27a5affe6f02877ff0afc1110d7e21b6b267e59cef40428be8fa1dc6b88c:0"
+          ],
+          "source_quote": "应整理诉求、订单标识、错误码、发生时间、已知证据和待核实项。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "authorization_vs_charge",
+      "group_id": "duplicate_payment",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "授权冻结和实际成功扣款是一回事吗？相同金额足以证明扣重了吗？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "charge_distinction",
+          "acceptable_chunk_ids": [
+            "cce3643d320854a4ef390c711fee9c878b7bc8bacbc470ddf20abaa8116c8972:1b4f7ee0f3a45b27eb60e19e82db144ca5bf96caf94ddaba8d837b39bed8e840:0"
+          ],
+          "source_quote": "区分授权冻结与实际成功扣款。金额相同不足以证明重复扣款。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "renewal_vs_refund",
+      "group_id": "renewal",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "取消自动续费，已经付的订单是不是就退款了？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "renewal_distinction",
+          "acceptable_chunk_ids": [
+            "58acfb692bea7573cc9ca4c85792a880208f38e0b920561515a21c28416b7f16:e71b4562415cc821a1b7a687fe77dc91e477bc407c44551a10a9324b47e758c0:0"
+          ],
+          "source_quote": "取消自动续费只影响后续续费，不等于已支付订单退款。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": [
+        "取消自动续费意味着已支付订单退款"
+      ]
+    },
+    {
+      "id": "401_vs_403",
+      "group_id": "auth_codes",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "401 和 403 应该分别检查什么，为什么不能只查 Token？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "401",
+          "acceptable_chunk_ids": [
+            "035363ed5617458e982a8c334e61622038ad17083fccaac9e0c9e66cab13d648:130aeecafee8f860875be0cd5be5452cb04dad94e578e306fc9c34d5302da177:0"
+          ],
+          "source_quote": "检查 Token 是否过期、认证方式、请求环境和设备时间"
+        },
+        {
+          "id": "403",
+          "acceptable_chunk_ids": [
+            "035363ed5617458e982a8c334e61622038ad17083fccaac9e0c9e66cab13d648:130aeecafee8f860875be0cd5be5452cb04dad94e578e306fc9c34d5302da177:0"
+          ],
+          "source_quote": "403 应核对账号、租户和资源权限"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "summary_vs_ticket",
+      "group_id": "handoff",
+      "category": "near_concept",
+      "split": "dev",
+      "turns": [
+        "已经生成交接摘要，是否说明创建了真实工单并进入坐席队列？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "summary_distinction",
+          "acceptable_chunk_ids": [
+            "e5bb08e2f59f99d9c0cce6242494867c69670d7d086c53858f3849c868f87319:c96e27a5affe6f02877ff0afc1110d7e21b6b267e59cef40428be8fa1dc6b88c:0"
+          ],
+          "source_quote": "当前只生成交接摘要，尚未创建真实工单，也不保证已进入人工队列。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": [
+        "已创建真实工单",
+        "已进入人工队列"
+      ]
+    },
+    {
+      "id": "multi_payment_handoff",
+      "group_id": "payment_handoff",
+      "category": "multi_evidence",
+      "split": "dev",
+      "turns": [
+        "重复扣款有争议，先核验哪些交易信息，转人工时摘要还要整理什么？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "transactions",
+          "acceptable_chunk_ids": [
+            "cce3643d320854a4ef390c711fee9c878b7bc8bacbc470ddf20abaa8116c8972:1b4f7ee0f3a45b27eb60e19e82db144ca5bf96caf94ddaba8d837b39bed8e840:0"
+          ],
+          "source_quote": "收集订单号、两笔交易的时间、金额、币种与支付渠道"
+        },
+        {
+          "id": "handoff",
+          "acceptable_chunk_ids": [
+            "e5bb08e2f59f99d9c0cce6242494867c69670d7d086c53858f3849c868f87319:c96e27a5affe6f02877ff0afc1110d7e21b6b267e59cef40428be8fa1dc6b88c:0"
+          ],
+          "source_quote": "应整理诉求、订单标识、错误码、发生时间、已知证据和待核实项。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "multi_auth_handoff",
+      "group_id": "auth_handoff",
+      "category": "multi_evidence",
+      "split": "dev",
+      "turns": [
+        "登录 401 且用户要求人工，先检查什么，交接要包含什么？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "auth",
+          "acceptable_chunk_ids": [
+            "035363ed5617458e982a8c334e61622038ad17083fccaac9e0c9e66cab13d648:130aeecafee8f860875be0cd5be5452cb04dad94e578e306fc9c34d5302da177:0"
+          ],
+          "source_quote": "检查 Token 是否过期、认证方式、请求环境和设备时间"
+        },
+        {
+          "id": "handoff",
+          "acceptable_chunk_ids": [
+            "e5bb08e2f59f99d9c0cce6242494867c69670d7d086c53858f3849c868f87319:c96e27a5affe6f02877ff0afc1110d7e21b6b267e59cef40428be8fa1dc6b88c:0"
+          ],
+          "source_quote": "应整理诉求、订单标识、错误码、发生时间、已知证据和待核实项。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "multi_activation_invoice",
+      "group_id": "activation_invoice",
+      "category": "multi_evidence",
+      "split": "dev",
+      "turns": [
+        "支付后没开通且要重开发票，分别要核对哪些信息？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "activation",
+          "acceptable_chunk_ids": [
+            "7a6f5ebd409f43c30f3cfb85fa5de1c4108bae4a0603db492a9d0ea588d5b60d:8f70137343c8f6b3979fd7c46ba784d9921fb41e974fdab6e0420ebec06f66b8:0"
+          ],
+          "source_quote": "先收集订单号、支付渠道和发生时间"
+        },
+        {
+          "id": "invoice",
+          "acceptable_chunk_ids": [
+            "58acfb692bea7573cc9ca4c85792a880208f38e0b920561515a21c28416b7f16:e71b4562415cc821a1b7a687fe77dc91e477bc407c44551a10a9324b47e758c0:0"
+          ],
+          "source_quote": "企业发票需核对合同主体、抬头、税号、订单范围和实付金额"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "multi_roles_refund",
+      "group_id": "roles_refund",
+      "category": "multi_evidence",
+      "split": "dev",
+      "turns": [
+        "技术和扣款复合问题如何协作，退款资格和到账时效由什么决定？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "collaboration",
+          "acceptable_chunk_ids": [
+            "fb976e3c5979ccec6c2ac31807cf31c85bfe7147e89363e26bed1bcf0b12e51c:961ecc47b6c5e8af5dc35309640ccf02e4e4e8f2a703fac0a126534bbef8f888:0"
+          ],
+          "source_quote": "复合问题可由主辅 Agent 协作。"
+        },
+        {
+          "id": "refund",
+          "acceptable_chunk_ids": [
+            "cce3643d320854a4ef390c711fee9c878b7bc8bacbc470ddf20abaa8116c8972:1b4f7ee0f3a45b27eb60e19e82db144ca5bf96caf94ddaba8d837b39bed8e840:0"
+          ],
+          "source_quote": "退款资格、金额、审核和到账时效以企业合同、正式政策及支付渠道为准。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "partial_refund_days",
+      "group_id": "refund_timing",
+      "category": "partial",
+      "split": "dev",
+      "turns": [
+        "退款一定三天到账吗？当前能给出哪些核验要求？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "limits",
+          "acceptable_chunk_ids": [
+            "cce3643d320854a4ef390c711fee9c878b7bc8bacbc470ddf20abaa8116c8972:1b4f7ee0f3a45b27eb60e19e82db144ca5bf96caf94ddaba8d837b39bed8e840:0"
+          ],
+          "source_quote": "退款资格、金额、审核和到账时效以企业合同、正式政策及支付渠道为准。"
+        }
+      ],
+      "required_facts": [
+        "到账时效以正式政策、企业合同及支付渠道为准"
+      ],
+      "forbidden_claims": [
+        "保证三天到账"
+      ]
+    },
+    {
+      "id": "partial_500_rootcause",
+      "group_id": "incident",
+      "category": "partial",
+      "split": "dev",
+      "turns": [
+        "500 的根因一定是数据库坏了吗？我该记录什么让人查？"
+      ],
+      "answerability": "answerable",
+      "expected_retrieval": "required",
+      "evidence_groups": [
+        {
+          "id": "incident_check",
+          "acceptable_chunk_ids": [
+            "035363ed5617458e982a8c334e61622038ad17083fccaac9e0c9e66cab13d648:130aeecafee8f860875be0cd5be5452cb04dad94e578e306fc9c34d5302da177:0"
+          ],
+          "source_quote": "500 应记录发生时间、request_id、影响范围和最近变更，交由有权限人员核查服务及依赖日志。"
+        }
+      ],
+      "required_facts": [],
+      "forbidden_claims": [
+        "已经确认根因是数据库损坏"
+      ]
+    },
+    {
+      "id": "unknown_contract_price",
+      "group_id": "unknown_price",
+      "category": "unanswerable",
+      "split": "dev",
+      "turns": [
+        "我公司明年续签合同的具体报价是多少元？"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [],
+      "forbidden_claims": []
+    },
+    {
+      "id": "unknown_sla",
+      "group_id": "unknown_sla",
+      "category": "unanswerable",
+      "split": "dev",
+      "turns": [
+        "我公司合同承诺的全年可用性 SLA 百分比具体是多少？"
+      ],
+      "answerability": "unanswerable",
+      "expected_retrieval": "not_applicable",
+      "evidence_groups": [],
+      "required_facts": [],
+      "forbidden_claims": []
+    }
+  ]
+}

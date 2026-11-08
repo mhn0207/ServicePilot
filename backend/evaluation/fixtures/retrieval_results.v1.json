@@ -1,0 +1,312 @@
+{
+  "protocol_version": "rag-fixture-v1",
+  "knowledge_hash": "c9043cbf452eb43568529331346988c88f267feea1f51e41d35e54538df1efc7",
+  "dataset_hash": "47293b115085c668b78d5bdbe8b113f7647a072060230d46cd638a84857dcde3",
+  "top_k": 3,
+  "description": "人工固定的模拟检索输出：含空结果、重复、fallback、第三名命中、部分覆盖和一次执行错误。0ms 是占位，不是测量值；禁止作为真实流水线效果。",
+  "executions": [
+    {
+      "case_id": "scope_direct",
+      "status": "success",
+      "error_code": null,
+      "results": [
+        {
+          "chunk_id": "fb976e3c5979ccec6c2ac31807cf31c85bfe7147e89363e26bed1bcf0b12e51c:961ecc47b6c5e8af5dc35309640ccf02e4e4e8f2a703fac0a126534bbef8f888:0",
+          "title": "企业服务协同范围",
+          "content": "ServicePilot 面向企业客户的服务咨询、技术可靠性、订单支付与收入合规问题。服务协调 Agent 负责澄清诉求和分流；技术可靠性 Agent 负责故障排查；收入与合规 Agent 负责账单核验要求及处理流程。复合问题可由主辅 Agent 协作。当前演示不连接真实订单、支付、退款或工单系统。",
+          "fallback": false
+        }
+      ],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "scope_paraphrase",
+      "status": "success",
+      "error_code": null,
+      "results": [
+        {
+          "chunk_id": "e5bb08e2f59f99d9c0cce6242494867c69670d7d086c53858f3849c868f87319:c96e27a5affe6f02877ff0afc1110d7e21b6b267e59cef40428be8fa1dc6b88c:0",
+          "title": "人工审核与证据交接",
+          "content": "资金、权限异常、生产事故、证据冲突或用户要求人工时，应整理诉求、订单标识、错误码、发生时间、已知证据和待核实项。明确区分建议、已核实事实与尚未执行操作。当前只生成交接摘要，尚未创建真实工单，也不保证已进入人工队列。",
+          "fallback": false
+        },
+        {
+          "chunk_id": "7a6f5ebd409f43c30f3cfb85fa5de1c4108bae4a0603db492a9d0ea588d5b60d:8f70137343c8f6b3979fd7c46ba784d9921fb41e974fdab6e0420ebec06f66b8:0",
+          "title": "企业订单与服务开通",
+          "content": "企业订单应核对订单号、服务套餐、合同主体、支付时间与开通状态。用户反馈支付成功但服务未开通时，先收集订单号、支付渠道和发生时间，交由有权限人员核验。不得将用户描述视作已查询订单系统，不得承诺已开通服务。",
+          "fallback": false
+        },
+        {
+          "chunk_id": "fb976e3c5979ccec6c2ac31807cf31c85bfe7147e89363e26bed1bcf0b12e51c:961ecc47b6c5e8af5dc35309640ccf02e4e4e8f2a703fac0a126534bbef8f888:0",
+          "title": "企业服务协同范围",
+          "content": "ServicePilot 面向企业客户的服务咨询、技术可靠性、订单支付与收入合规问题。服务协调 Agent 负责澄清诉求和分流；技术可靠性 Agent 负责故障排查；收入与合规 Agent 负责账单核验要求及处理流程。复合问题可由主辅 Agent 协作。当前演示不连接真实订单、支付、退款或工单系统。",
+          "fallback": false
+        }
+      ],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "order_direct",
+      "status": "success",
+      "error_code": null,
+      "results": [
+        {
+          "chunk_id": "7a6f5ebd409f43c30f3cfb85fa5de1c4108bae4a0603db492a9d0ea588d5b60d:8f70137343c8f6b3979fd7c46ba784d9921fb41e974fdab6e0420ebec06f66b8:0",
+          "title": "企业订单与服务开通",
+          "content": "企业订单应核对订单号、服务套餐、合同主体、支付时间与开通状态。用户反馈支付成功但服务未开通时，先收集订单号、支付渠道和发生时间，交由有权限人员核验。不得将用户描述视作已查询订单系统，不得承诺已开通服务。",
+          "fallback": false
+        },
+        {
+          "chunk_id": "7a6f5ebd409f43c30f3cfb85fa5de1c4108bae4a0603db492a9d0ea588d5b60d:8f70137343c8f6b3979fd7c46ba784d9921fb41e974fdab6e0420ebec06f66b8:0",
+          "title": "企业订单与服务开通",
+          "content": "企业订单应核对订单号、服务套餐、合同主体、支付时间与开通状态。用户反馈支付成功但服务未开通时，先收集订单号、支付渠道和发生时间，交由有权限人员核验。不得将用户描述视作已查询订单系统，不得承诺已开通服务。",
+          "fallback": false
+        }
+      ],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "order_paraphrase",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "billing_direct",
+      "status": "success",
+      "error_code": null,
+      "results": [
+        {
+          "chunk_id": null,
+          "title": null,
+          "content": null,
+          "fallback": true
+        }
+      ],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "billing_paraphrase",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "tech_direct",
+      "status": "error",
+      "error_code": "fixture_error",
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "tech_paraphrase",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "invoice_direct",
+      "status": "success",
+      "error_code": null,
+      "results": [
+        {
+          "chunk_id": "fb976e3c5979ccec6c2ac31807cf31c85bfe7147e89363e26bed1bcf0b12e51c:961ecc47b6c5e8af5dc35309640ccf02e4e4e8f2a703fac0a126534bbef8f888:0",
+          "title": "企业服务协同范围",
+          "content": "ServicePilot 面向企业客户的服务咨询、技术可靠性、订单支付与收入合规问题。服务协调 Agent 负责澄清诉求和分流；技术可靠性 Agent 负责故障排查；收入与合规 Agent 负责账单核验要求及处理流程。复合问题可由主辅 Agent 协作。当前演示不连接真实订单、支付、退款或工单系统。",
+          "fallback": false
+        }
+      ],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "invoice_paraphrase",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "handoff_direct",
+      "status": "success",
+      "error_code": null,
+      "results": [
+        {
+          "chunk_id": "e5bb08e2f59f99d9c0cce6242494867c69670d7d086c53858f3849c868f87319:c96e27a5affe6f02877ff0afc1110d7e21b6b267e59cef40428be8fa1dc6b88c:0",
+          "title": "人工审核与证据交接",
+          "content": "资金、权限异常、生产事故、证据冲突或用户要求人工时，应整理诉求、订单标识、错误码、发生时间、已知证据和待核实项。明确区分建议、已核实事实与尚未执行操作。当前只生成交接摘要，尚未创建真实工单，也不保证已进入人工队列。",
+          "fallback": false
+        }
+      ],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "handoff_paraphrase",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "authorization_vs_charge",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "renewal_vs_refund",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "401_vs_403",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "summary_vs_ticket",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "multi_payment_handoff",
+      "status": "success",
+      "error_code": null,
+      "results": [
+        {
+          "chunk_id": "cce3643d320854a4ef390c711fee9c878b7bc8bacbc470ddf20abaa8116c8972:1b4f7ee0f3a45b27eb60e19e82db144ca5bf96caf94ddaba8d837b39bed8e840:0",
+          "title": "重复扣款与退款审核",
+          "content": "收到重复扣款争议时，收集订单号、两笔交易的时间、金额、币种与支付渠道，区分授权冻结与实际成功扣款。金额相同不足以证明重复扣款。退款资格、金额、审核和到账时效以企业合同、正式政策及支付渠道为准。当前工具不能查询支付流水或创建退款申请，应提供核验清单和人工审核路径，不得承诺退款成功。",
+          "fallback": false
+        }
+      ],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "multi_auth_handoff",
+      "status": "success",
+      "error_code": null,
+      "results": [
+        {
+          "chunk_id": "035363ed5617458e982a8c334e61622038ad17083fccaac9e0c9e66cab13d648:130aeecafee8f860875be0cd5be5452cb04dad94e578e306fc9c34d5302da177:0",
+          "title": "技术可靠性排查",
+          "content": "企业服务登录返回 401 时检查 Token 是否过期、认证方式、请求环境和设备时间，禁止索取完整密钥。403 应核对账号、租户和资源权限，500 应记录发生时间、request_id、影响范围和最近变更，交由有权限人员核查服务及依赖日志。建议低风险、可验证的排查步骤，不声称已经读取后台日志或修复故障。",
+          "fallback": false
+        },
+        {
+          "chunk_id": "e5bb08e2f59f99d9c0cce6242494867c69670d7d086c53858f3849c868f87319:c96e27a5affe6f02877ff0afc1110d7e21b6b267e59cef40428be8fa1dc6b88c:0",
+          "title": "人工审核与证据交接",
+          "content": "资金、权限异常、生产事故、证据冲突或用户要求人工时，应整理诉求、订单标识、错误码、发生时间、已知证据和待核实项。明确区分建议、已核实事实与尚未执行操作。当前只生成交接摘要，尚未创建真实工单，也不保证已进入人工队列。",
+          "fallback": false
+        }
+      ],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "multi_activation_invoice",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "multi_roles_refund",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "partial_refund_days",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "partial_500_rootcause",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "unknown_contract_price",
+      "status": "success",
+      "error_code": null,
+      "results": [
+        {
+          "chunk_id": "58acfb692bea7573cc9ca4c85792a880208f38e0b920561515a21c28416b7f16:e71b4562415cc821a1b7a687fe77dc91e477bc407c44551a10a9324b47e758c0:0",
+          "title": "企业发票与订阅",
+          "content": "企业发票需核对合同主体、抬头、税号、订单范围和实付金额；作废、重开和账单调整须由财务审核。取消自动续费只影响后续续费，不等于已支付订单退款。套餐变更、已用服务和企业合同退款按正式协议及人工审核结果处理。",
+          "fallback": false
+        }
+      ],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    },
+    {
+      "case_id": "unknown_sla",
+      "status": "success",
+      "error_code": null,
+      "results": [],
+      "elapsed_ms": 0.0,
+      "cached": null,
+      "reranked": null
+    }
+  ]
+}

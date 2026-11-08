@@ -1,0 +1,224 @@
+{
+  "version": "synthetic-sources-v2",
+  "declaration": "评测用虚构企业规则；作者为本次 ServicePilot 评测维护者。无外部来源、客户资料或现行业务政策。仅用于离线评测，不进入演示 seed。",
+  "language": "en",
+  "scope": "English enterprise support retrieval; no claim about Chinese retrieval quality",
+  "documents": [
+    {
+      "document_id": "access-token",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "A missing bearer token produces HTTP 401 before tenant routing. The support operator checks whether the Authorization header reached the gateway and whether a proxy removed it. Collect only the request identifier and the token fingerprint; never request the raw credential in a ticket.",
+        "An expired bearer token also produces HTTP 401, but it requires renewal through the identity portal. A fresh token does not recover a disabled account. Compare the expiration time with gateway UTC time and record clock skew separately from missing credentials.",
+        "A valid token for the wrong audience produces HTTP 401 with reason audience_mismatch. The audience must be servicepilot-api. Do not change tenant membership to fix this error. Reissuing a token for the correct audience requires the original authenticated identity."
+      ]
+    },
+    {
+      "document_id": "permission",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "HTTP 403 means the identity was authenticated but the requested action was denied. The project reader role may view project status but may not export audit records. An export requires the audit_export capability assigned inside the same tenant, not merely a fresh access token.",
+        "Tenant administrators can request capability grants but cannot approve their own audit_export grant. An independent tenant security approver must review the request identifier, requested scope and business reason. A grant becomes active only after approval is recorded.",
+        "Removing a capability takes effect on the next authorization check even if an access token is still valid. A cached interface button may remain visible until refresh. Support verifies the server denial and must not infer authorization from a button or browser state."
+      ]
+    },
+    {
+      "document_id": "tenant",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "Every project lookup uses the authenticated tenant identifier and the project identifier together. A project belonging to another tenant is returned as HTTP 404 to avoid disclosing its existence. A user who belongs to both tenants must explicitly switch the active tenant.",
+        "An invitation to tenant Cedar does not transfer resources from tenant Birch. The invited member sees only resources granted in Cedar after accepting the invitation. Support must not copy documents between tenants to make an invitation appear successful.",
+        "A resource transfer requires separate approvals from the source owner and destination owner plus a transfer inventory. This policy describes a manual review only; the assistant cannot execute transfers. Existing links remain bound to the original tenant until completion is confirmed."
+      ]
+    },
+    {
+      "document_id": "server-errors",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "HTTP 500 with reason internal_fault is a server failure, not proof that a payment failed. Capture the request identifier, endpoint and UTC time. For read requests, retry at most twice with increasing delay. Never include Authorization headers in diagnostic attachments.",
+        "A write request that returns HTTP 500 may already have committed. Query its receipt using the same idempotency key before retrying. A new idempotency key represents a new operation and can cause a second charge. Support escalates if the receipt remains indeterminate.",
+        "HTTP 503 with Retry-After indicates planned overload handling. Read clients wait for the indicated interval. A persistent failure after the retry budget is exhausted is handed to reliability staff with the observed timeline; the assistant must not promise a recovery deadline."
+      ]
+    },
+    {
+      "document_id": "activation",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "The fictional business has separate payment and provisioning states. A payment receipt marked settled allows provisioning to begin but does not prove that a workspace is ready. The operator checks the provisioning job identifier and its most recent state transition.",
+        "A provisioning job in awaiting_capacity is queued for an available workspace slot. Do not ask the customer to pay again. Collect the order identifier, settled receipt reference and job identifier for the provisioning team. No fixed activation deadline is guaranteed.",
+        "A provisioning job in rejected_configuration requires correction of the requested region or plan combination before resubmission. Resubmitting provisioning under the existing paid order does not create another payment. Only the provisioning team may authorize the corrected request."
+      ]
+    },
+    {
+      "document_id": "holds",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "An authorization hold reserves available funds but is not a captured charge. The payment ledger labels a hold authorized and a completed charge captured. A bank notification alone is insufficient to distinguish them; compare the merchant reference and ledger event type.",
+        "A released hold is recorded as voided, not refunded. The release instruction can precede the bank display update. Support may provide the void reference after identity verification but cannot promise the bank posting date or create a refund for an uncaptured hold.",
+        "A partial capture leaves the uncaptured remainder reserved until voided or expired. Reconciliation must separately list the captured amount and remaining authorization. Do not count their sum as two settled payments; refund eligibility is assessed only on the captured portion."
+      ]
+    },
+    {
+      "document_id": "duplicate",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "Two bank notifications with one captured ledger entry are not enough to establish a duplicate charge. Match currency, merchant reference and capture identifier. An authorization event followed by a capture event belongs to one payment lifecycle rather than two purchases.",
+        "Two distinct captured entries for the same order require reconciliation by finance. Collect both capture references and amounts, with card details redacted. The assistant records a suspected duplicate; it cannot declare a refund approved or execute either reversal.",
+        "If duplicate entries use different currencies, finance checks the order currency and conversion records before comparing values. Nominal amounts must not be added across currencies. The customer may receive a reconciliation summary only after finance confirms the matching events."
+      ]
+    },
+    {
+      "document_id": "renewal",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "Canceling automatic renewal changes the next billing instruction but leaves access active until the current paid term ends. The effective cancellation record includes the tenant, subscription identifier and confirmation timestamp. It is not an instruction to refund the paid term.",
+        "A cancellation requested after the next renewal capture does not reverse that capture. The customer must open a separate refund review for the captured renewal. Support should collect the cancellation confirmation and renewal capture timestamps to establish their ordering.",
+        "A paused workspace and a subscription with automatic renewal disabled are different states. Pausing compute stops workload execution but does not change the renewal instruction. The operator checks the subscription renewal flag rather than treating paused compute as canceled billing."
+      ]
+    },
+    {
+      "document_id": "refunds",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "Refund review applies only to captured payments. A reviewer checks the capture reference, requested amount, currency and reason. Submission creates a review request, not an approved refund. The assistant must not promise approval, a fixed amount or a bank posting date.",
+        "An approved refund is first marked approved and later submitted_to_processor. Only a processor confirmation marks it completed. Customer account access does not automatically change when a refund status changes; subscription termination is handled by its own workflow.",
+        "A partially refunded capture retains a remaining refundable balance equal to captured amount minus completed refunds. Pending refund requests must also be inspected to avoid overlapping approvals. Currency must match the original capture, and the assistant cannot calculate exchange compensation."
+      ]
+    },
+    {
+      "document_id": "invoice",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "A payment receipt confirms a payment event, while an invoice identifies the billed legal entity and taxable items. They are distinct records. To request an invoice, provide the order reference, verified company legal name and tax registration identifier through the billing portal.",
+        "Invoices are issued only for captured billable amounts. An authorization hold cannot support an invoice request. A draft invoice is editable before issuance; an issued invoice requires the correction process and must not be silently replaced in a support attachment.",
+        "Invoice delivery uses the verified billing contact for the tenant. A project reader cannot change that address by chat. A billing administrator must verify the new contact in the billing portal before any resend to a different address is approved."
+      ]
+    },
+    {
+      "document_id": "invoice-fix",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "An issued invoice with a wrong legal name enters a correction review. The original invoice number remains in the audit trail. Billing staff decide whether a replacement invoice or credit note is required; the assistant cannot edit an issued PDF or invent a new invoice number.",
+        "A credit note references the original invoice and records a billing reduction. It is not itself proof of a bank refund. The operator checks the related refund transaction separately before saying that money was returned. A zero balance invoice can still have no refund transaction.",
+        "Tax identifier changes require verified company evidence and approval by billing staff. The corrected document is delivered only to a verified billing contact. Private supporting documents are submitted through the portal rather than pasted into an assistant conversation."
+      ]
+    },
+    {
+      "document_id": "handoff",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "A reliability handoff includes the symptom, UTC timeline, request identifiers, affected endpoint and checks already performed. Summaries separate observed facts from hypotheses. Raw access tokens, complete card numbers and unrelated conversation history must be removed.",
+        "A finance handoff includes the order reference, currency, captured amounts and relevant receipt references. It must explicitly distinguish a requested refund from an approved refund. The assistant can prepare this summary but cannot create a real queue entry or promise staff assignment.",
+        "A combined incident uses one summary with separate technical and billing questions. Do not claim the outage caused a charge unless evidence establishes that relationship. A human owner verifies each question, and unresolved facts stay labeled unknown rather than filled by inference."
+      ]
+    },
+    {
+      "document_id": "idempotency",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "A client retry with the same idempotency key and identical payload returns the original receipt. The key is scoped to the authenticated tenant and operation. Support compares the payload fingerprint, not raw sensitive request contents, when investigating a retry.",
+        "Reusing an idempotency key with a different payload returns HTTP 409 conflict. This is not an authentication failure and renewing a token cannot solve it. The client must retrieve the original operation receipt before deciding whether a distinct operation is intended.",
+        "A receipt in processing means no final outcome is available yet. The client polls the receipt instead of sending another write with a new key. A missing receipt after an uncertain server response must be escalated, not interpreted as proof that nothing happened."
+      ]
+    },
+    {
+      "document_id": "webhook",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "A payment webhook is trusted only after signature verification and timestamp tolerance checks. A signature failure records a rejected event and does not update the ledger. Support collects the event identifier and rejection reason without exposing the signing secret.",
+        "Repeated delivery of a verified webhook with the same event identifier is deduplicated. A successful acknowledgement confirms receipt of the event, not workspace activation. The provisioning state must be checked separately using the associated order reference.",
+        "An out of order event must not move a captured payment back to authorized. Reconciliation uses the processor event sequence and ledger rules rather than arrival time alone. A conflicting sequence is escalated to finance with the verified event identifiers."
+      ]
+    },
+    {
+      "document_id": "seats",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "Purchasing seat capacity and assigning a member are separate actions. A tenant with available capacity can invite a member, but the member gains access only after accepting and receiving a role. An unaccepted invitation is not an active seat assignment.",
+        "Removing a member revokes access but does not automatically reduce contracted seat capacity. The billing administrator reviews the next renewal quantity separately. Support cannot promise an immediate prorated refund merely because the member list became shorter.",
+        "A seat limit error is a capacity constraint, not a token expiration. The administrator can review pending invitations and purchased capacity. Deleting audit records does not free seats, and raising a technical incident does not authorize extra billable capacity."
+      ]
+    },
+    {
+      "document_id": "retention",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "A tenant audit export contains authorization decisions and administrative changes. Export requires audit_export capability in that tenant. Ordinary project readers may view project status but cannot download the full audit history or another tenant audit bundle.",
+        "A deletion request enters privacy review and does not immediately erase financial audit records. Required retention exceptions are assessed by the privacy reviewer. The assistant can describe the review process but must not promise deletion of all records at a chosen date.",
+        "A completed deletion review includes a scope statement listing retained categories and reasons. The customer receives that statement through the verified privacy contact. A missing project in the interface is insufficient evidence that every retained record was erased."
+      ]
+    },
+    {
+      "document_id": "sso",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "For a scheduled SSO signing certificate rotation, the identity administrator uploads the new public certificate while the previous certificate remains valid during an overlap window. Private signing keys never leave the identity provider. The assistant must not request them.",
+        "During the overlap window either configured public certificate may verify an assertion. After the administrator closes the window, assertions signed only by the retired certificate are rejected. Reissuing an API token does not repair an SSO certificate mismatch.",
+        "An emergency certificate revocation ends the overlap immediately after security approval. The identity team documents the incident and verifies new assertions before restoring login. Support must not suggest disabling assertion signature verification as a workaround."
+      ]
+    },
+    {
+      "document_id": "service-account",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "A service account belongs to one tenant and has an assigned human owner. It cannot accept a personal invitation or inherit another account permissions. Before granting automation access, the owner specifies the minimal capability and approved resource scope.",
+        "Rotating a service account secret creates a replacement credential and a temporary overlap chosen by the security reviewer. The old credential is revoked at the end of that overlap. Support handles only fingerprints and cannot retrieve either secret from the account record.",
+        "When the human owner leaves, the tenant security administrator assigns a new accountable owner before renewing automation access. Changing the display name alone does not transfer ownership. Unowned automation is suspended pending review rather than silently assigned to a reader."
+      ]
+    },
+    {
+      "document_id": "dispute",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "A processor dispute and a merchant refund request are separate workflows for the same capture. If a dispute is open, finance places any new refund request on coordination hold to avoid duplicate compensation. The assistant must not promise that both paths will pay out.",
+        "A withdrawn dispute does not by itself approve a merchant refund. Finance verifies the processor status and then resumes refund review. The handoff includes the dispute reference, capture reference and coordination hold status without unredacted bank evidence.",
+        "A dispute fee is recorded separately from the captured order amount. Its treatment requires finance review under the fictional contract and is not automatically refunded with the order. Support cannot infer fee waiver eligibility from the outcome of the main dispute."
+      ]
+    },
+    {
+      "document_id": "purchase-order",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "A purchase order reference records a customer procurement commitment but is not proof of payment. A bank transfer is matched using the order reference, received currency and treasury receipt. Provisioning waits for treasury confirmation under this payment method.",
+        "A transfer with a missing order reference enters unmatched_funds review. Treasury may request the payer legal name and redacted transfer reference through the secure portal. The assistant cannot assign unmatched money to a tenant based solely on a chat statement.",
+        "An overpayment remains an unapplied balance until treasury approves allocation or return. It does not automatically buy more seats or extend a term. Support records the matched invoice amount and excess separately, with currency preserved in the handoff."
+      ]
+    },
+    {
+      "document_id": "region",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "A requested workspace region change requires a migration review with an inventory of stored resources and a destination compatibility check. Updating the billing address does not move data. The assistant may collect a request but cannot start the actual migration.",
+        "A migration scheduled for a maintenance window requires an approved rollback plan and an owner for verification. Existing region identifiers remain authoritative until the completion receipt is issued. A scheduled status is not evidence that data already moved.",
+        "If the destination lacks a required feature, the migration is blocked pending a revised plan. Support must not promise equivalent availability or residency behavior without review. Billing currency changes, if needed, follow a separate finance process."
+      ]
+    },
+    {
+      "document_id": "sandbox",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "Sandbox payment events use test ledger identifiers and never represent captured production funds. A sandbox success receipt cannot activate a production workspace. Support checks the environment label before reconciling any order or discussing financial consequences.",
+        "Production credentials must not be pasted into the sandbox console. A leaked production credential requires security rotation even if no real payment was attempted. The test environment has separate signing secrets and tenant identifiers from production.",
+        "Promoting a configuration from sandbox requires a fresh production approval and validation of callback destinations. Test receipts and sample customer records are excluded from the promotion. The assistant cannot convert a sandbox order identifier into a paid production order."
+      ]
+    },
+    {
+      "document_id": "reseller",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "For a subscription billed by a reseller, the reseller issues the customer invoice and handles the customer payment review. The platform can verify workspace status but cannot correct a reseller invoice. Support first checks the billing_owner field on the subscription.",
+        "Disabling renewal at the platform for a reseller managed plan records a request pending reseller confirmation. The effective renewal change requires the reseller acknowledgement reference. A platform request timestamp alone does not prove the reseller stopped billing.",
+        "A reseller transfer request needs approval from the current reseller, destination reseller and tenant owner. Existing billing ownership remains in force until the transfer receipt is confirmed. The assistant must not tell the customer to pay both resellers during review."
+      ]
+    },
+    {
+      "document_id": "emergency",
+      "source": "original synthetic evaluation policy",
+      "review_sections": [
+        "Emergency administrative access requires an incident identifier, named approver and explicit expiration time. It is limited to the approved tenant and investigation scope. A production incident does not automatically grant access to billing exports or other tenants.",
+        "At expiry the emergency grant is revoked and the security reviewer inspects the actions performed. Extending access requires a new approval; leaving the browser open does not preserve the grant. The reviewer records whether any unrelated resources were accessed.",
+        "Incident closure requires a verified resolution statement and the status of temporary grants. A closed reliability incident does not automatically close a finance dispute or approve a refund. Separate owners confirm those workflows before the combined handoff is marked resolved."
+      ]
+    }
+  ]
+}

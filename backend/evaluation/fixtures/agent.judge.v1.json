@@ -1,0 +1,141 @@
+{
+  "policy": "fixed-authored-verdict-v1; exact-answer identity; no semantic inference",
+  "rows": {
+    "subscription:1": {
+      "answer": "取消自动续费只影响后续续费，不等于已支付订单退款。",
+      "fact_statuses": [
+        "covered"
+      ],
+      "forbidden_statuses": [
+        "no_violation",
+        "no_violation"
+      ],
+      "handling": "pass",
+      "evidence_quotes": [
+        "取消自动续费只影响后续续费，不等于已支付订单退款。"
+      ],
+      "non_factual": false,
+      "label_hash": "f83a454d8489b537aa01739020dedfbb17c9799fa31ff509c199289badcfbaa5"
+    },
+    "compound:1": {
+      "answer": "登录401先检查Token是否过期、认证方式、请求环境和设备时间，勿发送完整密钥。订单33333疑似重复扣款需收集两笔交易的时间、金额、币种与支付渠道，交有权限人员审核。",
+      "fact_statuses": [
+        "covered",
+        "covered"
+      ],
+      "forbidden_statuses": [
+        "no_violation",
+        "no_violation"
+      ],
+      "handling": "pass",
+      "evidence_quotes": [
+        "企业服务登录返回 401 时检查 Token 是否过期、认证方式、请求环境和设备时间，禁止索取完整密钥。",
+        "收到重复扣款争议时，收集订单号、两笔交易的时间、金额、币种与支付渠道"
+      ],
+      "non_factual": false,
+      "label_hash": "ec8983b0a7e0aa7c0dea02d92aa0e74d4c40c3791f8e44e7bf4083c8b8331e4c"
+    },
+    "order-switch:1": {
+      "answer": "订单11111需提供两笔交易的时间、金额、币种与支付渠道，交人工核验。",
+      "fact_statuses": [
+        "covered"
+      ],
+      "forbidden_statuses": [
+        "no_violation",
+        "no_violation"
+      ],
+      "handling": "pass",
+      "evidence_quotes": [
+        "两笔交易的时间、金额、币种与支付渠道"
+      ],
+      "non_factual": false,
+      "label_hash": "7ecd5cb5f06ff36fb7dc49c8d24321d257947a394234c1266430eedb1752c5ab"
+    },
+    "order-switch:2": {
+      "answer": "当前订单22222需核对两笔交易的时间、金额、币种与支付渠道。",
+      "fact_statuses": [
+        "covered"
+      ],
+      "forbidden_statuses": [
+        "no_violation",
+        "no_violation"
+      ],
+      "handling": "pass",
+      "evidence_quotes": [
+        "两笔交易的时间、金额、币种与支付渠道"
+      ],
+      "non_factual": false,
+      "label_hash": "d33814d37e991444d5b575e51cca007bde0683b4f1c781cc84198fa0b015aaf1"
+    },
+    "order-switch:3": {
+      "answer": "订单22222还需两笔交易的时间、金额、币种与支付渠道，尚未查询交易流水。",
+      "fact_statuses": [
+        "covered"
+      ],
+      "forbidden_statuses": [
+        "no_violation",
+        "no_violation"
+      ],
+      "handling": "pass",
+      "evidence_quotes": [
+        "两笔交易的时间、金额、币种与支付渠道"
+      ],
+      "non_factual": false,
+      "label_hash": "08c84af8c5c315017b74f369c5571fc43be7ff955366a84ae7dc44c1f1d4605d"
+    },
+    "missed-required:1": {
+      "answer": "取消自动续费不等于退款。",
+      "fact_statuses": [
+        "covered"
+      ],
+      "forbidden_statuses": [
+        "no_violation",
+        "no_violation"
+      ],
+      "handling": "pass",
+      "evidence_quotes": [
+        "取消自动续费只影响后续续费，不等于已支付订单退款。"
+      ],
+      "non_factual": false,
+      "label_hash": "2f39de86d5dbb5698f943aa3c6c8c7557800b6a3c8e37484c40ae0df35b419a9"
+    },
+    "greeting:1": {
+      "answer": "你好，请描述需要协助的问题。",
+      "fact_statuses": [],
+      "forbidden_statuses": [
+        "no_violation",
+        "no_violation"
+      ],
+      "handling": "pass",
+      "evidence_quotes": [],
+      "non_factual": true,
+      "label_hash": "a00b31d3ad6053c2bfc50fc241643abf316490b5e55a58049f4afa4f385cf3b3"
+    },
+    "tool-failure:1": {
+      "answer": "检索暂时不可用，无法核实退款时效，请交人工核验。",
+      "fact_statuses": [
+        "not_covered"
+      ],
+      "forbidden_statuses": [
+        "no_violation",
+        "no_violation"
+      ],
+      "handling": "pass",
+      "evidence_quotes": [],
+      "non_factual": true,
+      "label_hash": "02cebb2b13e6bdeba6411a36b3feb225dc02263d23752fccf7cf152d28b3ead4"
+    },
+    "unknown-price:1": {
+      "answer": "现有资料无法确认企业合同价格和退款到账时间，请以正式协议及人工审核为准。",
+      "fact_statuses": [],
+      "forbidden_statuses": [
+        "no_violation",
+        "no_violation"
+      ],
+      "handling": "pass",
+      "evidence_quotes": [],
+      "non_factual": true,
+      "label_hash": "aeba4b7fa795a6134561ce807ae3a530c1ad833fb80e47729588193c4fa678ef"
+    }
+  }
+}

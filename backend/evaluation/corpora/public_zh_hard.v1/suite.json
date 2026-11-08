@@ -1,0 +1,76 @@
+{
+  "protocol_version": "rag-suite-v2",
+  "corpus": "corpus.json",
+  "snapshot": "snapshot.json",
+  "dataset": "cases.json",
+  "sources": "sources.json",
+  "hard_negatives": "hard-negatives.json",
+  "knowledge_hash": "aa798744d95049759b04464cabc0b3a601125c3f36ac798a7a585fe3b830b678",
+  "source_dataset_hash": "5a461603393fe577f35637ae9b0ff6a0a07140b16e7afe958ae8d4336fb2a064",
+  "sources_hash": "799755a2c470c949ae862bfbb2852f61505caa5df7a0ebe3fbe235143a5079fe",
+  "hard_negatives_hash": "ace8188a322159859a9f60f576ce2fa8622efc02a83514a6c56094a93d96a55b",
+  "review_status": "AI_DRAFT_PENDING_HUMAN_SOURCE_AND_ANNOTATION_REVIEW",
+  "grouping_rationale": "Dev: transactions/expiry/eviction. Validation: persistence/pubsub/streams. Source URLs, documents and topic families do not cross splits; both splits use one indexed corpus. This is topic shift, not IID or blind human evaluation.",
+  "limitations": [
+    "No retrieval strategies, generation or Judge run on this dataset at freeze",
+    "Independent of public_zh.v1 source URLs; all new summaries/questions/labels remain authored by the same AI",
+    "Both splits and source texts are visible to the author; frozen validation means no score-driven edits, not author blindness",
+    "Small curated corpus, not full official documents or a production-scale benchmark",
+    "Four unanswerable cases lack instance observations; two lack product-rule sections in the indexed snapshot. Neither kind has generated-answer validation",
+    "Partial/unanswerable labels and expected facts are review rubrics, not a Chinese semantic answer grader",
+    "No independent human source audit, no official endorsement, and no automatic production configuration change"
+  ],
+  "splits": {
+    "dev": {
+      "case_ids": [
+        "zhhard-001",
+        "zhhard-002",
+        "zhhard-003",
+        "zhhard-004",
+        "zhhard-005",
+        "zhhard-006",
+        "zhhard-007",
+        "zhhard-008",
+        "zhhard-009",
+        "zhhard-010",
+        "zhhard-011",
+        "zhhard-012",
+        "zhhard-013",
+        "zhhard-014",
+        "zhhard-015"
+      ],
+      "groups": [
+        "redis-hard:eviction",
+        "redis-hard:expiry",
+        "redis-hard:txn"
+      ],
+      "evaluated_dataset_hash": "6908cbc104c2fcdfd72169c0d2a8811524ce211de3d36d3466a7fde351bd0c6c"
+    },
+    "validation": {
+      "case_ids": [
+        "zhhard-016",
+        "zhhard-017",
+        "zhhard-018",
+        "zhhard-019",
+        "zhhard-020",
+        "zhhard-021",
+        "zhhard-022",
+        "zhhard-023",
+        "zhhard-024",
+        "zhhard-025",
+        "zhhard-026",
+        "zhhard-027",
+        "zhhard-028",
+        "zhhard-029",
+        "zhhard-030"
+      ],
+      "groups": [
+        "redis-hard:persistence",
+        "redis-hard:pubsub",
+        "redis-hard:streams"
+      ],
+      "evaluated_dataset_hash": "a9e09d59a3ae25566fe438a3d89150d1ee4578661d806311bbb592342daf7abe"
+    }
+  },
+  "freeze_hash": "e56772461fe83a951846946323158f4524ee27d3060b81581763ec97ba44cbc2"
+}

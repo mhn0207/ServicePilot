@@ -1,0 +1,7 @@
+{
+  "suite": "agent-dev-v1",
+  "cases_sha256": "4cedc1f16a53489ad46d6e2fae5ac83f9ec6fe2136cb350b71b471f5eee9e2fd",
+  "knowledge_hash": "c9043cbf452eb43568529331346988c88f267feea1f51e41d35e54538df1efc7",
+  "case_set_hash": "c3f0907a0e792a1072ba2c292d52936ab5706285168f9ed78031ac082d1722fd",
+  "scope": "observed dev fixtures; no independent validation"
+}

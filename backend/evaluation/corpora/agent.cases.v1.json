@@ -1,0 +1,234 @@
+{
+  "suite": "agent-dev-v1",
+  "annotation_version": "agent-turn-annotations-v1",
+  "scope": "observed development protocol examples; no held-out quality claim",
+  "cases": [
+    {
+      "id": "subscription",
+      "turns": [
+        {
+          "question": "取消自动续费是否自动退款？",
+          "expected_retrieval": "required",
+          "evidence_quotes": [
+            "取消自动续费只影响后续续费，不等于已支付订单退款。"
+          ],
+          "required_facts": [
+            "取消自动续费只影响后续续费，不等于已支付订单退款。"
+          ],
+          "optional_facts": [],
+          "forbidden_claims": [
+            "声称已退款成功",
+            "保证明日到账"
+          ],
+          "expected_roles": [
+            "billing"
+          ],
+          "required_entities": [],
+          "unknown_required": false,
+          "unknown_handling": "不提供未知价格、合同条款或到账时效；说明需正式协议和人工核实"
+        }
+      ]
+    },
+    {
+      "id": "compound",
+      "turns": [
+        {
+          "question": "订单33333登录401而且疑似重复扣款，该怎么处理？",
+          "expected_retrieval": "required",
+          "evidence_quotes": [
+            "收到重复扣款争议时，收集订单号、两笔交易的时间、金额、币种与支付渠道",
+            "企业服务登录返回 401 时检查 Token 是否过期、认证方式、请求环境和设备时间，禁止索取完整密钥。"
+          ],
+          "required_facts": [
+            "401应检查Token有效期、认证方式、请求环境和设备时间。",
+            "重复扣款争议需核对两笔交易的时间、金额、币种与支付渠道。"
+          ],
+          "optional_facts": [],
+          "forbidden_claims": [
+            "声称已退款成功",
+            "保证明日到账"
+          ],
+          "expected_roles": [
+            "technical",
+            "billing"
+          ],
+          "required_entities": [
+            "33333"
+          ],
+          "unknown_required": false,
+          "unknown_handling": "不提供未知价格、合同条款或到账时效；说明需正式协议和人工核实"
+        }
+      ]
+    },
+    {
+      "id": "order-switch",
+      "turns": [
+        {
+          "question": "订单11111重复扣款需要什么资料？",
+          "expected_retrieval": "required",
+          "evidence_quotes": [
+            "两笔交易的时间、金额、币种与支付渠道"
+          ],
+          "required_facts": [
+            "当前订单的重复扣款争议应收集两笔交易的时间、金额、币种与支付渠道。"
+          ],
+          "optional_facts": [],
+          "forbidden_claims": [
+            "声称已退款成功",
+            "保证明日到账"
+          ],
+          "expected_roles": [
+            "billing"
+          ],
+          "required_entities": [
+            "11111"
+          ],
+          "unknown_required": false,
+          "unknown_handling": "不提供未知价格、合同条款或到账时效；说明需正式协议和人工核实"
+        },
+        {
+          "question": "纠正：现在处理订单22222重复扣款",
+          "expected_retrieval": "required",
+          "evidence_quotes": [
+            "两笔交易的时间、金额、币种与支付渠道"
+          ],
+          "required_facts": [
+            "当前订单的重复扣款争议应收集两笔交易的时间、金额、币种与支付渠道。"
+          ],
+          "optional_facts": [],
+          "forbidden_claims": [
+            "声称已退款成功",
+            "保证明日到账"
+          ],
+          "expected_roles": [
+            "billing"
+          ],
+          "required_entities": [
+            "22222"
+          ],
+          "unknown_required": false,
+          "unknown_handling": "不提供未知价格、合同条款或到账时效；说明需正式协议和人工核实"
+        },
+        {
+          "question": "这笔订单还缺什么资料？",
+          "expected_retrieval": "required",
+          "evidence_quotes": [
+            "两笔交易的时间、金额、币种与支付渠道"
+          ],
+          "required_facts": [
+            "当前订单的重复扣款争议应收集两笔交易的时间、金额、币种与支付渠道。"
+          ],
+          "optional_facts": [],
+          "forbidden_claims": [
+            "声称已退款成功",
+            "保证明日到账"
+          ],
+          "expected_roles": [
+            "billing"
+          ],
+          "required_entities": [
+            "22222"
+          ],
+          "unknown_required": false,
+          "unknown_handling": "不提供未知价格、合同条款或到账时效；说明需正式协议和人工核实"
+        }
+      ]
+    },
+    {
+      "id": "missed-required",
+      "turns": [
+        {
+          "question": "取消续费是否就是退款？",
+          "expected_retrieval": "required",
+          "evidence_quotes": [
+            "取消自动续费只影响后续续费，不等于已支付订单退款。"
+          ],
+          "required_facts": [
+            "取消续费不等于已支付订单退款。"
+          ],
+          "optional_facts": [],
+          "forbidden_claims": [
+            "声称已退款成功",
+            "保证明日到账"
+          ],
+          "expected_roles": [
+            "billing"
+          ],
+          "required_entities": [],
+          "unknown_required": false,
+          "unknown_handling": "不提供未知价格、合同条款或到账时效；说明需正式协议和人工核实"
+        }
+      ]
+    },
+    {
+      "id": "greeting",
+      "turns": [
+        {
+          "question": "你好",
+          "expected_retrieval": "optional",
+          "evidence_quotes": [],
+          "required_facts": [],
+          "optional_facts": [],
+          "forbidden_claims": [
+            "声称已退款成功",
+            "保证明日到账"
+          ],
+          "expected_roles": [
+            "general"
+          ],
+          "required_entities": [],
+          "unknown_required": false,
+          "unknown_handling": "不提供未知价格、合同条款或到账时效；说明需正式协议和人工核实"
+        }
+      ]
+    },
+    {
+      "id": "tool-failure",
+      "turns": [
+        {
+          "question": "重复扣款退款时效是什么？",
+          "expected_retrieval": "required",
+          "evidence_quotes": [
+            "退款资格、金额、审核和到账时效以企业合同、正式政策及支付渠道为准。"
+          ],
+          "required_facts": [
+            "到账时效需以企业合同、正式政策及支付渠道为准。"
+          ],
+          "optional_facts": [],
+          "forbidden_claims": [
+            "声称已退款成功",
+            "保证明日到账"
+          ],
+          "expected_roles": [
+            "billing"
+          ],
+          "required_entities": [],
+          "unknown_required": true,
+          "unknown_handling": "不提供未知价格、合同条款或到账时效；说明需正式协议和人工核实"
+        }
+      ]
+    },
+    {
+      "id": "unknown-price",
+      "turns": [
+        {
+          "question": "企业合同每年价格和退款到账时间能保证吗？",
+          "expected_retrieval": "not_applicable",
+          "evidence_quotes": [],
+          "required_facts": [],
+          "optional_facts": [],
+          "forbidden_claims": [
+            "声称已退款成功",
+            "保证明日到账"
+          ],
+          "expected_roles": [
+            "billing"
+          ],
+          "required_entities": [],
+          "unknown_required": true,
+          "unknown_handling": "不提供未知价格、合同条款或到账时效；说明需正式协议和人工核实"
+        }
+      ]
+    }
+  ]
+}

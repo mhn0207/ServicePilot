@@ -1,0 +1,14 @@
+[
+  {"id": "auth_direct", "query": "企业服务登录返回401应该怎么排查？", "expected_title": "技术可靠性排查"},
+  {"id": "auth_paraphrase", "query": "认证不通过，是不是凭证过期或设备时间不对？", "expected_title": "技术可靠性排查"},
+  {"id": "payment_direct", "query": "同一订单被扣了两次款，要核验哪些信息？", "expected_title": "重复扣款与退款审核"},
+  {"id": "payment_paraphrase", "query": "两笔相同金额的银行卡支出就能说明重复收费吗？", "expected_title": "重复扣款与退款审核"},
+  {"id": "invoice_direct", "query": "企业发票抬头填错，重开要核对什么？", "expected_title": "企业发票与订阅"},
+  {"id": "subscription_paraphrase", "query": "把下个月的自动续费关掉，本月已付的钱会自动退吗？", "expected_title": "企业发票与订阅"},
+  {"id": "activation_direct", "query": "订单支付成功但是企业服务没有开通怎么办？", "expected_title": "企业订单与服务开通"},
+  {"id": "activation_paraphrase", "query": "款付过了套餐还是不能用，需要提供哪些凭据核验？", "expected_title": "企业订单与服务开通"},
+  {"id": "handoff_direct", "query": "资金争议转人工时，交接摘要应包含哪些证据？", "expected_title": "人工审核与证据交接"},
+  {"id": "handoff_paraphrase", "query": "整理完交接信息是否意味着已创建工单、进入坐席队列？", "expected_title": "人工审核与证据交接"},
+  {"id": "scope_direct", "query": "ServicePilot平台的几个Agent分别处理哪些企业问题？", "expected_title": "企业服务协同范围"},
+  {"id": "scope_paraphrase", "query": "这个演示平台能连接真实订单、支付、退款系统吗？", "expected_title": "企业服务协同范围"}
+]

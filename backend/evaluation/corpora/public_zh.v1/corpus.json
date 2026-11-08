@@ -1,0 +1,62 @@
+[
+  {
+    "document_id": "public-zh:gh-troubleshooting",
+    "title": "GitHub REST API：限流与私有资源排查",
+    "content": "适用产品：GitHub。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\nGitHub REST API限流可能返回403或429；主要额度耗尽时x-ratelimit-remaining为0。\n若响应带retry-after，应等待该秒数；额度为0时按x-ratelimit-reset指定时间等待。\n访问私有资源时，认证不正确也可能得到404，不能仅凭404认定仓库被删除；应核查令牌及访问权限。"
+  },
+  {
+    "document_id": "public-zh:gh-best-practices",
+    "title": "GitHub REST API：请求调度与条件请求",
+    "content": "适用产品：GitHub。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\n为降低GitHub REST API次要限流风险，建议串行处理请求；大量POST、PATCH、PUT或DELETE之间至少间隔一秒。\n正确认证的条件GET返回304时，不计入主要速率限制；这不等于对其他限制的豁免。\n可以保存etag并在后续请求使用if-none-match；条件请求是否支持需以具体端点说明为准。"
+  },
+  {
+    "document_id": "public-zh:gh-authentication",
+    "title": "GitHub REST API：令牌认证方式与失败登录",
+    "content": "适用产品：GitHub。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\nGitHub REST API多数令牌可通过Authorization的Bearer或token方式传递，但JWT必须使用Bearer。\n无效凭据最初返回401；短时间内反复使用无效凭据后，用户的认证尝试可能暂时统一返回403，即使随后提供有效凭据。\n令牌还必须具有端点所需权限；仅更换Authorization写法不代表获得额外资源权限。"
+  },
+  {
+    "document_id": "public-zh:gh-pagination",
+    "title": "GitHub REST API：分页与每页数量",
+    "content": "适用产品：GitHub。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\nGitHub REST API分页应沿link标头提供的URL继续请求；不同端点的分页参数不一定相同。\nlink可能只有部分关系：无法计算最后一页时可以没有last；是否还有下一页应查看next。\n多数端点per_page上限为100；超过上限可能被静默缩小而仍返回成功，具体默认值和上限需核对端点文档。"
+  },
+  {
+    "document_id": "public-zh:ali-resource-plan",
+    "title": "阿里云费用与成本：资源包退订与使用",
+    "content": "适用产品：阿里云。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\n是否可退资源包，先在费用与成本的资源退订页面查看可退订实例。\n支持退订的资源包在有效期内且用量为零可全额退；指定未来生效的资源包在生效前可全额退。\n退资源包不等于删除正在使用的产品和数据：对应产品会转为按量付费，需保持账户资金充足。\n账户资金不足后会进入欠费并停服；长期未结清欠费可能导致产品释放和数据丢失，不能把退资源包理解成永远免费保留数据。"
+  },
+  {
+    "document_id": "public-zh:ali-renewal",
+    "title": "阿里云费用与成本：续订常见问题",
+    "content": "适用产品：阿里云。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\n取消订阅或关闭免密支付，只停止后续自动续费，不影响当前已经购买的资源权益。\n导出续费清单是询价和导出信息，不会替资源执行续费；仍需按续费流程完成支付。\n续费价格受活动、配置和有效期等影响，应以支付页面为准，不能从旧活动价保证下一次价格。"
+  },
+  {
+    "document_id": "public-zh:ali-billing",
+    "title": "阿里云费用与成本：关闭续费后仍出账",
+    "content": "适用产品：阿里云。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\n纯后付费产品按实际用量出账，关闭自动续费不会停止这类产品计费。\n删除API Key或释放资源后，出账延迟仍可能带来最后一个计费周期的尾单；仅见新账单不能认定仍有新用量。\n购买包年包月实例也可能同时使用按量计费项目，应在账单详情核对具体资源和计费项，不能仅凭两张账单认定重复扣费。"
+  },
+  {
+    "document_id": "public-zh:ali-unsubscribe",
+    "title": "阿里云费用与成本：预付费退订操作边界",
+    "content": "适用产品：阿里云。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\n退订已生效的预付费实例会释放资源，操作不可撤销，应先备份数据并核对订单。\n只退未生效的续费订单，不影响当前已经生效的服务；已生效的续费订单不能单独取消退款。\n只想避免未来自动续费而不退款，应调整续费策略；不要把关闭续费、退未生效订单和退整台实例当成同一操作。"
+  },
+  {
+    "document_id": "public-zh:stripe-idempotency",
+    "title": "Stripe API v1：幂等重试和结果保存",
+    "content": "适用产品：Stripe API v1。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\nStripe API v1在端点开始执行后保存给定幂等键的首次状态码和响应体；相同键重试返回已保存结果，包括500。\nAPI v1中，执行前的参数校验失败或与在途请求冲突不会保存幂等结果；对于已保存的幂等请求，复用键更改参数会报错。\n上述结果回放规则不能直接套用API v2；当前官方文档对v2失败工作重试的行为另作说明。"
+  },
+  {
+    "document_id": "public-zh:stripe-webhooks",
+    "title": "Stripe Webhook：乱序、重复与重新投递",
+    "content": "适用产品：Stripe。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\nStripe不保证Webhook按事件生成顺序送达；snapshot事件created精度为秒，不宜作为顺序或去重依据。\n重复投递应记录已处理event ID；必要时通过API取回缺失对象，不应假定先收到的事件就是业务上先发生。\n手工重发成功并返回2xx，并不会自动取消Stripe对原失败投递的自动重试。"
+  },
+  {
+    "document_id": "public-zh:stripe-cancel",
+    "title": "Stripe订阅：暂停收款与周期末取消",
+    "content": "适用产品：Stripe。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\nStripe暂停收款不会改变订阅状态，不应把它直接当成取消订阅。\ncancel_at_period_end=true允许订阅运行至已付周期结束；周期结束前可设为false撤销预定取消，已经取消的订阅不能以此方式恢复。\n取消时的账户贷记与把钱退给客户是不同操作；需要实际退款时应另行发起refund并处理账户余额，不代表已到账。"
+  },
+  {
+    "document_id": "public-zh:stripe-refunds",
+    "title": "Stripe支付：退款目的地与未捕获支付",
+    "content": "适用产品：Stripe。以下为2026-11-07核对的官方文档中文摘要，不是ServicePilot业务政策。\nStripe退款返回原支付方式，不能在该退款流程中指定另一张卡或银行账户。\n同一charge可多次部分退款，但累计不能超过原支付金额；requires_capture的未捕获支付不能直接退款，应取消PaymentIntent。\n到账时间取决于银行等因素，文档给出的约5至10个工作日是估计，不是对任一客户的精确到账保证。"
+  }
+]

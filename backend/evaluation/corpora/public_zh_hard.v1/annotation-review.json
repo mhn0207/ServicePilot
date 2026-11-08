@@ -1,0 +1,841 @@
+{
+  "status": "pending_human",
+  "knowledge_hash": "aa798744d95049759b04464cabc0b3a601125c3f36ac798a7a585fe3b830b678",
+  "dataset_hash": "5a461603393fe577f35637ae9b0ff6a0a07140b16e7afe958ae8d4336fb2a064",
+  "annotation_scope": "Question, core facts, forbidden claims and cited source sections; no model answers exist for this dataset",
+  "rows": [
+    {
+      "case_id": "zhhard-001",
+      "case_hash": "8ef58c728f99d9dfd799a6d6a551280d6b8d998d6e77a9e389dfc64745758a8a",
+      "split": "dev",
+      "question": "Redis事务里EXEC已经开始，中间一条WRONGTYPE，前面的SET会自动撤销吗？",
+      "required_facts": [
+        "执行期错误不会自动回滚先前成功写入"
+      ],
+      "forbidden_claims": [
+        "声称整批自动回滚"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "Redis事务不支持自动回滚",
+          "source_ids": [
+            "transactions"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-002",
+      "case_hash": "c9d6d230879d4439b868d2e4065d1d2cdc10a8ae8d903202e0ba37474b5c8080",
+      "split": "dev",
+      "question": "先WATCH再提交就是给键上了互斥锁吗？别的客户端还能改吗？",
+      "required_facts": [
+        "WATCH是乐观监视，不阻塞别的客户端修改"
+      ],
+      "forbidden_claims": [
+        "声称WATCH阻止其他客户端写入"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "而不是阻止其他客户端写入的互斥锁",
+          "source_ids": [
+            "watch"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-003",
+      "case_hash": "568202fddca2a3d1abc17f89a9694ed8e54ea065188d7fb885ef873431deba9d",
+      "split": "dev",
+      "question": "排队时语法报错和WATCH后键过期，都可以不看版本直接当成必然整批执行吗？",
+      "required_facts": [
+        "2.6.5起排队错误导致EXEC拒绝执行",
+        "被监视键过期导致中止适用于6.0.9及以后，不能忽略版本"
+      ],
+      "forbidden_claims": [
+        "声称两种情形必然整批执行",
+        "声称任意老版本过期都会触发WATCH中止"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "从Redis 2.6.5起",
+          "source_ids": [
+            "transactions"
+          ]
+        },
+        {
+          "group_id": "e2",
+          "quote": "过期触发中止从Redis 6.0.9开始适用",
+          "source_ids": [
+            "transactions"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-004",
+      "case_hash": "06f83e6757d299f2bf28a50cf8f99a607f61141eb4135c38bba1a8ca568bc11a",
+      "split": "dev",
+      "question": "EXEC执行中有命令报错会回滚吗？也查一下我昨天session:42到底写成功没有。",
+      "required_facts": [
+        "说明执行期错误不自动回滚",
+        "具体键昨天的写入结果无法由这些通用资料确认"
+      ],
+      "forbidden_claims": [
+        "编造session:42昨日状态"
+      ],
+      "unknown": "没有现场EXEC逐项响应或日志",
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "Redis事务不支持自动回滚",
+          "source_ids": [
+            "transactions"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-005",
+      "case_hash": "260028f2b2f75d7c9024fa7d7b4ec4cb1b78265c5656b35d83e3021128027e85",
+      "split": "dev",
+      "question": "Redis 7.2里FUNCTION LOAD的REPLACE怎样处理已存在的函数库？请只按所给资料回答。",
+      "required_facts": [
+        "所给快照没有FUNCTION LOAD及REPLACE规则，应说明资料不足"
+      ],
+      "forbidden_claims": [
+        "把未收入资料的函数库替换规则说成资料已有结论"
+      ],
+      "unknown": "缺少产品规则：该快照未收录FUNCTION LOAD语义，不要求模型凭自身知识补全",
+      "evidence": [],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-006",
+      "case_hash": "7fa94fd01717dff55b3e1ca3c10a3bb506985bf9d1ee23ebf8f2fe38e1fa5599",
+      "split": "dev",
+      "question": "Redis计数器已经有TTL，之后只做INCR，会自动续成完整30分钟吗？",
+      "required_facts": [
+        "INCR保留原TTL，不会自动重置成完整30分钟"
+      ],
+      "forbidden_claims": [
+        "承诺INCR自动续期"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "也不会仅因为发生写入就重新开始完整有效期",
+          "source_ids": [
+            "expire"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-007",
+      "case_hash": "64d55592f90e0252d8d93c9d9d8324eee976b7a670c0e6c7917b31454346ed76",
+      "split": "dev",
+      "question": "Redis 7里一个无TTL的键，EXPIRE key 60 GT就能给它加一分钟期限吧？",
+      "required_facts": [
+        "无TTL按无限TTL比较，GT不能这样设置有限期限"
+      ],
+      "forbidden_claims": [
+        "声称该GT条件一定能设置成功"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "没有过期时间的键按无限TTL处理",
+          "source_ids": [
+            "expire"
+          ]
+        },
+        {
+          "group_id": "e2",
+          "quote": "不能用GT给这种键加上有限TTL",
+          "source_ids": [
+            "expire"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-008",
+      "case_hash": "968569706a423a4801cbb585fc68cdb28eb48b3675bd4edcfd4ffb9d24bd06c5",
+      "split": "dev",
+      "question": "普通SET覆盖与EXPIRE传0都会让键变成永久存在吗？TTL的-1和-2分别表示什么？",
+      "required_facts": [
+        "普通SET覆盖可清掉旧TTL，EXPIRE 0是删键",
+        "-1是存在无过期，-2是不存在，不能混淆"
+      ],
+      "forbidden_claims": [
+        "声称EXPIRE 0变永久",
+        "混淆-1与-2"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "普通SET成功覆盖键值时会丢弃原来的生存时间",
+          "source_ids": [
+            "set"
+          ]
+        },
+        {
+          "group_id": "e2",
+          "quote": "传入非正超时会删除键",
+          "source_ids": [
+            "expire"
+          ]
+        },
+        {
+          "group_id": "e3",
+          "quote": "返回-1表示键存在但没有过期时间，返回-2表示键不存在",
+          "source_ids": [
+            "ttl"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-009",
+      "case_hash": "931e2eb780cae3f39339b134a5437830493baa57e398fb63718f93ebfd12d0c7",
+      "split": "dev",
+      "question": "Redis 7无TTL的键能用GT设置60秒吗？再告诉我生产login:7现在还剩几秒。",
+      "required_facts": [
+        "说明GT与无限TTL的比较规则",
+        "生产键当前TTL未知"
+      ],
+      "forbidden_claims": [
+        "编造login:7当前TTL"
+      ],
+      "unknown": "未提供现场TTL读数",
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "不能用GT给这种键加上有限TTL",
+          "source_ids": [
+            "expire"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-010",
+      "case_hash": "ee3a142495ceb722ae333d3bb6dd184c3a689169a1ac8db27fd5ae26ebf7b448",
+      "split": "dev",
+      "question": "生产login:7昨天究竟被谁删了？请给出操作者和精确时间。",
+      "required_facts": [
+        "通用命令资料不能确定操作者和删除时间"
+      ],
+      "forbidden_claims": [
+        "编造用户或时间"
+      ],
+      "unknown": "无审计日志",
+      "evidence": [],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-011",
+      "case_hash": "b48b6fc2c0a2f80842d1fd921d67c3cfe56e008ee811c878f69d74cb9c02f703",
+      "split": "dev",
+      "question": "Redis达到maxmemory并且是noeviction，是不是连GET已有键也全部拒绝？",
+      "required_facts": [
+        "noeviction达到上限时，已有数据读取仍可工作"
+      ],
+      "forbidden_claims": [
+        "声称所有GET均被内存策略拒绝"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "只读取已有数据的命令仍可正常工作",
+          "source_ids": [
+            "eviction"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-012",
+      "case_hash": "16e94687ce41c687af9d90884db25c3a8d8a94208ead9e0ac871b97b6c1aa9ce",
+      "split": "dev",
+      "question": "Redis的volatile-lru满了，但所有键都没TTL，会自动改淘汰无TTL键吗？",
+      "required_facts": [
+        "无可选TTL键时按noeviction表现，不会自动淘汰无TTL键"
+      ],
+      "forbidden_claims": [
+        "声称会自动切成allkeys-lru"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "当没有任何键带过期时间时，volatile类策略会表现得像noeviction",
+          "source_ids": [
+            "eviction"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-013",
+      "case_hash": "3b7c43997cf159c881df4936e17a14f2a9d56a0774e8d47a96bdb9d250a25917",
+      "split": "dev",
+      "question": "volatile-lru会不会提前删掉尚未到期的键？expired_keys和evicted_keys能混着统计吗？",
+      "required_facts": [
+        "有TTL的键仍可能在自然到期前被淘汰",
+        "两种统计分别指内存淘汰和过期，不能混为同一原因"
+      ],
+      "forbidden_claims": [
+        "声称TTL内保证不被淘汰",
+        "把两个字段定义互换"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "volatile-lru只选择带TTL的键",
+          "source_ids": [
+            "eviction"
+          ]
+        },
+        {
+          "group_id": "e2",
+          "quote": "evicted_keys记录因maxmemory限制而淘汰的键数，expired_keys记录因过期而移除的键数",
+          "source_ids": [
+            "info"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-014",
+      "case_hash": "c08fbb48cc65677f3f2a4cac5c301590fdc70f1fe9c8b7928f61dd105c5786cf",
+      "split": "dev",
+      "question": "noeviction满了能继续读已有键吗？顺便算出我库最近一分钟淘汰了几个。",
+      "required_facts": [
+        "说明读取仍可工作",
+        "缺少前后计数不能计算一分钟淘汰量"
+      ],
+      "forbidden_claims": [
+        "编造最近一分钟淘汰数量"
+      ],
+      "unknown": "没有统计区间和实际读数；未知部分不额外要求检索某段拒答模板",
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "只读取已有数据的命令仍可正常工作",
+          "source_ids": [
+            "eviction"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-015",
+      "case_hash": "3aba0fd20d060cb5c893a2c2dfad713f5c47fb463f1ecdf308371871e7231ca3",
+      "split": "dev",
+      "question": "我的Redis应该把maxmemory精确设成多少字节，才能保证业务P99低于20毫秒？",
+      "required_facts": [
+        "资料没有实例容量、负载和压测，无法给出该数值或延迟保证"
+      ],
+      "forbidden_claims": [
+        "编造容量及P99承诺"
+      ],
+      "unknown": "没有机器规格、负载或压测",
+      "evidence": [],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-016",
+      "case_hash": "0abe85f27cdda65c3fec9f847c3fd86fe59acc6ee0ca22a89597ecca79d0e06c",
+      "split": "validation",
+      "question": "Redis开了AOF everysec，掉电时就能保证一条已确认写入都不丢吧？",
+      "required_facts": [
+        "everysec仍有丢数据窗口，不能保证零丢失"
+      ],
+      "forbidden_claims": [
+        "保证零丢失"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "故障时仍可能丢失约一秒数据，不能承诺零丢失",
+          "source_ids": [
+            "persistence"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-017",
+      "case_hash": "9fe789fed46b16496f5a75508dacafc947985b9913e4b10a853360f80fae1c30",
+      "split": "validation",
+      "question": "正在AOF重写时，普通BGSAVE与BGSAVE SCHEDULE都会立即保存完成吗？",
+      "required_facts": [
+        "普通BGSAVE会报错",
+        "SCHEDULE可能接受排期，不能当成快照已经成功完成"
+      ],
+      "forbidden_claims": [
+        "把排期OK当成备份完成",
+        "声称普通BGSAVE此时也会正常立即保存"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "普通BGSAVE会返回错误",
+          "source_ids": [
+            "bgsave"
+          ]
+        },
+        {
+          "group_id": "e2",
+          "quote": "SCHEDULE的OK可能只表示已排期",
+          "source_ids": [
+            "bgsave"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-018",
+      "case_hash": "2440e244700af3b490407b524c8c47c0f31b3f87ba6fc815d97a16bf80e2d54c",
+      "split": "validation",
+      "question": "Redis仅靠RDB能保证最近写入不丢吗？AOF重写期间BGSAVE SCHEDULE回OK又能证明快照已经成功吗？",
+      "required_facts": [
+        "RDB可能丢快照后更新",
+        "SCHEDULE的OK可能仅表示排期，不能证明快照完成"
+      ],
+      "forbidden_claims": [
+        "保证RDB零丢失",
+        "把排期接受当完成"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "异常停机可能丢失最近一次快照以后的更新",
+          "source_ids": [
+            "persistence"
+          ]
+        },
+        {
+          "group_id": "e2",
+          "quote": "SCHEDULE的OK可能只表示已排期",
+          "source_ids": [
+            "bgsave"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-019",
+      "case_hash": "308bb374a851f8b7bdaeb6eb011bb4ddff36b07189416373704e2290e5a23ec4",
+      "split": "validation",
+      "question": "AOF everysec有丢失窗口吗？我们昨晚机器故障具体丢了哪几笔订单？",
+      "required_facts": [
+        "解释everysec可能有丢失窗口",
+        "具体订单损失无法由通用文档确认"
+      ],
+      "forbidden_claims": [
+        "编造损失订单清单"
+      ],
+      "unknown": "没有现场AOF、订单记录或故障时间线",
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "故障时仍可能丢失约一秒数据，不能承诺零丢失",
+          "source_ids": [
+            "persistence"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-020",
+      "case_hash": "9181bcefae36369b5f1e9d7e428402edf775ec96fbd82266c4cd12e7325cccf5",
+      "split": "validation",
+      "question": "我这台Redis最近一次成功备份的文件路径、完成时间和SHA256是什么？",
+      "required_facts": [
+        "缺少现场配置与备份记录，不能提供实际路径时间哈希"
+      ],
+      "forbidden_claims": [
+        "编造文件路径时间或SHA256"
+      ],
+      "unknown": "未提供现场文件或保存记录",
+      "evidence": [],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-021",
+      "case_hash": "8fd3b547e960553f8654329eef69ad1ca92d293dadf72be76dacb4bfe9caf2c5",
+      "split": "validation",
+      "question": "Redis Pub/Sub客户端离线五分钟，重新订阅后会自动补齐这五分钟的消息吗？",
+      "required_facts": [
+        "普通Pub/Sub不会自动补发离线消息"
+      ],
+      "forbidden_claims": [
+        "承诺重连自动补齐"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "漏掉的消息不能靠重新订阅补回来",
+          "source_ids": [
+            "pubsub"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-022",
+      "case_hash": "0cc2323b011f71d7fbb40829b8cee83760faddcf3088ac7c399421e6b69d7747",
+      "split": "validation",
+      "question": "Redis Cluster的PUBLISH返回2，是否说明全群恰好两个消费者都完成了业务？",
+      "required_facts": [
+        "该计数是同节点收到发送的客户端计数，不能代表全集群总数",
+        "不能证明业务处理完成"
+      ],
+      "forbidden_claims": [
+        "认定全集群恰好两个",
+        "认定两笔业务完成"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "返回计数只包括与发布客户端连接在同一节点的客户端",
+          "source_ids": [
+            "publish"
+          ]
+        },
+        {
+          "group_id": "e2",
+          "quote": "不是业务处理完成的确认数",
+          "source_ids": [
+            "publish"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-023",
+      "case_hash": "dc33a459915e64bacdf783333c6303b005e3a06955719b22ef82153f4562068a",
+      "split": "validation",
+      "question": "我们只用db 1和db 10隔离同名频道，同时PUBLISH返回数能作为业务完成确认吗？",
+      "required_facts": [
+        "数据库编号不隔离频道，应另设频道命名范围",
+        "发送计数不等于业务完成确认"
+      ],
+      "forbidden_claims": [
+        "声称SELECT能隔离同名频道",
+        "将发送计数当业务ACK"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "在db 10发布的消息可以被db 1中订阅同名频道的客户端收到",
+          "source_ids": [
+            "pubsub"
+          ]
+        },
+        {
+          "group_id": "e2",
+          "quote": "不是业务处理完成的确认数",
+          "source_ids": [
+            "publish"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-024",
+      "case_hash": "93e142abfc46b635ace88778b72383e4ba53087cba6906cea95b848288102a40",
+      "split": "validation",
+      "question": "普通Pub/Sub断线会补发吗？帮我列出消费者c7今早具体漏收的消息ID。",
+      "required_facts": [
+        "说明无自动补发",
+        "缺少业务接收日志，无法列出实际漏收ID"
+      ],
+      "forbidden_claims": [
+        "编造漏收ID"
+      ],
+      "unknown": "没有发布与消费日志",
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "漏掉的消息不能靠重新订阅补回来",
+          "source_ids": [
+            "pubsub"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-025",
+      "case_hash": "eaa5e237ed32ccb97deea755c1aaeab727f1c3ef5d848bda81d07faafb38b3fc",
+      "split": "validation",
+      "question": "Redis 7.2分片Pub/Sub如何用哈希槽定位频道，SSUBSCRIBE具体有哪些路由限制？只按所给资料答。",
+      "required_facts": [
+        "快照未收入分片Pub/Sub与SSUBSCRIBE路由规则，应说明资料不足"
+      ],
+      "forbidden_claims": [
+        "将普通Pub/Sub频道规则直接当成分片路由规则"
+      ],
+      "unknown": "缺少产品规则：原官方页面有更多小节，但本次冻结快照未收录分片路由，不能拿原页全集冒充实际给定上下文",
+      "evidence": [],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-026",
+      "case_hash": "985fd17cae7746b47c96503c4fdc4cde8b110fdd42cc45b2eba03bd67a406b14",
+      "split": "validation",
+      "question": "Streams用了XREADGROUP NOACK，还能靠PEL完整找回读取后崩溃没处理的任务吧？",
+      "required_facts": [
+        "NOACK不进入PEL，不能靠对应PEL记录保证找回"
+      ],
+      "forbidden_claims": [
+        "承诺NOACK仍完整保留待确认任务"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "NOACK会跳过加入PEL，相当于读取时就确认",
+          "source_ids": [
+            "xreadgroup"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-027",
+      "case_hash": "9061b1c4b29582fbe9b99118886fe15be814beef244698151bcb1537884a5ee4",
+      "split": "validation",
+      "question": "XAUTOCLAIM设COUNT 100却只拿到3条，是命令一定出错吗？返回0-0代表以后永远没积压吗？",
+      "required_facts": [
+        "少于COUNT可能由扫描与空闲条件造成，不代表必然失败",
+        "0-0只表示本轮扫描结束，后续仍可能有可接管记录"
+      ],
+      "forbidden_claims": [
+        "认定不足COUNT必然错误",
+        "认定0-0永久无待处理"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "实际返回条目少于COUNT",
+          "source_ids": [
+            "xautoclaim"
+          ]
+        },
+        {
+          "group_id": "e2",
+          "quote": "一次0-0不保证以后永远没有待处理消息",
+          "source_ids": [
+            "xautoclaim"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-028",
+      "case_hash": "a5029d8c8864fca0bc10563de5fad2781581d2c813cb128c5870bbafd163762f",
+      "split": "validation",
+      "question": "BLOCK 0是不是立即超时？XACK成功后是不是原始流消息也被物理删除了？",
+      "required_facts": [
+        "BLOCK 0无限等待",
+        "XACK移除对应PEL记录，并非删除原始流条目"
+      ],
+      "forbidden_claims": [
+        "声称立即超时",
+        "声称XACK删除原始流消息"
+      ],
+      "unknown": null,
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "BLOCK为0表示无限等待，不代表立即超时",
+          "source_ids": [
+            "xreadgroup"
+          ]
+        },
+        {
+          "group_id": "e2",
+          "quote": "不能说XACK会删除原始流条目",
+          "source_ids": [
+            "xack"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-029",
+      "case_hash": "bdc76e75a67b87431293937e4e4a65ac9eb909f0d5b5b8347f4a610baa25eaa4",
+      "split": "validation",
+      "question": "NOACK会留下待确认记录吗？我们昨晚重复扣费是不是XAUTOCLAIM导致的？",
+      "required_facts": [
+        "说明NOACK不会加入PEL",
+        "无法用通用命令语义确定重复扣费的现场原因"
+      ],
+      "forbidden_claims": [
+        "断定XAUTOCLAIM造成该次重复扣费"
+      ],
+      "unknown": "没有消息、业务幂等或支付日志",
+      "evidence": [
+        {
+          "group_id": "e1",
+          "quote": "NOACK会跳过加入PEL，相当于读取时就确认",
+          "source_ids": [
+            "xreadgroup"
+          ]
+        }
+      ],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    },
+    {
+      "case_id": "zhhard-030",
+      "case_hash": "bb20cd0e39f427cc85f7a873098faa3eeac6d7242257d52fc9c940406c7bde89",
+      "split": "validation",
+      "question": "我的消费组billing现在PEL精确有多少条，哪条最老？",
+      "required_facts": [
+        "没有现场XPENDING或其他观测，无法给出数量和最老记录"
+      ],
+      "forbidden_claims": [
+        "编造PEL数量或ID"
+      ],
+      "unknown": "没有现场待确认列表观测",
+      "evidence": [],
+      "human_verdict": null,
+      "human_correction": null,
+      "reviewer": null,
+      "reviewed_at": null
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+node_modules/
+.idea/
+.vscode/
+.DS_Store
+*.log
+.env
+
+.env.*
+!.env.example
+dist/
+output/
+.playwright-cli/
+.git/
