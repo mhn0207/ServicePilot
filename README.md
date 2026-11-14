@@ -1,5 +1,7 @@
 # ServicePilot｜基于 RAG 的多 Agent 企业服务咨询系统
 
+[![CI](https://github.com/mhn0207/ServicePilot/actions/workflows/ci.yml/badge.svg)](https://github.com/mhn0207/ServicePilot/actions/workflows/ci.yml)
+
 面向企业服务咨询的多 Agent AI 应用，覆盖技术故障、账单争议与订阅咨询，提供知识检索、排查建议和人工交接摘要。
 
 个人实践项目，在 ZhiYing / EchoMind 相关代码基础上持续迭代，重点关注 Agent 编排、会话可靠性与 RAG 评测。
@@ -13,6 +15,14 @@
 - **工具与运行观察**：接入 Anthropic Tool Calling、标准 MCP 和 3 个可热加载 Skills，提供参数校验、角色权限、超时熔断、执行预算、工具轨迹及 Prometheus 指标；支持管理员查看知识片段并按内容版本删除文档。
 
 业务工具提供字段核验、金额比较和处理建议，不连接真实订单、支付、退款或工单系统。
+
+## 设计取舍
+
+- **确定性路由**：主 Agent 与协作 Agent 由意图、关键词和实体打分决定，不交给模型自由选择。行为可回归测试、可解释，代价是覆盖面取决于词表。
+- **统一的执行预算**：一次聊天的全部时间参数集中在 `core/request_budget.py` 的 `BudgetPolicy`，导入时校验“意图 + 主 Agent + 兜底 ≤ 请求预算”等约束；预算不足时跳过可选步骤而不是整体超时。
+- **兜底复用检索**：专属 Agent 失败后由通用 Agent 接手，直接复用本次请求已取得的检索结果；已尝试过有副作用的工具则不再兜底。
+- **离线评测用固定响应**：回归与协议验收不调用真实模型，结果可复现且零成本；它验证的是链路和协议，不代表回答质量。
+- **基线只能显式晋升**：评测完成不会自动覆盖基线，避免退化被悄悄吸收。
 
 ## 请求流程
 
@@ -61,16 +71,18 @@ docker compose -p servicepilot-local -f docker-compose.yml -f docker-compose.web
 
 ## 开发与验证
 
-```powershell
+```bash
 # backend/：使用 Python 3.12 和本项目虚拟环境
 python -X utf8 -m pip install -r requirements-dev.txt
 python -X utf8 -m pytest tests -q
 
-# frontend/
+# frontend/：Node 22
 npm ci
 npm test
 npm run build
 ```
+
+以上命令在 PowerShell、macOS 和 Linux 下相同。推送到 `main` 及每个 Pull Request 会由 GitHub Actions 执行同一组检查（`.github/workflows/ci.yml`）；测试不读取 `.env`，不需要模型 Key。
 
 测试覆盖编排、会话重试、实体更正、知识维护和评测协议；Docker 验证覆盖服务启动、HTTP 链路、存储故障与重启保留。配置及验证范围见 [后端说明](backend/README.md)，前端开发见 [工作台说明](frontend/README.md)。
 
@@ -89,6 +101,13 @@ frontend/                Vue 工作台与接口适配
 ```
 
 真实配置、数据库、会话、画像与运行报告不纳入版本管理。接口保留 `/api/zhiying`、`ZHIYING_*` 等现有协议标识。
+
+## 已知限制
+
+- 业务工具只做字段核验和建议，不连接真实订单、支付或工单系统；人工升级只生成交接摘要。
+- 演示知识库只有 6 篇短文，评测语料的候选片段也很少（中文集各 12 片）。现有检索题在简单词面匹配下就接近满分，因此不同检索策略之间还拉不开差距。
+- Agent 离线验收仅 7 个用例且使用固定响应，尚无多 Agent 相对单 Agent 的收益结论。
+- 强制检索的判定依赖有限的主题词表，换一种说法可能漏判。
 
 ## 来源与授权
 
