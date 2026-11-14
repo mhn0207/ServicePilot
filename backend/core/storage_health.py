@@ -10,6 +10,7 @@ class ChromaHealthProbe:
         self._count = collection.count
         self._pending = None
         self._url = None
+        self._ssl_context = None
         if host is not None:
             if host.startswith(('http://', 'https://')):
                 base = host.rstrip('/')
@@ -23,6 +24,10 @@ class ChromaHealthProbe:
                                           (collection.tenant, collection.database, collection.id))
             self._url = (f'{base}/collections/{identity}/count' if api_path == '/api/v1' else
                          f'{base}/tenants/{tenant}/databases/{database}/collections/{identity}/count')
+            # Loading certificate roots can block for ~1s on Windows. Prepare
+            # the same verified HTTPX context at startup, outside /health's
+            # deadline, and reuse it without retaining a loop-bound client.
+            self._ssl_context = httpx.create_ssl_context(trust_env=False)
 
     async def check(self) -> bool:
         # Cancellation of /health must not spawn another local disk thread on
@@ -34,7 +39,8 @@ class ChromaHealthProbe:
     async def _probe(self) -> bool:
         try:
             if self._url is not None:
-                async with httpx.AsyncClient(timeout=1.0, trust_env=False) as client:
+                async with httpx.AsyncClient(timeout=1.0, trust_env=False,
+                                            verify=self._ssl_context) as client:
                     response = await client.get(self._url)
                     response.raise_for_status()
                     payload = response.json()
