@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field, model_validator
 from core.performance import collect_performance, measure_stage, performance_snapshot
-from core.request_budget import chat_budget
+from core.request_budget import POLICY, chat_budget
 
 load_dotenv(pathlib.Path(_ROOT) / '.env')
 
@@ -414,7 +414,7 @@ async def chat(req: ChatRequest, http_request: HTTPRequest):
 
     from core.concurrency import ConversationBusyError, LeaseLostError
     try:
-        async with asyncio.timeout(50), chat_budget(45), _memory.conversation(req.user_id, conv_id):
+        async with asyncio.timeout(POLICY.hard_timeout_s), chat_budget(POLICY.request_s), _memory.conversation(req.user_id, conv_id):
             receipt = await _memory.get_turn_receipt(req.user_id, conv_id, client_id)
             if receipt:
                 if receipt["message"] != req.message:
