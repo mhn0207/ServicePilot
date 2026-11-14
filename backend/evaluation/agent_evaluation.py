@@ -51,7 +51,11 @@ def list_agent_runs():
 def load_suite():
     p=BASE/'evaluation/corpora/agent.cases.v1.json'
     manifest=load(BASE/'evaluation/corpora/agent.suite.v1.json')
-    if hashlib.sha256(p.read_bytes()).hexdigest()!=manifest['cases_sha256']: raise ValueError('annotation freeze mismatch')
+    # 冻结哈希按字节计算，而 .gitattributes 的 text=auto 让同一份标注在 Windows 检出为
+    # CRLF、在 Linux/macOS 检出为 LF。两种换行下内容相同即视为同一份冻结标注。
+    lf=p.read_bytes().replace(b'\r\n',b'\n')
+    digests={hashlib.sha256(data).hexdigest() for data in (lf,lf.replace(b'\n',b'\r\n'))}
+    if manifest['cases_sha256'] not in digests: raise ValueError('annotation freeze mismatch')
     data=load(p); snapshot=build_snapshot(load(BASE/'data/demo_docs/sample_knowledge.json'))
     for c in data['cases']:
         for t in c['turns']:
