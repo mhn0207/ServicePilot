@@ -1,7 +1,7 @@
 """
-ServicePilot 企业服务协同平台 — FastAPI 入口
+ServicePilot 企业服务咨询系统 — FastAPI 入口
 
-启动时打印小熊饼干图案。
+启动时打印图案。
 所有核心组件在 lifespan 中初始化，通过环境变量配置。
 """
 import asyncio
@@ -38,12 +38,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BANNER = r"""
-    ʕ•ᴥ•ʔ  ʕ•ᴥ•ʔ  ʕ•ᴥ•ʔ
    ╔══════════════════════╗
-   ║   ServicePilot  v2.0     ║
-   ║   企业服务协同平台    ║
+   ║   ServicePilot       ║
+   ║  企业服务咨询系统       ║
    ╚══════════════════════╝
-    ʕ•ᴥ•ʔ  ʕ•ᴥ•ʔ  ʕ•ᴥ•ʔ
 """
 
 # ── 全局组件（lifespan 中初始化）─────────────────────────────────────────────
@@ -245,7 +243,7 @@ from tooling.mcp_server import http_app as standard_mcp_app, server as standard_
 
 # ── FastAPI ───────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="ServicePilot｜企业服务协同平台",
+    title="ServicePilot｜基于 RAG 的多 Agent 企业服务咨询系统",
     version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs",
