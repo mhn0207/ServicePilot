@@ -1,11 +1,12 @@
-"""测试导入 api.main 时禁止加载本机 .env；凭据必须由测试显式模拟。"""
+"""pytest 中禁用 dotenv 文件解析；配置由测试显式注入环境变量。"""
+from contextlib import ExitStack
 from unittest.mock import patch
 
 
 def pytest_configure(config):
-    config._servicepilot_dotenv_patch = patch("dotenv.load_dotenv", return_value=False)
-    config._servicepilot_dotenv_patch.start()
-
-
-def pytest_unconfigure(config):
-    config._servicepilot_dotenv_patch.stop()
+    patches = ExitStack()
+    config.add_cleanup(patches.close)
+    patches.enter_context(patch("dotenv.load_dotenv", return_value=False))
+    # Pydantic v1 / pydantic-settings 使用 dotenv_values，可能已持有导入别名。
+    # 在共用解析入口阻止文件读取，也覆盖这些别名；不影响临时文件创建。
+    patches.enter_context(patch("dotenv.main.DotEnv.dict", side_effect=dict))
