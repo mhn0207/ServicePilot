@@ -131,6 +131,36 @@ async def test_remote_collection_failure_is_unhealthy_even_when_server_heartbeat
 
 
 @pytest.mark.asyncio
+async def test_remote_probes_prepare_verified_tls_before_readiness_checks(monkeypatch):
+    import ssl
+    from core.storage_health import ChromaHealthProbe
+
+    original = httpx.AsyncClient
+    collection = NS(count=lambda: 0, id='one', tenant='default_tenant', database='default_database')
+    probes = [ChromaHealthProbe(collection, host='review-chroma') for _ in range(3)]
+    contexts = []
+
+    def forbidden_certificate_load(*args, **kwargs):
+        raise AssertionError('Readiness must not synchronously reload certificate roots')
+
+    def client(**kwargs):
+        context = kwargs['verify']
+        assert isinstance(context, ssl.SSLContext)
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.check_hostname is True
+        assert kwargs['trust_env'] is False
+        contexts.append(context)
+        return original(**kwargs, transport=httpx.MockTransport(lambda request: httpx.Response(200, json=0)))
+
+    monkeypatch.setattr(ssl, 'create_default_context', forbidden_certificate_load)
+    monkeypatch.setattr(httpx, 'AsyncClient', client)
+    assert await asyncio.gather(*(probe.check() for probe in probes)) == [True, True, True]
+    # Repeated checks retain certificate verification without rebuilding roots.
+    assert await probes[0].check() is True
+    assert contexts[0] is contexts[-1]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('api_path,expected', [
     ('/api/v1', '/api/v1/collections/one/count'),
     ('/api/v2', '/api/v2/tenants/default_tenant/databases/default_database/collections/one/count'),
