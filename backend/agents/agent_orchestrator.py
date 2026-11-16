@@ -44,7 +44,7 @@ from agents.tools import (
 )
 from core.intent_recognizer import IntentCategory, IntentRecognizer, UrgencyLevel
 from core.llm_utils import create_message, extract_text_content
-from core.request_budget import phase_budget, can_start, limit_timeout, observe, remaining
+from core.request_budget import POLICY, phase_budget, can_start, limit_timeout, observe, remaining
 
 logger = logging.getLogger(__name__)
 
@@ -374,13 +374,14 @@ class BaseAgent:
                 reused = True
             if reused:
                 observe('agent.fallback', 'retrieval_reused')
+        system = self._system_param(req)
         try:
             for _ in range(3):
                 request_kwargs: Dict[str, Any] = {
                     "model": self._model,
                     "max_tokens": self.profile.max_tokens,
                     "temperature": self.profile.temperature,
-                    "system": self._build_system_prompt(req),
+                    "system": system,
                     "messages": messages,
                 }
                 if tools:
@@ -400,7 +401,7 @@ class BaseAgent:
                     request_kwargs['tool_choice'] = {'type': 'tool', 'name': 'search_knowledge_base'}
                 resp = await asyncio.wait_for(
                     create_message(self._client, stage=f"agent.{self.agent_type.value}", **request_kwargs),
-                    timeout=max(1, _env_float("ZHIYING_LLM_TIMEOUT_S", 15)),
+                    timeout=max(1, _env_float("ZHIYING_LLM_TIMEOUT_S", POLICY.agent_timeout_default_s)),
                 )
                 tool_uses = [block for block in (resp.content or []) if self._block_type(block) == "tool_use"]
                 if not tool_uses:
@@ -454,7 +455,7 @@ class BaseAgent:
                                 else:
                                     result = spec.handler(req, args)
                                     if inspect.isawaitable(result):
-                                        timeout = limit_timeout(30)
+                                        timeout = limit_timeout(POLICY.tool_handler_s)
                                         result = await result if remaining() is None else await asyncio.wait_for(result, timeout=timeout)
                             finally:
                                 tool_call_context.reset(observation_token)
@@ -537,8 +538,8 @@ class BaseAgent:
                 raise ValueError("不允许的工具参数（additionalProperties）") from None
             raise ValueError(f"工具参数未通过 JSON Schema 校验（{ex.validator}）") from None
 
-    def _build_system_prompt(self, req: Request) -> str:
-        """把角色契约和动态 Skills 拼入 system prompt。"""
+    def _system_parts(self, req: Request) -> tuple[str, str]:
+        """(不随请求变化的角色契约, 按消息匹配的 Skills 段)。"""
         profile_prompt = (
             f"\n\n[角色契约]\n"
             f"角色：{self.profile.role}\n"
@@ -556,11 +557,32 @@ class BaseAgent:
         )
         base_prompt = f"{self.system_prompt}{profile_prompt}"
         if self._skill_manager is None:
-            return base_prompt
+            return base_prompt, ""
         skill_prompt = self._skill_manager.prompt_for(req.message, self.agent_type.value)
         if not skill_prompt:
-            return base_prompt
-        return f"{base_prompt}\n\n[动态 Skills]\n{skill_prompt}"
+            return base_prompt, ""
+        return base_prompt, f"\n\n[动态 Skills]\n{skill_prompt}"
+
+    def _build_system_prompt(self, req: Request) -> str:
+        """把角色契约和动态 Skills 拼入 system prompt。"""
+        return "".join(self._system_parts(req))
+
+    def _system_param(self, req: Request) -> Any:
+        """system 请求参数。
+
+        顺序固定为「工具 → 角色契约 → Skills」，三者都不含本轮对话内容，
+        按前缀自动缓存的服务（如 DeepSeek）无需额外标记即可命中。
+        Anthropic 官方接口只在显式断点处缓存：设置
+        ZHIYING_PROMPT_CACHE_BREAKPOINTS=1 后，在角色契约和 Skills 末尾各放
+        一个断点。默认关闭，请求内容与原先逐字节一致。
+        """
+        base_prompt, skill_block = self._system_parts(req)
+        if os.getenv("ZHIYING_PROMPT_CACHE_BREAKPOINTS", "").strip().lower() not in ("1", "true", "yes"):
+            return base_prompt + skill_block
+        return [
+            {"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}
+            for text in (base_prompt, skill_block) if text
+        ]
 
     def _build_role_packet(self, req: Request) -> str:
         """给子 Agent 的确定性输入包；子类可补充领域字段。"""
@@ -774,7 +796,7 @@ class ResponseComposer:
             if skill:
                 prompt += f"\n\n[通用客服输出边界]\n{skill}"
         try:
-            if not can_start('composer', 2):
+            if not can_start('composer', POLICY.composer_min_start_s):
                 raise TimeoutError('insufficient_composer_budget')
             response = await asyncio.wait_for(create_message(self._client,
                 stage="composer",
@@ -782,7 +804,7 @@ class ResponseComposer:
                 max_tokens=_env_int("ZHIYING_COMPOSER_MAX_TOKENS", 1000),
                 temperature=_env_float("ZHIYING_COMPOSER_TEMPERATURE", 0.1),
                 messages=[{"role": "user", "content": prompt}],
-            ), timeout=max(1, _env_float("ZHIYING_COMPOSER_TIMEOUT_S", 8)))
+            ), timeout=max(1, _env_float("ZHIYING_COMPOSER_TIMEOUT_S", POLICY.composer_timeout_default_s)))
             content = extract_text_content(response.content).strip()
             if content:
                 return AgentCallResult(content, status="partial" if getattr(response, "stop_reason", None) == "max_tokens" else status)
@@ -1307,7 +1329,7 @@ class AgentOrchestrator:
                 error_code="agent_unavailable",
             )
 
-        with phase_budget(28, reserve=5):
+        with phase_budget(POLICY.primary_s, reserve=POLICY.primary_reserve_s):
             response = await agent.handle(req)
 
         # 已尝试副作用操作后，不让兜底 Agent 再次执行可能相同的业务动作。
@@ -1316,13 +1338,13 @@ class AgentOrchestrator:
 
         # 专属 Agent 失败时降级到 GeneralAgent
         if not response.success and agent_type not in (AgentType.GENERAL, AgentType.ESCALATION):
-            if not can_start('agent.fallback', 11):
+            if not can_start('agent.fallback', POLICY.fallback_min_start_s):
                 return response
             logger.warning(f"{agent_type.value} 失败，降级到 GeneralAgent")
             fallback = self._best_agent(AgentType.GENERAL)
             if fallback:
                 original = response
-                with phase_budget(8, reserve=3):
+                with phase_budget(POLICY.fallback_s, reserve=POLICY.fallback_reserve_s):
                     response = await fallback.handle(replace(req, reuse_retrieval=True))
                 response.tools_used = list(dict.fromkeys(original.tools_used + response.tools_used))
                 response.tool_traces = original.tool_traces + [{

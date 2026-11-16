@@ -25,6 +25,7 @@ from anthropic import AsyncAnthropic
 
 from core.llm_utils import create_message, extract_text_content
 from core.amount_entities import amount_mentions
+from core.request_budget import POLICY
 
 logger = logging.getLogger(__name__)
 
@@ -302,7 +303,7 @@ class IntentRecognizer:
                 max_tokens=256,
                 temperature=0.1,
                 messages=[{"role": "user", "content": prompt}],
-            ), timeout=max(0.1, float(os.getenv("ZHIYING_INTENT_TIMEOUT_S", "8"))))
+            ), timeout=max(0.1, float(os.getenv("ZHIYING_INTENT_TIMEOUT_S", str(POLICY.intent_timeout_default_s)))))
             raw = extract_text_content(resp.content)
             s, e = raw.find("{"), raw.rfind("}") + 1
             data = json.loads(raw[s:e])

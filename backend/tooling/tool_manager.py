@@ -26,7 +26,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from anthropic import AsyncAnthropic
 
 from core.llm_utils import create_message, extract_text_content
-from core.request_budget import can_start, limit_timeout, remaining, budget_degraded, observe
+from core.request_budget import POLICY, can_start, limit_timeout, remaining, budget_degraded, observe
 from core.concurrency import KeyedLocks
 from core.performance import measure_stage, record_event
 
@@ -338,7 +338,7 @@ class MCPToolManager:
           原始: "退款流程"
           改写: ["如何申请退款", "退款需要多少天", "退款政策是什么"]
         """
-        if not can_start('rag.rewrite', 18):
+        if not can_start('rag.rewrite', POLICY.rag_optional_min_start_s):
             return [query]
         prompt = f"""将以下用户查询改写为 {n} 个不同角度的搜索子查询，用于检索知识库。
 要求：每个子查询角度不同，覆盖原始问题的不同方面。
@@ -446,7 +446,7 @@ class MCPToolManager:
         解决问题：向量检索的相似度分数不等于"对用户有用"，
         LLM 能理解语义相关性，重排后 Top-K 质量显著提升。
         """
-        if len(items) <= top_k or not can_start('rag.rerank', 18):
+        if len(items) <= top_k or not can_start('rag.rerank', POLICY.rag_optional_min_start_s):
             return items[:top_k], False
 
         # 将结果序列化为文本供 LLM 评分
