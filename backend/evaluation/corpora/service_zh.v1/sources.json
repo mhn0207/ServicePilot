@@ -1,0 +1,497 @@
+{
+  "version": "service-zh-sources-v1",
+  "declaration": "评测用虚构企业规则。无外部来源、客户资料或现行业务政策；文中全部数字（时限、额度、金额、日期）均为虚构设定，仅用于让问题有可检验的答案。",
+  "language": "zh",
+  "authoring": "AI_DRAFT_PENDING_HUMAN_REVIEW",
+  "scope": "中文企业服务检索与回答评测；不代表任何真实产品的政策",
+  "documents": [
+    {
+      "document_id": "service-zh:t01",
+      "title": "访问令牌与 401",
+      "origin": "Chinese rewrite of service_rules.v2 document \"access-token\" with added synthetic facts",
+      "checked_facts": [
+        "401",
+        "租户路由之前",
+        "身份门户续期",
+        "60 分钟",
+        "5 分钟",
+        "不能恢复已被禁用的账号",
+        "audience_mismatch",
+        "servicepilot-api",
+        "request_id",
+        "令牌指纹",
+        "原始凭据"
+      ]
+    },
+    {
+      "document_id": "service-zh:t02",
+      "title": "权限与 403",
+      "origin": "Chinese rewrite of service_rules.v2 document \"permission\" with added synthetic facts",
+      "checked_facts": [
+        "403",
+        "已经通过认证",
+        "项目只读角色",
+        "audit_export",
+        "不能审批自己",
+        "独立的租户安全审批人",
+        "2 个工作日",
+        "下一次鉴权检查即生效",
+        "10 分钟"
+      ]
+    },
+    {
+      "document_id": "service-zh:t03",
+      "title": "租户隔离与 404",
+      "origin": "Chinese rewrite of service_rules.v2 document \"tenant\" with added synthetic facts",
+      "checked_facts": [
+        "404 而不是 403",
+        "显式切换当前租户",
+        "7 天未接受自动失效",
+        "分别审批",
+        "转移清单",
+        "助手不能执行转移"
+      ]
+    },
+    {
+      "document_id": "service-zh:t04",
+      "title": "服务端错误与重试（500 / 503）",
+      "origin": "Chinese rewrite of service_rules.v2 document \"server-errors\" with added synthetic facts",
+      "checked_facts": [
+        "internal_fault",
+        "不能据此认定支付失败",
+        "最多重试 2 次",
+        "2 秒和 4 秒",
+        "同一个幂等键查询回执",
+        "第二次扣款",
+        "503",
+        "Retry-After",
+        "P2 等级",
+        "不得承诺恢复时间"
+      ]
+    },
+    {
+      "document_id": "service-zh:t05",
+      "title": "写入回执与幂等",
+      "origin": "Chinese rewrite of service_rules.v2 document \"idempotency\" with added synthetic facts",
+      "checked_facts": [
+        "返回原来的回执",
+        "24 小时",
+        "409",
+        "不是认证失败",
+        "processing",
+        "不低于 5 秒",
+        "必须升级处理"
+      ]
+    },
+    {
+      "document_id": "service-zh:t06",
+      "title": "限流与 429",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "每分钟最多 600 次",
+        "429",
+        "Retry-After",
+        "每分钟 30 次",
+        "不属于故障",
+        "按租户而不是按令牌",
+        "商务审批"
+      ]
+    },
+    {
+      "document_id": "service-zh:t07",
+      "title": "请求超时与连接失败",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "30 秒",
+        "504",
+        "原幂等键查询回执",
+        "状态页",
+        "白名单",
+        "15 分钟内生效",
+        "关闭证书校验"
+      ]
+    },
+    {
+      "document_id": "service-zh:t08",
+      "title": "支付 Webhook 校验",
+      "origin": "Chinese rewrite of service_rules.v2 document \"webhook\" with added synthetic facts",
+      "checked_facts": [
+        "签名验证",
+        "5 分钟",
+        "rejected",
+        "不会更新账本",
+        "去重",
+        "最多 8 次",
+        "72 小时",
+        "不表示工作区已经开通",
+        "改回授权状态"
+      ]
+    },
+    {
+      "document_id": "service-zh:t09",
+      "title": "沙箱与生产隔离",
+      "origin": "Chinese rewrite of service_rules.v2 document \"sandbox\" with added synthetic facts",
+      "checked_facts": [
+        "test_",
+        "不能用来开通生产工作区",
+        "30 天后自动清理",
+        "安全轮换",
+        "重新取得生产审批",
+        "回调地址"
+      ]
+    },
+    {
+      "document_id": "service-zh:t10",
+      "title": "SSO 证书轮换",
+      "origin": "Chinese rewrite of service_rules.v2 document \"sso\" with added synthetic facts",
+      "checked_facts": [
+        "重叠窗口",
+        "默认 14 天",
+        "最长可申请到 30 天",
+        "已退役证书",
+        "重新签发 API 令牌不能修复",
+        "安全审批",
+        "关闭断言签名校验"
+      ]
+    },
+    {
+      "document_id": "service-zh:t11",
+      "title": "服务账号归属与轮换",
+      "origin": "Chinese rewrite of service_rules.v2 document \"service-account\" with added synthetic facts",
+      "checked_facts": [
+        "只属于一个租户",
+        "人类负责人",
+        "每 90 天轮换",
+        "默认 7 天",
+        "凭据指纹",
+        "指定新的负责人",
+        "暂停等待评审"
+      ]
+    },
+    {
+      "document_id": "service-zh:t12",
+      "title": "SDK 版本与接入配置",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "此前的两个主版本",
+        "180 天",
+        "不同的基础地址和签名密钥",
+        "rejected_configuration",
+        "升级指引"
+      ]
+    },
+    {
+      "document_id": "service-zh:t13",
+      "title": "数据同步延迟与缓存",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "15 分钟",
+        "以账本为准",
+        "T+1",
+        "即时生效",
+        "10 分钟",
+        "不得根据界面显示"
+      ]
+    },
+    {
+      "document_id": "service-zh:t14",
+      "title": "工作区区域迁移",
+      "origin": "Chinese rewrite of service_rules.v2 document \"region\" with added synthetic facts",
+      "checked_facts": [
+        "迁移评审",
+        "10 个工作日",
+        "修改账单地址不会迁移任何数据",
+        "每周六 02:00–06:00（UTC+8）",
+        "scheduled",
+        "完成回执",
+        "阻塞",
+        "财务流程"
+      ]
+    },
+    {
+      "document_id": "service-zh:b01",
+      "title": "支付结算与服务开通",
+      "origin": "Chinese rewrite of service_rules.v2 document \"activation\" with added synthetic facts",
+      "checked_facts": [
+        "settled",
+        "awaiting_capacity",
+        "不要让客户重新付款",
+        "2 个工作日",
+        "不保证固定的开通时限",
+        "rejected_configuration",
+        "不会产生新的支付",
+        "只有开通团队"
+      ]
+    },
+    {
+      "document_id": "service-zh:b02",
+      "title": "授权冻结与实际扣款",
+      "origin": "Chinese rewrite of service_rules.v2 document \"holds\" with added synthetic facts",
+      "checked_facts": [
+        "authorized",
+        "captured",
+        "7 天内没有转为扣款",
+        "voided",
+        "refunded",
+        "部分扣款",
+        "只按已扣款的部分评估"
+      ]
+    },
+    {
+      "document_id": "service-zh:b03",
+      "title": "重复扣款对账",
+      "origin": "Chinese rewrite of service_rules.v2 document \"duplicate\" with added synthetic facts",
+      "checked_facts": [
+        "两条银行通知",
+        "不足以认定重复扣款",
+        "两条不同的 captured 记录",
+        "3 个工作日",
+        "疑似重复",
+        "不能直接相加"
+      ]
+    },
+    {
+      "document_id": "service-zh:b04",
+      "title": "取消自动续费与已付权益",
+      "origin": "Chinese rewrite of service_rules.v2 document \"renewal\" with added synthetic facts",
+      "checked_facts": [
+        "只改变下一期的扣款指令",
+        "不是对已付周期的退款指令",
+        "至少 24 小时",
+        "续费前 7 天",
+        "不会撤销那笔扣款",
+        "暂停工作区和关闭自动续费是两种不同的状态"
+      ]
+    },
+    {
+      "document_id": "service-zh:b05",
+      "title": "退款审核与到账（现行版）",
+      "origin": "Chinese rewrite of service_rules.v2 document \"refunds\" with added synthetic facts",
+      "checked_facts": [
+        "2026-07-01 及之后",
+        "60 天内",
+        "5 个工作日",
+        "approved",
+        "submitted_to_processor",
+        "completed",
+        "已扣金额减去已完成的退款",
+        "币种必须与原扣款一致",
+        "不得承诺"
+      ]
+    },
+    {
+      "document_id": "service-zh:b06",
+      "title": "退款政策（旧版）",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "2026-07-01 之前",
+        "扣款日期，而不是提出申请的日期",
+        "90 天内",
+        "10 个工作日"
+      ]
+    },
+    {
+      "document_id": "service-zh:b07",
+      "title": "企业合同条款优先",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "优先于通用政策",
+        "未使用的整月",
+        "回落到",
+        "助手看不到合同内容",
+        "客户经理核验"
+      ]
+    },
+    {
+      "document_id": "service-zh:b08",
+      "title": "发票开具",
+      "origin": "Chinese rewrite of service_rules.v2 document \"invoice\" with added synthetic facts",
+      "checked_facts": [
+        "是不同的记录",
+        "税务登记号",
+        "3 个工作日内开具",
+        "授权冻结不能作为开票依据",
+        "更正流程",
+        "已核验的账单联系人"
+      ]
+    },
+    {
+      "document_id": "service-zh:b09",
+      "title": "发票更正与红字发票",
+      "origin": "Chinese rewrite of service_rules.v2 document \"invoice-fix\" with added synthetic facts",
+      "checked_facts": [
+        "180 天内",
+        "原发票号保留",
+        "红字发票",
+        "不能证明银行已经退款",
+        "税务登记号",
+        "门户提交"
+      ]
+    },
+    {
+      "document_id": "service-zh:b10",
+      "title": "拒付争议与退款协调",
+      "origin": "Chinese rewrite of service_rules.v2 document \"dispute\" with added synthetic facts",
+      "checked_facts": [
+        "两条独立流程",
+        "协调冻结",
+        "举证期限为 7 天",
+        "并不等于商户退款获批",
+        "每笔 15 美元",
+        "由财务审核"
+      ]
+    },
+    {
+      "document_id": "service-zh:b11",
+      "title": "席位与计费数量",
+      "origin": "Chinese rewrite of service_rules.v2 document \"seats\" with added synthetic facts",
+      "checked_facts": [
+        "两个独立的动作",
+        "不算已占用的席位",
+        "立即生效，按当期剩余天数比例计费",
+        "下次续费时生效",
+        "不是令牌过期",
+        "删除审计记录不会释放席位"
+      ]
+    },
+    {
+      "document_id": "service-zh:b12",
+      "title": "套餐变更与按比例计费",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "升级套餐立即生效",
+        "当期剩余天数比例",
+        "下一个计费周期生效",
+        "不退差价",
+        "14 天试用期",
+        "不会改变续费日"
+      ]
+    },
+    {
+      "document_id": "service-zh:b13",
+      "title": "采购订单与银行转账",
+      "origin": "Chinese rewrite of service_rules.v2 document \"purchase-order\" with added synthetic facts",
+      "checked_facts": [
+        "不是付款证明",
+        "unmatched_funds",
+        "30 天内无人认领",
+        "未分配余额",
+        "不会自动用来购买更多席位"
+      ]
+    },
+    {
+      "document_id": "service-zh:b14",
+      "title": "优惠券、充值余额与抵扣",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "限用 1 张优惠券",
+        "不能与合同价叠加",
+        "按实付金额计算",
+        "24 个月",
+        "先扣充值余额",
+        "不可提现",
+        "未分配余额"
+      ]
+    },
+    {
+      "document_id": "service-zh:b15",
+      "title": "经销商代收的订阅",
+      "origin": "Chinese rewrite of service_rules.v2 document \"reseller\" with added synthetic facts",
+      "checked_facts": [
+        "billing_owner",
+        "不能更正经销商开出的发票",
+        "5 个工作日",
+        "确认参考号",
+        "三方批准"
+      ]
+    },
+    {
+      "document_id": "service-zh:b16",
+      "title": "逾期未付与服务暂停",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "7 天宽限期",
+        "第 8 天起工作区变为只读",
+        "第 30 天",
+        "1 个工作日内恢复",
+        "90 天后",
+        "不可恢复"
+      ]
+    },
+    {
+      "document_id": "service-zh:g01",
+      "title": "服务范围与角色分工",
+      "origin": "rewritten from demo seed knowledge",
+      "checked_facts": [
+        "服务协调",
+        "技术可靠性",
+        "收入与合规",
+        "不能查询订单系统或支付流水",
+        "物流配送、会员权益、营销活动"
+      ]
+    },
+    {
+      "document_id": "service-zh:g02",
+      "title": "人工交接摘要",
+      "origin": "Chinese rewrite of service_rules.v2 document \"handoff\" with added synthetic facts",
+      "checked_facts": [
+        "UTC 时间线",
+        "request_id",
+        "已申请退款",
+        "已批准退款",
+        "不会创建真实的工单",
+        "故障导致了扣款"
+      ]
+    },
+    {
+      "document_id": "service-zh:g03",
+      "title": "支持等级与响应时间",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "30 分钟内响应",
+        "7×24",
+        "4 小时内响应",
+        "1 个工作日内响应",
+        "9:00–18:00（UTC+8）",
+        "不等于问题解决的时间"
+      ]
+    },
+    {
+      "document_id": "service-zh:g04",
+      "title": "紧急访问与事件关闭",
+      "origin": "Chinese rewrite of service_rules.v2 document \"emergency\" with added synthetic facts",
+      "checked_facts": [
+        "事件编号",
+        "具名的审批人",
+        "最长 4 小时",
+        "必须重新审批",
+        "不会自动关闭财务争议"
+      ]
+    },
+    {
+      "document_id": "service-zh:g05",
+      "title": "审计留存与删除请求",
+      "origin": "Chinese rewrite of service_rules.v2 document \"retention\" with added synthetic facts",
+      "checked_facts": [
+        "audit_export",
+        "180 天",
+        "7 年",
+        "隐私审核",
+        "30 天内答复",
+        "范围声明"
+      ]
+    },
+    {
+      "document_id": "service-zh:g06",
+      "title": "投诉与敏感信息处理",
+      "origin": "new synthetic document",
+      "checked_facts": [
+        "2 个工作日内首次回复",
+        "完整卡号",
+        "短信验证码",
+        "提示对方撤回",
+        "不写入交接摘要"
+      ]
+    }
+  ]
+}
