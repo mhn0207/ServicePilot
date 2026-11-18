@@ -8,7 +8,7 @@ from collections import deque
 from contextlib import closing
 from datetime import datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import fakeredis.aioredis
 import httpx
@@ -479,6 +479,114 @@ def raw_message(index):
 
 
 @pytest.mark.asyncio
+async def test_failed_episodic_archive_is_retried_after_trimming(services):
+    memory, *_ = services
+    summarize = AsyncMock(return_value=text_response("本次归档摘要"))
+    memory._client = SimpleNamespace(messages=SimpleNamespace(create=summarize))
+    memory._model = "fake"
+    upsert = Mock(side_effect=[RuntimeError("Chroma unavailable"), None])
+    memory._episodic = SimpleNamespace(upsert=upsert)
+    memory.update_profile = AsyncMock()
+    key = memory._wm_key("u", "c")
+    await memory._redis.rpush(key, *(raw_message(i) for i in reversed(range(15))))
+
+    await memory.maintain("u", "c")
+    assert await memory._redis.llen(key) == 5
+    assert await memory._redis.get(memory._summary_key("u", "c")) == "本次归档摘要"
+    upsert.assert_called_once()
+
+    # Simulate another worker handling the next maintenance after the original exits.
+    restarted = MemoryManager.__new__(MemoryManager)
+    restarted._redis = memory._redis
+    restarted._episodic = memory._episodic
+    restarted.update_profile = AsyncMock()
+    await restarted.maintain("u", "c")
+    assert upsert.call_count == 2
+    first, retry = (call.kwargs for call in upsert.call_args_list)
+    assert retry["ids"] == first["ids"]
+    assert retry["documents"] == ["本次归档摘要"]
+    assert retry["metadatas"][0]["full_text"] == "\n".join(f"user: old-{i}" for i in range(10))
+    summarize.assert_awaited_once()
+    await restarted.maintain("u", "c")
+    assert upsert.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_episodic_archive_survives_lost_compression_commit_response(services, monkeypatch):
+    memory, *_ = services
+    summarize = AsyncMock(return_value=text_response("已提交的摘要"))
+    memory._client = SimpleNamespace(messages=SimpleNamespace(create=summarize))
+    memory._model = "fake"
+    memory._episodic = SimpleNamespace(upsert=Mock())
+    memory.update_profile = AsyncMock()
+    key = memory._wm_key("u", "c")
+    await memory._redis.rpush(key, *(raw_message(i) for i in reversed(range(15))))
+    pipeline = type(memory._redis.pipeline())
+    original_execute = pipeline.execute
+
+    async def lose_commit_response(pipe, *args, **kwargs):
+        is_watched_commit = pipe.watching
+        result = await original_execute(pipe, *args, **kwargs)
+        if is_watched_commit:
+            raise RedisConnectionError("lost EXEC response after commit")
+        return result
+
+    with monkeypatch.context() as patch:
+        patch.setattr(pipeline, "execute", lose_commit_response)
+        with pytest.raises(RedisConnectionError, match="lost EXEC response"):
+            await memory.maintain("u", "c")
+    assert await memory._redis.llen(key) == 5
+    memory._episodic.upsert.assert_not_called()
+
+    await memory.maintain("u", "c")
+    memory._episodic.upsert.assert_called_once()
+    assert memory._episodic.upsert.call_args.kwargs["documents"] == ["已提交的摘要"]
+    summarize.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_episodic_archive_can_replay_after_cancellation_before_ack(services, monkeypatch):
+    memory, *_ = services
+    memory._client = SimpleNamespace(messages=SimpleNamespace(create=AsyncMock(
+        return_value=text_response("已写入的摘要"))))
+    memory._model = "fake"
+    memory.update_profile = AsyncMock()
+    stored_documents = {}
+
+    def upsert(*, ids, documents, metadatas):
+        stored_documents[ids[0]] = documents[0]
+
+    memory._episodic = SimpleNamespace(upsert=Mock(side_effect=upsert))
+    await memory._redis.rpush(memory._wm_key("u", "c"),
+                             *(raw_message(i) for i in reversed(range(15))))
+    before_ack = asyncio.Event()
+    original_lrem = memory._redis.lrem
+
+    async def block_ack(*args):
+        before_ack.set()
+        await asyncio.Future()
+
+    monkeypatch.setattr(memory._redis, "lrem", block_ack)
+    first = asyncio.create_task(memory.maintain("u", "c"))
+    try:
+        await asyncio.wait_for(before_ack.wait(), 1)
+        assert list(stored_documents.values()) == ["已写入的摘要"]
+        # A competing maintenance cannot replay while the first writer owns the archive lease.
+        await memory.maintain("u", "c")
+        memory._episodic.upsert.assert_called_once()
+    finally:
+        first.cancel()
+        await asyncio.gather(first, return_exceptions=True)
+        monkeypatch.setattr(memory._redis, "lrem", original_lrem)
+
+    await memory.maintain("u", "c")
+    assert memory._episodic.upsert.call_count == 2
+    assert list(stored_documents.values()) == ["已写入的摘要"]
+    await memory.maintain("u", "c")
+    assert memory._episodic.upsert.call_count == 2
+
+
+@pytest.mark.asyncio
 async def test_background_compression_does_not_block_chat_or_drop_new_messages(services):
     memory, orch, model, http = services
     started, finish = asyncio.Event(), asyncio.Event()
@@ -520,14 +628,14 @@ async def test_concurrent_compression_commits_only_one_snapshot(services):
     async def summarize(**kwargs):
         nonlocal count
         count += 1
-        if count == 2:
+        attempt = count
+        if attempt == 2:
             started.set()
         await finish.wait()
-        return text_response("有效摘要")
+        return text_response(f"快照摘要 {attempt}")
 
     memory._client = SimpleNamespace(messages=SimpleNamespace(create=summarize))
     memory._model = "fake"
-    memory._merge_summary = AsyncMock(return_value="有效摘要")
     memory._store_episodic = AsyncMock()
     key = memory._wm_key("u", "c")
     await memory._redis.rpush(key, *(raw_message(i) for i in reversed(range(25))))
@@ -538,6 +646,9 @@ async def test_concurrent_compression_commits_only_one_snapshot(services):
         await asyncio.gather(*tasks)
         assert await memory._redis.llen(key) == 5
         memory._store_episodic.assert_awaited_once()
+        committed_summary = await memory._redis.get(memory._summary_key("u", "c"))
+        assert committed_summary in {"快照摘要 1", "快照摘要 2"}
+        assert memory._store_episodic.await_args.args[-1] == committed_summary
     finally:
         finish.set()
         await asyncio.gather(*tasks, return_exceptions=True)

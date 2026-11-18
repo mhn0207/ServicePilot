@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 import chromadb
 import redis.asyncio as redis
@@ -31,7 +32,7 @@ from anthropic import AsyncAnthropic
 
 from core.llm_utils import create_message, extract_text_content
 from core.performance import record_event
-from core.concurrency import KeyedLocks, redis_lease
+from core.concurrency import ConversationBusyError, KeyedLocks, redis_lease
 from core.storage_health import ChromaHealthProbe
 
 logger = logging.getLogger(__name__)
@@ -359,15 +360,22 @@ class MemoryManager:
     # ── 压缩（防止 context 爆炸）─────────────────────────────────────────────
 
     async def _compress(self, user_id: str, conv_id: str) -> None:
-        """
-        工作记忆压缩：
-          1. 用 LLM 对旧消息生成摘要
-          2. 摘要存 Redis（覆盖旧摘要）
-          3. 旧消息存入情景记忆（ChromaDB）供跨会话检索
-          4. 工作记忆只保留最近 5 条
-        """
+        """压缩工作记忆，并补写此前已裁剪但尚未归档的内容。"""
         key = self._wm_key(user_id, conv_id)
         skey = self._summary_key(user_id, conv_id)
+        conversation_id = self._conversation_id(user_id, conv_id)
+        pending_key = f"episodic_pending_v1:{conversation_id}"
+        archive_lock = f"lock:episodic:{conversation_id}"
+        if await self._redis.exists(pending_key):
+            try:
+                async with redis_lease(self._redis, archive_lock, wait_s=0):
+                    # 每次维护限制补写量，避免积压占满后台 worker。
+                    for pending in await self._redis.lrange(pending_key, 0, 3):
+                        if not await self._archive_pending(user_id, conv_id, pending_key, pending):
+                            break
+            except ConversationBusyError:
+                return
+
         # 必须读取完整快照，不能只压缩最近 WORKING_MAX 条后删除整段列表。
         async with self._redis.pipeline(transaction=True) as pipe:
             pipe.lrange(key, 0, -1)
@@ -395,27 +403,46 @@ class MemoryManager:
             return
 
         new_summary = await self._merge_summary(old_summary, summary)
-        # WATCH/MULTI 同时保护列表和摘要；并发新增的消息保留在列表头部。
-        for _ in range(3):
-            async with self._redis.pipeline(transaction=True) as pipe:
-                try:
-                    await pipe.watch(key, skey)
-                    current = await pipe.lrange(key, 0, -1)
-                    current_summary = await pipe.get(skey) or ""
-                    if len(current) < len(snapshot) or current[-len(snapshot):] != snapshot or current_summary != old_summary:
-                        return  # 其他压缩任务已更新快照，不再覆盖它。
-                    keep_count = len(current) - len(snapshot) + 5
-                    pipe.multi()
-                    pipe.setex(skey, 86400, new_summary)
-                    pipe.ltrim(key, 0, keep_count - 1)
-                    pipe.expire(key, 86400)
-                    await pipe.execute()
+        # 唯一记录 ID 确保确认时只移除本次尝试的记录，即使两次快照文本相同。
+        pending = json.dumps([uuid4().hex, text, summary])
+        try:
+            # 与补写互斥，确保同一会话的首次写入和恢复按提交顺序执行。
+            async with redis_lease(self._redis, archive_lock, wait_s=0):
+                # WATCH/MULTI 保留摘要生成期间和提交期间新到达的消息。
+                for _ in range(3):
+                    async with self._redis.pipeline(transaction=True) as pipe:
+                        try:
+                            await pipe.watch(key, skey)
+                            current = await pipe.lrange(key, 0, -1)
+                            current_summary = await pipe.get(skey) or ""
+                            if len(current) < len(snapshot) or current[-len(snapshot):] != snapshot or current_summary != old_summary:
+                                return  # 其他压缩任务已更新快照，不再覆盖它。
+                            keep_count = len(current) - len(snapshot) + 5
+                            pipe.multi()
+                            pipe.setex(skey, 86400, new_summary)
+                            pipe.ltrim(key, 0, keep_count - 1)
+                            pipe.expire(key, 86400)
+                            pipe.rpush(pending_key, pending)
+                            *_, pending_count = await pipe.execute()
+                        except WatchError:
+                            continue
                     logger.info("工作记忆压缩完成: %s/%s", user_id, conv_id)
-                    await self._store_episodic(user_id, conv_id, text, summary)
+                    if pending_count == 1:
+                        await self._archive_pending(user_id, conv_id, pending_key, pending)
                     return
-                except WatchError:
-                    continue
+        except ConversationBusyError:
+            return
         logger.info("会话持续并发写入，本次压缩延期")
+
+    async def _archive_pending(self, user_id: str, conv_id: str, key: str, pending: str) -> bool:
+        _, text, summary = json.loads(pending)
+        try:
+            await self._store_episodic(user_id, conv_id, text, summary)
+        except Exception as ex:
+            logger.warning("存储情景记忆失败，保留待归档记录: %s", type(ex).__name__)
+            return False
+        await self._redis.lrem(key, 1, pending)
+        return True
 
     @staticmethod
     def _messages_from_raw(raws: List[str]) -> List[Message]:
@@ -463,24 +490,20 @@ class MemoryManager:
 
     async def _store_episodic(self, user_id: str, conv_id: str, text: str, summary: str) -> None:
         """将压缩后的对话片段存入情景记忆。ChromaDB 内置 embedding，不依赖外部 API。"""
-        try:
-            user_id = self._safe_text(user_id)
-            conv_id = self._safe_text(conv_id)
-            text = self._safe_text(text)
-            summary = self._safe_text(summary)
-            digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
-            doc_id = hashlib.md5(f"{user_id}:{conv_id}:{digest}".encode("utf-8")).hexdigest()
-            write_fn = getattr(self._episodic, "upsert", None) or self._episodic.add
-            # 直接传 documents，ChromaDB 内置模型自动生成 embedding
-            await asyncio.to_thread(
-                write_fn,
-                ids=[doc_id],
-                documents=[summary],
-                metadatas=[{"user_id": user_id, "conv_id": conv_id,
-                            "ts": datetime.now().isoformat(), "full_text": self._safe_text(text[:500])}],
-            )
-        except Exception as ex:
-            logger.warning(f"存储情景记忆失败: {ex}")
+        user_id = self._safe_text(user_id)
+        conv_id = self._safe_text(conv_id)
+        text = self._safe_text(text)
+        summary = self._safe_text(summary)
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+        doc_id = hashlib.md5(f"{user_id}:{conv_id}:{digest}".encode("utf-8")).hexdigest()
+        # 直接传 documents，ChromaDB 内置模型自动生成 embedding。
+        await asyncio.to_thread(
+            self._episodic.upsert,
+            ids=[doc_id],
+            documents=[summary],
+            metadatas=[{"user_id": user_id, "conv_id": conv_id,
+                        "ts": datetime.now().isoformat(), "full_text": self._safe_text(text[:500])}],
+        )
 
     async def _get_profile(self, user_id: str) -> Dict[str, Any]:
         """获取用户画像（取最新一条）。"""
