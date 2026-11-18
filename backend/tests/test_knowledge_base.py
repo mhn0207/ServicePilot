@@ -121,6 +121,20 @@ def test_markdown_sections_preserve_nested_lists_and_fences(fence):
     assert all(" > 这行是代码注释]" not in chunk for chunk in chunks)
 
 
+@pytest.mark.parametrize(("checklist", "next_indent"), [
+    ("- 恢复步骤\n  # 网关诊断\n  使用备用地址。\n", ""),
+    ("1. 恢复步骤\n\n   # 网关诊断\n   使用备用地址。\n", "  "),
+    ("- 恢复步骤\n  - # 网关诊断\n    使用备用地址。\n", ""),
+])
+def test_markdown_list_headings_stay_inside_the_list(checklist, next_indent):
+    text = f"# 手册\n\n{checklist}\n{next_indent}## 核验结果\n查询状态。\n"
+    chunks = chunk_text(text, strategy="markdown-v1")
+
+    assert [chunk.splitlines()[0] for chunk in chunks] == ["[章节: 手册]", "[章节: 手册 > 核验结果]"]
+    assert checklist in chunks[0]
+    assert "查询状态。" in chunks[1]
+
+
 @pytest.mark.parametrize(("list_prefix", "fence"), [
     ("- ", "```"),
     ("  10. ", "~~~"),

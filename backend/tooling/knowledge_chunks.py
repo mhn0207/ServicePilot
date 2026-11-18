@@ -122,16 +122,19 @@ def _markdown_sections(text: str) -> Iterator[tuple[list[str], list[str | _Fence
     line = next(lines, None)
     while line is not None:
         syntax = line.rstrip("\r\n")
-        heading = _HEADING.fullmatch(syntax)
         expanded = syntax.expandtabs(4)
         indent = len(expanded) - len(expanded.lstrip(" "))
+        heading = None
         fence = None
         if expanded.strip():
-            # 围栏可在列表标记后开启，也可在同一列表项的缩进续行开启。
             while list_indents and indent < list_indents[-1]:
                 list_indents.pop()
             list_indent = list_indents[-1] if list_indents else 0
+            # 只有文档级标题才能更新章节路径，列表续行中的标题留在列表内。
+            if not list_indents:
+                heading = _HEADING.fullmatch(syntax)
             if not heading and indent <= list_indent + 3:
+                # 围栏可在列表标记后开启，也可在同一列表项的缩进续行开启。
                 offset = indent
                 if not _THEMATIC_BREAK.fullmatch(expanded, offset):
                     while item := _LIST_PREFIX.match(expanded, offset):
