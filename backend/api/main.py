@@ -34,6 +34,7 @@ from agents.sandbox_tools import COMMANDS, build_sandbox_tools, run_sandbox_comm
 from core.chat_progress import collect_chat_progress, emit_chat_stage
 from core.performance import collect_performance, measure_stage, performance_snapshot
 from core.request_budget import POLICY, chat_budget
+from tooling.knowledge_chunks import MARKDOWN_CHUNKING, ChunkStrategy
 from tooling.sandbox_store import SandboxStore
 
 load_dotenv(pathlib.Path(_ROOT) / '.env')
@@ -658,6 +659,7 @@ class DocInput(BaseModel):
     title:   str
     content: str
     document_id: Optional[str] = None
+    chunk_strategy: ChunkStrategy | None = None
 
 
 class BatchDocInput(BaseModel):
@@ -711,7 +713,7 @@ async def add_knowledge(body: BatchDocInput):
     """
     批量导入文档到知识库。
 
-    文档会自动切片（每片 500 字）并存入 ChromaDB，ChromaDB 内置 Embedding 模型自动向量化。
+    文档会切成至多 500 字的片段，可指定 chunk_strategy。ChromaDB 内置模型自动向量化。
 
     示例请求体：
     ```json
@@ -745,8 +747,8 @@ async def upload_knowledge(file: UploadFile = File(...)):
     上传文件导入知识库。
 
     支持格式：
-    - `.txt` / `.md`：整个文件作为一篇文档，文件名作为标题
-    - `.json`：JSON 数组格式 `[{"title": "...", "content": "..."}, ...]`
+    - `.txt` / `.md`：整个文件作为一篇文档，文件名作为标题。Markdown 自动使用 markdown-v1
+    - `.json`：JSON 数组格式 `[{"title": "...", "content": "..."}, ...]`，可按文档指定 chunk_strategy
 
     文件大小限制：10MB
     """
@@ -756,16 +758,15 @@ async def upload_knowledge(file: UploadFile = File(...)):
     kb = tool.handler.__self__
 
     filename = file.filename or "unknown"
-    if pathlib.Path(filename).suffix.lower() not in {".txt", ".md", ".json"}:
+    suffix = pathlib.Path(filename).suffix.lower()
+    if suffix not in {".txt", ".md", ".json"}:
         raise HTTPException(400, "仅支持 .txt、.md、.json 文件")
     content = await file.read(10 * 1024 * 1024 + 1)
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(413, "文件大小超过 10MB 限制")
 
     text = content.decode("utf-8", errors="ignore")
-    filename = file.filename or "unknown"
-
-    if filename.lower().endswith(".json"):
+    if suffix == ".json":
         import json as _json
         try:
             docs = _json.loads(text)
@@ -777,12 +778,14 @@ async def upload_knowledge(file: UploadFile = File(...)):
         # txt / md：整个文件作为一篇文档
         title = filename.rsplit(".", 1)[0] if "." in filename else filename
         docs = [{"title": title, "content": text}]
+        if suffix == ".md":
+            docs[0]["chunk_strategy"] = MARKDOWN_CHUNKING
 
     try:
         validated = [DocInput.model_validate(doc).model_dump(exclude_none=True) for doc in docs]
         count = await kb.add_documents_async(validated)
     except ValueError as ex:
-        raise HTTPException(400, "文档格式不正确：需要非空 title、content 和可选 document_id") from ex
+        raise HTTPException(400, "文档格式不正确：需要非空 title、content，可选 document_id、chunk_strategy") from ex
     finally:
         _tool_manager.invalidate_cache("knowledge_search")
         if _eval_tool_manager is not None:

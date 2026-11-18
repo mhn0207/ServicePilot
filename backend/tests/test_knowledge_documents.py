@@ -36,10 +36,12 @@ def make_kb():
 
 def test_list_details_order_and_delete_preserve_other_document():
     kb = make_kb()
+    for _, meta in kb._collection.rows.values():
+        meta.pop('chunk_strategy')
     listed = kb.list_documents()
     assert len(listed['documents']) == 2
     a = next(d for d in listed['documents'] if d['title'] == '甲')
-    assert a['chunk_count'] == 3 and a['deletable']
+    assert a['chunk_count'] == 3 and a['deletable'] and a['chunk_strategy'] == 'legacy'
     detail = kb.get_document(a['document_id'])
     assert [c['chunk_index'] for c in detail['chunks']] == [0, 1, 2]
     assert all(a['version'] in c['chunk_id'] for c in detail['chunks'])
@@ -96,6 +98,48 @@ def api_kb(monkeypatch):
     monkeypatch.setattr(api, '_tool_manager', manager)
     monkeypatch.setattr(api, '_eval_tool_manager', evaluation)
     return kb, manager, evaluation
+
+
+@pytest.mark.asyncio
+async def test_markdown_upload_and_json_import_preserve_legacy_identity(api_kb):
+    from evaluation.retrieval import build_snapshot
+
+    kb, manager, evaluation = api_kb
+    text = "# 账单\n\n- 核验订单\n  - 保存流水编号\n"
+    docs = [
+        {"title": "清单", "content": text},
+        {"title": "清单", "content": text, "chunk_strategy": "markdown-v1"},
+    ]
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=api.app), base_url='http://test') as client:
+        headers = {'Authorization': 'Bearer ' + 'a' * 24}
+        assert (await client.post('/knowledge/upload', headers=headers,
+                                  files={'file': ('清单.txt', text.encode(), 'text/plain')})).status_code == 200
+        assert (await client.post('/knowledge/upload', headers=headers,
+                                  files={'file': ('清单.MD', text.encode(), 'text/markdown')})).status_code == 200
+        assert (await client.post('/knowledge/add', headers=headers, json={'documents': [docs[1]]})).status_code == 200
+        assert (await client.post('/knowledge/upload', headers=headers, files={
+            'file': ('清单.json', json.dumps(docs).encode(), 'application/json')
+        })).status_code == 200
+        invalid = dict(docs[0], chunk_strategy="unknown")
+        assert (await client.post('/knowledge/add', headers=headers, json={'documents': [invalid]})).status_code == 422
+        listing = (await client.get('/knowledge/documents', headers=headers)).json()['documents']
+        imported = [item for item in listing if item['title'] == "清单"]
+        assert {item['chunk_strategy'] for item in imported} == {"legacy", "markdown-v1"}
+        identities = {item['document_id'] for item in imported}
+        snapshot = build_snapshot(docs)
+        assert identities == {c.document_id for c in snapshot.chunks}
+        for chunk in snapshot.chunks:
+            detail = (await client.get('/knowledge/documents/' + chunk.document_id, headers=headers)).json()
+            assert detail['deletable']
+            assert detail['chunks'] == [dict(chunk_index=0, chunk_id=chunk.chunk_id, content=chunk.content)]
+        markdown = next(c for c in snapshot.chunks if c.content.startswith("[章节: "))
+        response = await client.delete('/knowledge/documents/' + markdown.document_id,
+                                       params={'expected_version': markdown.version}, headers=headers)
+        assert response.status_code == 200 and response.json()['deleted_chunks'] == 1
+        legacy = next(c for c in snapshot.chunks if c.content == text)
+        assert kb.get_document(legacy.document_id)['chunks'][0]['chunk_id'] == legacy.chunk_id
+    manager.invalidate_cache.assert_called_with('knowledge_search')
+    evaluation.invalidate_cache.assert_called_with('knowledge_search')
 
 
 @pytest.mark.asyncio

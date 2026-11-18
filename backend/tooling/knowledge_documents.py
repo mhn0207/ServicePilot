@@ -5,7 +5,7 @@ legacy or partially written records remain visible but cannot be deleted here.
 """
 import re
 
-from tooling.knowledge_chunks import evidence_id
+from tooling.knowledge_chunks import LEGACY_CHUNKING, MARKDOWN_CHUNKING, evidence_id
 
 
 class DocumentMissing(LookupError):
@@ -45,7 +45,11 @@ class KnowledgeDocuments:
         version = next(iter(versions)) if len(versions) == 1 else None
         indices = [m.get('chunk_index') for _, m, _ in rows]
         titles = [m.get('title') for _, m, _ in rows]
-        complete = (bool(rows) and version is not None and
+        strategies = [m.get('chunk_strategy', LEGACY_CHUNKING) for _, m, _ in rows]
+        strategy = strategies[0] if strategies and all(s == strategies[0] for s in strategies) else None
+        if strategy not in (LEGACY_CHUNKING, MARKDOWN_CHUNKING):
+            strategy = None
+        complete = (bool(rows) and version is not None and strategy is not None and
                     all(isinstance(t, str) and t.strip() and t == titles[0] for t in titles) and
                     all(type(i) is int and i >= 0 for i in indices) and
                     sorted(indices) == list(range(len(rows))) and
@@ -54,7 +58,7 @@ class KnowledgeDocuments:
                         for storage_id, m, _ in rows))
         title = next((t for t in titles if isinstance(t, str) and t.strip()), '未命名资料')
         return dict(document_id=document_id, title=title, version=version,
-                    chunk_count=len(rows), deletable=bool(complete),
+                    chunk_strategy=strategy, chunk_count=len(rows), deletable=bool(complete),
                     restriction='' if complete else '身份、版本或片段信息不完整，仅可查看，请核验后重新导入。')
 
     def list_documents(self):

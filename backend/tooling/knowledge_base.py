@@ -12,7 +12,6 @@ ChromaDB 在这里的角色：
   两者是不同的 collection，互不干扰。
 """
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -20,7 +19,9 @@ import threading
 from typing import Any, Dict, List, Optional
 
 import chromadb
-from tooling.knowledge_chunks import chunk_text, content_version, document_identity, evidence_id
+from tooling.knowledge_chunks import (
+    LEGACY_CHUNKING, ChunkStrategy, chunk_text, content_version, document_identity, evidence_id,
+)
 from tooling.retrieval_ranking import RetrievalRanking
 from core.storage_health import ChromaHealthProbe
 from tooling.knowledge_documents import KnowledgeDocuments
@@ -93,7 +94,7 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
         批量导入文档到知识库。
 
         documents 格式: [{"title": "...", "content": "..."}, ...]
-        长文档会自动切片（每片 500 字）。
+        长文档会自动切片（每片至多 500 字），可按文档指定 chunk_strategy。
         """
         # 相同文档身份在同一批次只采用最后一个版本，避免重复 ID。
         prepared = {}
@@ -106,36 +107,38 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
             explicit_id = doc.get("document_id")
             if explicit_id is not None and (not isinstance(explicit_id, str) or not explicit_id.strip()):
                 raise ValueError("document_id 必须是非空字符串")
-            identity = document_identity(title, explicit_id)
-            if not isinstance(identity, str):
-                raise ValueError("document_id 必须是字符串")
-            prepared[identity] = (title, content, bool(doc.get("document_id")))
+            strategy = doc.get("chunk_strategy", LEGACY_CHUNKING)
+            identity = document_identity(title, explicit_id, strategy=strategy)
+            prepared[identity] = (title, content, strategy)
 
         count = 0
         with self._write_lock:
-            for identity, (title, content, explicit) in prepared.items():
-                document_id = hashlib.sha256(identity.encode()).hexdigest()
-                chunks = self._chunk_text(content, chunk_size=500)
+            for identity, (title, content, strategy) in prepared.items():
+                document_id = content_version(identity)
+                chunks = self._chunk_text(content, strategy=strategy)
                 version = content_version(content)
                 ids = [f"{document_id}:{i}" for i in range(len(chunks))]
                 existing = self._collection.get(where={"document_id": document_id}, include=["metadatas"])
                 old_ids = set(existing["ids"])
-                # 仅迁移归属可验证的旧身份；旧显式 ID 与 title: 前缀冲突时保留旧记录供核验。
-                kind, value = json.loads(identity)
-                legacy_identity = value if explicit else f"title:{title}"
-                if not explicit or not value.startswith("title:"):
-                    legacy_id = hashlib.sha256(legacy_identity.encode()).hexdigest()
-                    previous = self._collection.get(where={"document_id": legacy_id}, include=["metadatas"])
-                    old_ids.update(i for i, meta in zip(previous["ids"], previous["metadatas"])
-                                   if (meta or {}).get("title") == title)
-                if not explicit:
-                    # 兼容旧版只有 title/chunk_index 元数据的片段。
-                    legacy = self._collection.get(where={"title": title}, include=["metadatas"])
-                    old_ids.update(i for i, meta in zip(legacy["ids"], legacy["metadatas"])
-                                   if not (meta or {}).get("document_id"))
+                if strategy == LEGACY_CHUNKING:
+                    # 旧片段只归入 legacy 命名空间，并且必须能验证归属。
+                    kind, value = json.loads(identity)
+                    explicit = kind == "explicit"
+                    if not explicit or not value.startswith("title:"):
+                        legacy_id = content_version(value if explicit else f"title:{title}")
+                        previous = self._collection.get(where={"document_id": legacy_id}, include=["metadatas"])
+                        old_ids.update(i for i, meta in zip(previous["ids"], previous["metadatas"])
+                                       if meta and meta.get("title") == title
+                                       and meta.get("chunk_strategy", LEGACY_CHUNKING) == LEGACY_CHUNKING)
+                    if not explicit:
+                        # 兼容旧版只有 title/chunk_index 元数据的片段。
+                        legacy = self._collection.get(where={"title": title}, include=["metadatas"])
+                        old_ids.update(i for i, meta in zip(legacy["ids"], legacy["metadatas"])
+                                       if not (meta or {}).get("document_id"))
                 self._collection.upsert(ids=ids, documents=chunks, metadatas=[
                     {"title": title, "document_id": document_id, "version": version,
-                     "chunk_index": i, "total_chunks": len(chunks)} for i in range(len(chunks))
+                     "chunk_strategy": strategy, "chunk_index": i, "total_chunks": len(chunks)}
+                    for i in range(len(chunks))
                 ])
                 stale = old_ids - set(ids)
                 if stale:
@@ -238,8 +241,9 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
 
     # ── 内部方法 ──────────────────────────────────────────────────────────────
 
-    def _chunk_text(self, text: str, chunk_size: int = 500) -> List[str]:
-        return chunk_text(text, chunk_size)
+    def _chunk_text(self, text: str, chunk_size: int = 500, *,
+                    strategy: ChunkStrategy = LEGACY_CHUNKING) -> List[str]:
+        return chunk_text(text, chunk_size, strategy=strategy)
 
     def _load_default_docs(self) -> None:
         """导入企业服务协同示例知识（仅用于开发演示）。"""

@@ -11,7 +11,9 @@
       <ul class="document-list">
         <li v-for="doc in state.documents" :key="doc.document_id">
           <button class="document-title" :disabled="state.loading || state.deleting" @click="controller.select(doc)">{{ doc.title }}</button>
-          <span>{{ doc.chunk_count }} 个片段</span><small>版本 {{ doc.version ? doc.version.slice(0, 12) : '待核验' }}</small>
+          <span>{{ doc.chunk_count }} 个片段</span>
+          <small v-if="doc.chunk_strategy">{{ strategyLabel(doc.chunk_strategy) }}</small>
+          <small>版本 {{ doc.version ? doc.version.slice(0, 12) : '待核验' }}</small>
           <span v-if="!doc.deletable">仅可查看</span>
         </li>
       </ul>
@@ -21,6 +23,7 @@
       <p v-if="state.detailLoading" role="status">正在读取片段…</p><p v-if="state.detailError" role="alert">{{ state.detailError }}</p>
       <section v-if="state.detail" class="document-detail" aria-label="文档片段">
         <h3>{{ state.detail.title }}</h3><p>文档 ID：{{ state.detail.document_id }}</p><p>内容版本：{{ state.detail.version || '待核验' }}</p>
+        <p v-if="state.detail.chunk_strategy">切块模式：{{ strategyLabel(state.detail.chunk_strategy) }}</p>
         <p v-if="!state.detail.deletable">{{ state.detail.restriction }}</p>
         <article v-for="(chunk, index) in state.detail.chunks" :key="index"><h4>片段 {{ chunk.chunk_index == null ? '待核验' : chunk.chunk_index + 1 }}</h4>
           <pre>{{ chunk.content }}</pre><small>证据 ID：{{ chunk.chunk_id || '待核验' }}</small></article>
@@ -41,6 +44,7 @@ import { createDocumentState, createKnowledgeDocuments } from '../lib/knowledgeD
 const props=defineProps({settings:{type:Object,required:true},revision:{type:Number,default:0}})
 const emit=defineEmits(['changed','access'])
 const state=reactive(createDocumentState())
+const strategyLabel = strategy => strategy === 'markdown-v1' ? 'Markdown' : '普通切块'
 watch(()=>state.access,value=>emit('access',value),{immediate:true})
 const controller=createKnowledgeDocuments(props.settings,state,()=>emit('changed'))
 watch(()=>[props.settings.endpoint,props.settings.userId,props.settings.pythonToken,props.revision],()=>{controller.invalidate();controller.load()})

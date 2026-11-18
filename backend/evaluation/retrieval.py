@@ -5,7 +5,9 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from tooling.knowledge_chunks import chunk_text, content_version, document_identity, evidence_id
+from tooling.knowledge_chunks import (
+    LEGACY_CHUNKING, ChunkStrategy, chunk_text, content_version, document_identity, evidence_id,
+)
 
 PROTOCOL = "rag-evidence-v1"
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -26,6 +28,9 @@ class Document(StrictModel):
     title: RawText
     content: RawText
     document_id: RawText | None = None
+    # 旧快照的序列化形状参与知识哈希，legacy 字段必须省略。
+    chunk_strategy: ChunkStrategy = Field(default=LEGACY_CHUNKING,
+                                          exclude_if=lambda value: value == LEGACY_CHUNKING)
 
 
 class SnapshotChunk(StrictModel):
@@ -48,21 +53,21 @@ class Snapshot(StrictModel):
 def build_snapshot(documents: list[dict]) -> Snapshot:
     """固定原文构建快照；顺序无关，重复身份拒绝，绝不读取本机已有库。"""
     docs = [Document.model_validate(doc) for doc in documents]
-    docs.sort(key=lambda d: document_identity(d.title, d.document_id))
+    identified = [(document_identity(d.title, d.document_id, strategy=d.chunk_strategy), d) for d in docs]
+    identified.sort(key=lambda entry: entry[0])
     chunks, identities = [], set()
-    for doc in docs:
-        identity = document_identity(doc.title, doc.document_id)
+    for identity, doc in identified:
         if identity in identities:
             raise ValueError("重复文档身份")
         identities.add(identity)
         document_id = content_version(identity)
         version = content_version(doc.content)
-        for index, content in enumerate(chunk_text(doc.content)):
+        for index, content in enumerate(chunk_text(doc.content, strategy=doc.chunk_strategy)):
             chunks.append(SnapshotChunk(chunk_id=evidence_id(document_id, version, index),
                                         document_id=document_id, version=version, chunk_index=index,
                                         title=doc.title, content=content))
     payload = {"protocol_version": "knowledge-snapshot-v1", "chunk_size": 500,
-               "documents": [d.model_dump() for d in docs],
+               "documents": [d.model_dump() for _, d in identified],
                "chunks": [c.model_dump() for c in sorted(chunks, key=lambda c: c.chunk_id)]}
     return Snapshot(**payload, knowledge_hash=canonical_hash(payload))
 
