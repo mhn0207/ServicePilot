@@ -184,12 +184,13 @@ python -X utf8 scripts/evaluate_agents.py --run-id example-agent-dev
 | 英语合成规则 `suite.v2.json` | 24 篇 / 72 片；40 dev、20 validation | 虚构企业规则；36/18 条正向题 |
 | `public_zh.v1` | 12 篇短摘要 / 12 片；16 dev、8 validation | GitHub、阿里云与 Stripe 来源；验证正向题 7 条，按供应商分组 |
 | `public_zh_hard.v1` | Redis 资料整理 6 篇 / 12 片；两个 split 各 15 题 | 24 条正向题；来源与语义标注待人工核验，未运行正式策略/生成实验 |
+| `public_zh_expanded.v1` | 84 篇 / 120 片；沿用 `public_zh.v1` 的 16 dev、8 validation | 新增 72 片合成业务背景与 36 片定向干扰，独立人工复核待完成 |
 
 冻结身份校验只保证数据一致，不证明来源现行有效、语义标注正确或人工独立性。中文资料与初始题目由 AI 整理；`public_zh.v1` 的展示标注获维护者认可，不等于逐一审计源网页或校准模型答案。hard 集人工字段仍为空，不覆盖旧集。
 
 ### 本地检索记录
 
-以下为维护者本地报告摘要，原始运行产物未随仓库分发。固定 MiniLM 缓存、Top-K=3、预算各 20、bypass；每个 split 单次运行，不含建库，也不是生产尾延迟测试。
+以下为维护者本地报告摘要，原始运行产物未随仓库分发。固定 MiniLM 缓存、Top-K=3、预算各 20、bypass。扩展池的两个 split 各运行两轮，两轮逐题评分一致。
 
 | 数据 / split | 正向分母 | A / B 证据 Recall@3 | 判断 |
 | --- | --- | --- | --- |
@@ -197,8 +198,10 @@ python -X utf8 scripts/evaluate_agents.py --run-id example-agent-dev
 | 英语 validation | 18 | 1.0 / 1.0 | 按预先规则保留较简单 A |
 | 中文短摘要 dev | 16 | 0.6875 / 1.0 | 差异集中在少量资料主题 |
 | 中文短摘要 validation | 7 | 0.9286 / 1.0 | 一题造成主要差异，不推导稳定或大库收益 |
+| 中文扩展池 dev | 16 | 0.5625 / 0.6875 | B 新找回两题的证据 |
+| 中文扩展池 validation | 7 | 0.9286 / 0.9286 | 主指标持平 |
 
-中文候选池仅 12 片，主要体现 Top-3 排序，不能据此证明大规模候选召回。两类实验都没有据验证结果调生产默认策略。C/D 真实收益、完整中文回答指标和独立人工校准仍未建立。
+用项目虚拟环境运行 `scripts/freeze_public_zh_expanded.py` 可以核对衍生冻结文件，加 `--write` 可以重新生成。策略 CLI 的 `--suite` 指向 `evaluation/corpora/public_zh_expanded.v1/suite.json` 即可复跑。先核对漏掉的正例是否进入融合前候选，再决定是否测 C/D。报告仅支持本地小样本离线检索结论。
 
 ### 回答与系统验证
 

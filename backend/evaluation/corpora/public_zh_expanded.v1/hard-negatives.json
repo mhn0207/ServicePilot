@@ -1,0 +1,334 @@
+{
+  "review_status": "AI_AUTHORED_SCOPE_REVIEW_PENDING_INDEPENDENT_HUMAN_REVIEW",
+  "hard_negatives": [
+    {
+      "document_id": "public-zh-expanded:gateway-budget-403",
+      "chunk_id": "111a37db369950f86accc277b30533d1ea980558c465fffbd84c3fac53991ce5:1cbfb09c8b04643567cc19154b455755879d5a50384c50556e9d8d4f5949db07:0",
+      "case_ids": [
+        "pubzh-001"
+      ],
+      "scope": "澄屿 API 网关 · 按月调用套餐",
+      "reason": "状态码和余额相同，月度购买额度的恢复条件无法回答 GitHub 主限流窗口。"
+    },
+    {
+      "document_id": "public-zh-expanded:hook-quota-429",
+      "chunk_id": "02bc96d53882802e200934edd2d0617e0176a6879b86c6712d0fe4e5a611396e:132b5f73e912b62d81fe0512703ace98b056c417479117da40aab90ed505ee24:0",
+      "case_ids": [
+        "pubzh-001"
+      ],
+      "scope": "澄屿 Webhook 网关 · 单接收端并发槽位",
+      "reason": "限流字段重合，但它控制投递并发，等待单位和配额维度均不同。"
+    },
+    {
+      "document_id": "public-zh-expanded:restricted-mirror-404",
+      "chunk_id": "31f546737e0c0469e5f17bb76979535920e2bc0056358e33316f254f6cf6e76f:5e6311309843d8a75cc6c0705c4edfd8e32c335d2e015eb3eeacf8d9eefe75a0:0",
+      "case_ids": [
+        "pubzh-002",
+        "pubzh-006"
+      ],
+      "scope": "墨桥代码镜像 · 只读副本",
+      "reason": "复用了私有库、权限和 404 的排查表述，但缺失的是镜像副本，无法证明 GitHub API 的权限隐藏行为。"
+    },
+    {
+      "document_id": "public-zh-expanded:archive-404",
+      "chunk_id": "f3e69af85cb5c5bd1631536750d0965feb7e051bc6bbf90b2ab6f38c2ea04c9c:3dd433ef854ebf74211abb38aaf145da0d0f30278ee1a3205a9af7524c0c24cd:0",
+      "case_ids": [
+        "pubzh-002",
+        "pubzh-006"
+      ],
+      "scope": "墨桥构建仓库 · 临时归档存储",
+      "reason": "同样涉及私有资源和访问权限，404 在此表示临时制品已清理。"
+    },
+    {
+      "document_id": "public-zh-expanded:cdn-304",
+      "chunk_id": "353594714bbd2709bf6a06e7c458197f1506c1e12844ed81e654583ee15c49e1:512413765b200c5346bc02e800ce44eff193b1105edd861d3de1d025165f30d8:0",
+      "case_ids": [
+        "pubzh-003"
+      ],
+      "scope": "墨桥 CDN · API 请求计量套餐",
+      "reason": "命中同一条件请求术语，计量对象与 304 规则来自另一个产品。"
+    },
+    {
+      "document_id": "public-zh-expanded:artifact-304",
+      "chunk_id": "b4578127cc366aacd1d76a19112a8ea1d702a2e99b700d703822e449807fb2ef:742b350de0938e460b08a5ca48321fb50aef286f06716ef447a44ef2918a099a:0",
+      "case_ids": [
+        "pubzh-003"
+      ],
+      "scope": "澄屿制品中心 · 下载流量计费",
+      "reason": "看似给出 304 额度豁免，实际只说明下载字节，不能支持 GitHub 的请求配额结论。"
+    },
+    {
+      "document_id": "public-zh-expanded:parallel-shards",
+      "chunk_id": "cc69297b6e38c3fb99542438da01554e1ab993cb6bac73ae1e9993d95d780b87:653b94213f11f1ccd7f11acced4c8d7cb359ee2a382bc422502443245b8071a1:0",
+      "case_ids": [
+        "pubzh-004"
+      ],
+      "scope": "墨桥工单 API · 按项目分片",
+      "reason": "线程数、PATCH 和串行术语高度相近，但并行许可来自工单项目分片。"
+    },
+    {
+      "document_id": "public-zh-expanded:queue-patch",
+      "chunk_id": "d34bc3497310ad4fd80d48a4761a4214764fced8f6bd3b776f04c848bef0016d:b492b0689b606e0f223e375b6a68666b2a9b4952e8ca8f389646c22633c76462:0",
+      "case_ids": [
+        "pubzh-004"
+      ],
+      "scope": "澄屿目录 API · 异步导入端点",
+      "reason": "串行指后台执行，无法替代 GitHub REST 对客户端写请求的调度建议。"
+    },
+    {
+      "document_id": "public-zh-expanded:jwt-legacy",
+      "chunk_id": "d61683396712089d8d0c555fab4308f74c87ffde9ec47ce65b9b2c83caa77cd9:42982f35978bc6ec82720bd5e752f398df58ccebcad2844fa39d0792a2fcad6e:0",
+      "case_ids": [
+        "pubzh-005"
+      ],
+      "scope": "墨桥代码镜像 · 历史 v1 认证代理",
+      "reason": "格式、JWT 和令牌词面接近，代理层兼容格式无法回答 GitHub JWT 认证要求。"
+    },
+    {
+      "document_id": "public-zh-expanded:auth-lock-429",
+      "chunk_id": "83c2b6f56981a3aa4145e427ddecce98bf5b0277356742ee1ee99976f0b99c90:b4cd8c2f97aac809e0c4c763c3cc0a74d38ce07d5996b0709cdb2e693f5f04bb:0",
+      "case_ids": [
+        "pubzh-006"
+      ],
+      "scope": "澄屿身份门户 · 单设备暴力尝试拦截",
+      "reason": "触发条件相近，但拦截维度和返回状态码都与该 GitHub 题不同。"
+    },
+    {
+      "document_id": "public-zh-expanded:page-max-1000",
+      "chunk_id": "9330a14e32d4881780ea61650080115c832d89f1f55bb1b0d439459168c2d57d:8ba07975fb1cbf5e2ef1c2f026e293c83386b8a109a9ad54b35df039e5bd6ee3:0",
+      "case_ids": [
+        "pubzh-007"
+      ],
+      "scope": "澄屿导出 API · 清单分页",
+      "reason": "响应现象一致，缩短本页的原因是扫描预算，无法支持 GitHub 页大小上限。"
+    },
+    {
+      "document_id": "public-zh-expanded:link-proxy",
+      "chunk_id": "f45ceb9e971f9d5817acf48205eb8ba36cb1ea905e2c5d02fb922d5acf222c4e:9c053a6526c81b1cb1412daa31320348f984c687b24ec819afbbd06d3efcb2ad:0",
+      "case_ids": [
+        "pubzh-008"
+      ],
+      "scope": "墨桥 API 回放代理 · 录制回放模式",
+      "reason": "字段完全重合，但快照档案完整性与 GitHub 实时分页并非同一问题。"
+    },
+    {
+      "document_id": "public-zh-expanded:quota-addon-release",
+      "chunk_id": "4d71e136752eac925f7cf92edb64b8ae3e3bc51b573cfeab48def001bc747432:7564b4afd461d084bd1d89486c57e99fb2ec841f8ec857902fd843fd1294cc56:0",
+      "case_ids": [
+        "pubzh-009",
+        "pubzh-016"
+      ],
+      "scope": "澄屿云 · 独立快照存储容量包",
+      "reason": "资源包与数据清理都相关，专属存储套餐的附带资源不能外推到阿里云资源包。"
+    },
+    {
+      "document_id": "public-zh-expanded:unused-package-30d",
+      "chunk_id": "c3994e5fb3aed0294feb1c451d6935511ac7a2853f963dee620e8234670bfac8:06b38a81ab3ebcce229670af1bdc446b91f36e178a7d7fd51ff08b9dfb8de31e:0",
+      "case_ids": [
+        "pubzh-010"
+      ],
+      "scope": "澄屿云 · 促销试用资源包",
+      "reason": "保留了未使用、有效期和 30 天三个条件，但规则只适用于虚构促销套餐。"
+    },
+    {
+      "document_id": "public-zh-expanded:credit-pack-threshold",
+      "chunk_id": "de768af8faf68e90edeb954a7972fd1969a73fd17e9dd22f99dc38814290ce9e:60869ea4509d428136660518ba2fd2fcda5a569e871bf554dbb25dfd35b69c8e:0",
+      "case_ids": [
+        "pubzh-010"
+      ],
+      "scope": "墨桥云 · 赠券型预付资源包",
+      "reason": "使用了相同退款术语，新增的赠券补差条件无法作为原题证据。"
+    },
+    {
+      "document_id": "public-zh-expanded:payment-mandate",
+      "chunk_id": "0a5ceb923f6cd7ea94f84084a1f0c3845b5828bf4e7b1750cd5463dcee73f28a:d3a7997fd5c940b5a7a0fb1eb8d444f1ea8d3c6430e5aadd599da271b435b966:0",
+      "case_ids": [
+        "pubzh-011"
+      ],
+      "scope": "墨桥工作台 · 免密授权分期套餐",
+      "reason": "问题表述接近，但席位是分期购入，证据对象不同。"
+    },
+    {
+      "document_id": "public-zh-expanded:renewal-export-receipt",
+      "chunk_id": "ecc0b26a43961f7a7eecaeac7d6036f7c169d28828d58318a4374f2d219a3dc2:a5baeadf8c6578f81bf79d9c6bbf66f3f688ff0147f5e5022e3528327073d743:0",
+      "case_ids": [
+        "pubzh-012"
+      ],
+      "scope": "澄屿云 · 财务对账系统的已付款导出",
+      "reason": "导出的是支付后的对账凭据，且报价主张来自其他产品，均不能替代该题的阿里云续费证据。"
+    },
+    {
+      "document_id": "public-zh-expanded:renewal-contract-price",
+      "chunk_id": "3b09c9fbd65e38b23abb65a555ab01c3e537904e228604505b6507fc9f5138eb:6bdc75e0be21e03588c16c33b8660d9a00dac8258cdf77cb87eb44ae020a77dc:0",
+      "case_ids": [
+        "pubzh-012"
+      ],
+      "scope": "墨桥云 · 双年锁价专属合同",
+      "reason": "价格和续费条件都高度重合，但多了专属锁价合同这一前提。"
+    },
+    {
+      "document_id": "public-zh-expanded:api-key-revoke-bill",
+      "chunk_id": "dcc1b304220574b319c20a236e102ebc5556d74bbf0c43a91edc250b9caf371d:29ecd1945e7e682fcceb013605007a43bb47fe59f7d708cdb8aed1cc045225db:0",
+      "case_ids": [
+        "pubzh-013"
+      ],
+      "scope": "澄屿查询 API · 密钥专属包年计费",
+      "reason": "涉及同样的两个动作，但把计费生命周期绑定到密钥，无法说明阿里云按量尾单。"
+    },
+    {
+      "document_id": "public-zh-expanded:included-traffic",
+      "chunk_id": "4fccbff659bac21fb52e046722d4c8b5543a42147d0c107822a2d432e8737737:6c1382f5ebe86c062ff7a5b0739b39c265bcca36b0b87943409078ecb17552f5:0",
+      "case_ids": [
+        "pubzh-014"
+      ],
+      "scope": "墨桥云 · 固定流量全包实例",
+      "reason": "同为包年实例加流量明细，但套餐已含流量，无法判断阿里云是否存在另计费项。"
+    },
+    {
+      "document_id": "public-zh-expanded:instance-recycle",
+      "chunk_id": "08820a6cf3b1da5b792452f30446dd803ffe8122672b0398d8f6bd47411b253a:aaeb7b3099f8506669329fa1c7de635219dbae0123fd05c14a52dd1fbf72cecb:0",
+      "case_ids": [
+        "pubzh-015",
+        "pubzh-016"
+      ],
+      "scope": "澄屿云 · 实例回收站增值服务",
+      "reason": "退订对象与操作相似，但它默认有回收站，无法作为阿里云撤销或资源释放的证据。"
+    },
+    {
+      "document_id": "public-zh-expanded:renewal-hold",
+      "chunk_id": "3727fd1c56c041a844165277cb0596f71152d9879681badf20e2ac7baf08d4a1:9ffecb67e3558f92b2e36f0a8f3460a4a587f66ae0b8b4740aaff20a676a596f:0",
+      "case_ids": [
+        "pubzh-015",
+        "pubzh-016"
+      ],
+      "scope": "墨桥托管 · 下期预留实例订单",
+      "reason": "只描述未生效订单，无法补齐题目所需的整机退订规则。"
+    },
+    {
+      "document_id": "public-zh-expanded:idempotency-500-retry",
+      "chunk_id": "88e8af30c24bf4624bed2a6e40d6e6536431d4d05047be9a6cf3f4729649ae2d:5757557cdd9678e6c309df950cb26fd68521d3689509ec8a55c7b84fab3b5ff2:0",
+      "case_ids": [
+        "pubzh-017"
+      ],
+      "scope": "澄屿收款 API v1 · 创建付款端点",
+      "reason": "版本名称、幂等键和 500 重合，但错误回放策略属于另一个支付 API。"
+    },
+    {
+      "document_id": "public-zh-expanded:idempotency-scan",
+      "chunk_id": "f3196177730bf24114a26ea0e20bbb1999df8ed974bd16ce846042c1d7d472f8:8392fa6f52f209c68efc35b9b38301a33c20af25129fee8f77d69e3935a52d48:0",
+      "case_ids": [
+        "pubzh-017"
+      ],
+      "scope": "墨桥账单网关 · 批处理提交端点",
+      "reason": "同键和结果回放是共用概念，但该回执不代表 Stripe 保存的首次 HTTP 响应。"
+    },
+    {
+      "document_id": "public-zh-expanded:idempotency-validate-first",
+      "chunk_id": "c1d6df5ed6c0c6dd77bd2eb0d2c5b6275fd29c601744c85f74dba1f2c28c4e54:67320fcb0b638916450ab0dcb9c3010e9c0a1fa8a9621826f09bc34388384f09:0",
+      "case_ids": [
+        "pubzh-018"
+      ],
+      "scope": "墨桥账单 API v1 · 预留键协议",
+      "reason": "校验位置和键绑定阶段不同，不能支持 Stripe API v1 的保存条件。"
+    },
+    {
+      "document_id": "public-zh-expanded:idempotency-namespace",
+      "chunk_id": "b8f16f781c7c01bd1118c8851842aacb5545000efef5611609014447016b7019:c625aae5e788eb7f1bd32456b4c447f3aaacf5c9e289d5951cad5e8aff576f0e:0",
+      "case_ids": [
+        "pubzh-018"
+      ],
+      "scope": "澄屿收款 · API v2 路由级命名空间",
+      "reason": "它描述另一产品和版本的键作用域，无法判定该题的保存时机与同键改参。"
+    },
+    {
+      "document_id": "public-zh-expanded:webhook-ordered",
+      "chunk_id": "816347a9fc75b967a310bf56907aff2b63161bf3b2e7da9bfc25b99d752a51be:e2c2a75e71945bd38afa2fdf1db07aea752c963b79910e5f8f189d69eddfe00f:0",
+      "case_ids": [
+        "pubzh-019"
+      ],
+      "scope": "澄屿收款 · 商户单分区事件订阅",
+      "reason": "时间精度和乱序词面重合，但单分区顺序保证及去重字段无法用于 Stripe。"
+    },
+    {
+      "document_id": "public-zh-expanded:webhook-entity-version",
+      "chunk_id": "c023198476ec5527d3a8106a98b3fb58a03fa2bc0c874fc7be286586d32a40cc:d0cdce0ed3f0b0b9291f84321a1b26bdd3ab451635c32fb090bd91d6799f12c9:0",
+      "case_ids": [
+        "pubzh-019"
+      ],
+      "scope": "墨桥账单事件 · 单对象版本流",
+      "reason": "问题现象相似，但此事件协议提供对象版本号，无法支持 Stripe event ID 的证据要求。"
+    },
+    {
+      "document_id": "public-zh-expanded:webhook-resend-stop",
+      "chunk_id": "7281059bc8d4d8363f223a4c17ced9e52a339970a8221ceffc4694652a1b360a:ba5b9bbcb3e75476d51ea684135ab9cd01e997dadeca8b7aed9bdd89945e8060:0",
+      "case_ids": [
+        "pubzh-020"
+      ],
+      "scope": "墨桥账单事件 · 单投递记录确认模式",
+      "reason": "操作和响应码完全相近，但手动重发在此确认原任务，产品语义不同。"
+    },
+    {
+      "document_id": "public-zh-expanded:webhook-forward-2xx",
+      "chunk_id": "da67cd12b75a2c2fcf5d5b8dd893b414127fb01a7b8ad543aa04b6c1e53286be:3b7248da05583cfe5e97d01cca79849e144cfcd00d049226f4bdb91a341bdad1:0",
+      "case_ids": [
+        "pubzh-020"
+      ],
+      "scope": "澄屿事件代理 · 本地测试转发",
+      "reason": "区分了接收与自动重试，但 2xx 确认的是本地代理，缺少 Stripe 投递上下文。"
+    },
+    {
+      "document_id": "public-zh-expanded:subscription-pause-cancel",
+      "chunk_id": "88f9d5bf595cd105b4a68273b48e0a3e799206a018a928a1af38de1a24998967:de8e20d841dd9ef6f365721e1f5b8899dc19563637c6522cebccdb8d303ee15c:0",
+      "case_ids": [
+        "pubzh-021"
+      ],
+      "scope": "墨桥订阅 · 立即暂停套餐",
+      "reason": "字段相同，但暂停时的状态迁移和归档后的恢复能力来自另一套协议。"
+    },
+    {
+      "document_id": "public-zh-expanded:subscription-undo-pending",
+      "chunk_id": "bd67c57e452b171358949c86a81531231cb7959f93fc70ae50918ba7199ee7be:4517a9b809797c3b95497aeda0b570c36e06ae0c538358f4c9e378a5b2743ca3:0",
+      "case_ids": [
+        "pubzh-021"
+      ],
+      "scope": "澄屿订阅 · 周期末关闭续期",
+      "reason": "这一条仅覆盖取消计划待生效状态，且供应商不同。"
+    },
+    {
+      "document_id": "public-zh-expanded:credit-payout-card",
+      "chunk_id": "e08b26c7b8d88d3e74750f8e0e51e3b140dbfd1fc223430de07f16991126929a:f2d8fdb89c536efc6fc178be3a53109cb854666c4a0cac3197f8cb84dda5f641:0",
+      "case_ids": [
+        "pubzh-022"
+      ],
+      "scope": "澄屿收款 · 可提现商户余额",
+      "reason": "贷记和换卡命中原题词面，余额提现和 Stripe 原路退款的资金路径不同。"
+    },
+    {
+      "document_id": "public-zh-expanded:refund-closed-card",
+      "chunk_id": "8da1d25c6249532c337debc9731f92ce775c4c5d75299e3b87456e098ba46379:9792bcc9ff2835aa261d9da87cf207ab541eebdee6a863c7d4a11878ccd0f667:0",
+      "case_ids": [
+        "pubzh-022"
+      ],
+      "scope": "墨桥收款 · 人工改路退款协议",
+      "reason": "原支付方式和另一张卡都是同一主题，但人工改路规则属于虚构的另一产品。"
+    },
+    {
+      "document_id": "public-zh-expanded:uncaptured-refund-api",
+      "chunk_id": "f209e4f8d4dcb646c1817190f2da4526a09eecd7a1035f4b0ee47d8b7a1a48c5:17a3dacb3ce504f0e0758807ba2b648bfaae8b4c12e036988434d239861673b9:0",
+      "case_ids": [
+        "pubzh-023"
+      ],
+      "scope": "澄屿付款 · 统一撤销与退款端点",
+      "reason": "状态名和操作相同，但它是另一产品提供的 API 自动改写规则。"
+    },
+    {
+      "document_id": "public-zh-expanded:uncaptured-partial",
+      "chunk_id": "5b63d165a9698f1ddbc1effedfc0a68dd4405063d9ee79abcdc7747419b2015e:9f0c244677d245b641352acc8148b3b12a0c5b489de48edb04a279f6a575d7af:0",
+      "case_ids": [
+        "pubzh-023"
+      ],
+      "scope": "墨桥付款 · 多次捕获授权",
+      "reason": "关注的是一笔授权里已经捕获的部分，无法支持原题对未捕获资金的操作。"
+    }
+  ]
+}

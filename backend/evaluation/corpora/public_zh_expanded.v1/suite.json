@@ -1,0 +1,63 @@
+{
+  "protocol_version": "rag-suite-v2",
+  "corpus": "corpus.json",
+  "snapshot": "snapshot.json",
+  "dataset": "cases.json",
+  "sources": "sources.json",
+  "hard_negatives": "hard-negatives.json",
+  "knowledge_hash": "7bb055ff5ee03296e9b141a9bf9a71469096f16e2951e42ba9caed12fe44a539",
+  "source_dataset_hash": "f2e1847fc6a24b59ed1604f1073ee3bcf458282ebee1f6e7aaf38ad7a4b9909e",
+  "sources_hash": "5175bedff44e4c268f5deb3e87a9b8d0044bbc661c3dacfbec70902dab99d365",
+  "hard_negatives_hash": "5a13cd78e9449a40824fb885143fd5b8ef07c4e0bcd7c23b8ca69fef0cb0df60",
+  "review_status": "AI_AUTHORED_SCOPE_REVIEW_PENDING_INDEPENDENT_HUMAN_REVIEW",
+  "grouping_rationale": "All GitHub and Aliyun source families in dev; all Stripe source family in candidate validation. No shared source URL across splits. Vendor/domain shift is a confound; not random IID evaluation.",
+  "limitations": [
+    "Same 24 public_zh.v1 questions and evidence labels. Both splits use the same expanded pool.",
+    "Background rules and authored distractors are synthetic. Targeted negatives are authored against the visible question set.",
+    "The author reviewed applicability against the frozen evidence. Independent human annotation review and current public source audit are pending."
+  ],
+  "splits": {
+    "dev": {
+      "case_ids": [
+        "pubzh-001",
+        "pubzh-002",
+        "pubzh-003",
+        "pubzh-004",
+        "pubzh-005",
+        "pubzh-006",
+        "pubzh-007",
+        "pubzh-008",
+        "pubzh-009",
+        "pubzh-010",
+        "pubzh-011",
+        "pubzh-012",
+        "pubzh-013",
+        "pubzh-014",
+        "pubzh-015",
+        "pubzh-016"
+      ],
+      "groups": [
+        "public-aliyun-billing",
+        "public-github-rest"
+      ],
+      "evaluated_dataset_hash": "a6952662a066ddfadc67076b0b5f22925ceddb2ce151c7a8fd1ae1ddbd815626"
+    },
+    "validation": {
+      "case_ids": [
+        "pubzh-017",
+        "pubzh-018",
+        "pubzh-019",
+        "pubzh-020",
+        "pubzh-021",
+        "pubzh-022",
+        "pubzh-023",
+        "pubzh-024"
+      ],
+      "groups": [
+        "public-stripe"
+      ],
+      "evaluated_dataset_hash": "71abe2c4b4a27d0869ffbec47a5af02db29ebb34733990a3c2e5201f3bbcbc60"
+    }
+  },
+  "freeze_hash": "f805a6742e397aeeb745d2c780b157626d0b66aa8eb0a3e29cac00cec3aa3eda"
+}
