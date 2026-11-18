@@ -237,6 +237,7 @@ class Request:
     retrieval_results: Dict[str, Any] = field(default_factory=dict, repr=False)
     reuse_retrieval: bool = False
     tool_observer: Any = field(default=None, repr=False)
+    authenticated: bool = False
 
 
 @dataclass

@@ -1,9 +1,11 @@
 """HTTP 链路回归：使用 Redis 协议模拟器验证锁、事务、记忆和幂等行为。"""
 import asyncio
 import json
+import sqlite3
 import sys
 import types
 from collections import deque
+from contextlib import closing
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -13,6 +15,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from prometheus_client import CollectorRegistry
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 try:
     import chromadb
@@ -30,6 +33,7 @@ from core.concurrency import KeyedLocks
 from core.intent_recognizer import IntentCategory, IntentRecognizer, IntentResult, UrgencyLevel
 from memory.conversation_memory import MemoryManager
 from monitor.performance_monitor import PerformanceMonitor
+from tooling.sandbox_store import DEMO_ORDER_ID, DEMO_USER_ID, SandboxStore
 
 
 def text_response(text="回复完成", stop="end_turn"):
@@ -72,6 +76,142 @@ async def services(monkeypatch):
 
 def body(message="退款规则", request_id="one", conv_id="c"):
     return {"message": message, "user_id": "u", "conv_id": conv_id, "client_request_id": request_id}
+
+
+@pytest.fixture
+def sandbox(monkeypatch, tmp_path):
+    store = SandboxStore(tmp_path / "sandbox.sqlite3")
+    store.initialize()
+    owner_token = "sandbox-owner-test-token-012345"
+    other_token = "sandbox-other-test-token-012345"
+    monkeypatch.setattr(api, "_sandbox_store", store)
+    monkeypatch.setenv("SERVICEPILOT_API_TOKENS", json.dumps({
+        owner_token: {"user_id": DEMO_USER_ID, "role": "user"},
+        other_token: {"user_id": "other", "role": "user"},
+    }))
+    return store, {"Authorization": f"Bearer {owner_token}"}, {"Authorization": f"Bearer {other_token}"}
+
+
+def sandbox_review_ids(store):
+    with closing(sqlite3.connect(store.path)) as db:
+        return [row[0] for row in db.execute("SELECT review_id FROM refund_reviews")]
+
+
+@pytest.mark.asyncio
+async def test_sandbox_requires_configured_authentication_at_startup(monkeypatch):
+    monkeypatch.setenv("SERVICEPILOT_SANDBOX_ENABLED", "true")
+    monkeypatch.setenv("SERVICEPILOT_ENV", "development")
+    monkeypatch.delenv("SERVICEPILOT_API_TOKENS", raising=False)
+    monkeypatch.delenv("ZHIYING_API_TOKENS", raising=False)
+    monkeypatch.setattr(api, "_sandbox_store", None)
+    with pytest.raises(RuntimeError, match="启用业务沙盒需要配置"):
+        async with api.lifespan(api.app):
+            pytest.fail("沙盒不应在未配置鉴权时启动")
+
+
+@pytest.mark.asyncio
+async def test_sandbox_command_is_unavailable_when_disabled(services, monkeypatch):
+    _, _, model, http = services
+    monkeypatch.setattr(api, "_sandbox_store", None)
+    result = await http.post("/chat", json=body(f"沙盒查账 {DEMO_ORDER_ID}"))
+    assert result.status_code == 404
+    model.messages.create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sandbox_chat_checks_owner_and_deduplicates_review_across_conversations(services, sandbox):
+    _, _, model, http = services
+    store, owner, other = sandbox
+    lookup = f"沙盒查账 {DEMO_ORDER_ID}"
+    confirm = f"确认提交退款核验 {DEMO_ORDER_ID}"
+    assert (await http.post("/chat", json=body(lookup))).status_code == 401
+
+    # 传入订单所有者的 user_id 不能覆盖 Token 中的身份。
+    for index, command in enumerate((lookup, confirm)):
+        denied = await http.post("/chat", json={**body(command, f"denied-{index}"), "user_id": DEMO_USER_ID}, headers=other)
+        assert "未找到当前账号" in denied.json()["response"]
+
+    ledger = await http.post("/chat", json=body(lookup), headers=owner)
+    assert ledger.status_code == 200
+    assert "199.00 元，已入账" in ledger.json()["response"]
+    assert "199.00 元，预授权冻结（未入账）" in ledger.json()["response"]
+    incomplete = await http.post("/chat", json=body("确认提交退款核验", "incomplete"), headers=owner)
+    assert "请输入完整编号" in incomplete.json()["response"]
+    assert sandbox_review_ids(store) == []
+
+    first, concurrent = await asyncio.gather(
+        http.post("/chat", json=body(confirm, "confirm"), headers=owner),
+        http.post("/chat", json=body(confirm, "another", "other-conversation"), headers=owner),
+    )
+    assert first.status_code == concurrent.status_code == 200
+    assert first.json()["response"] == concurrent.json()["response"]
+    review_id, = sandbox_review_ids(store)
+    assert review_id in first.json()["response"]
+    replay = await http.post("/chat", json=body(confirm, "confirm"), headers=owner)
+    assert replay.json() == first.json()
+    assert (await http.post("/chat", json=body(lookup, "confirm"), headers=owner)).status_code == 409
+
+    # 用重新初始化的存储验证持久性和 seed 幂等。
+    reopened = SandboxStore(store.path)
+    await asyncio.to_thread(reopened.initialize)
+    assert len(reopened.order_ledger(DEMO_USER_ID, DEMO_ORDER_ID)["entries"]) == 2
+    query = f"查询退款核验单 {review_id}"
+    found = await http.post("/chat", json=body(query, "query"), headers=owner)
+    assert "待人工核验" in found.json()["response"]
+    invisible = await http.post("/chat", json=body(query, "query"), headers=other)
+    assert "未找到当前账号" in invisible.json()["response"]
+    model.messages.create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sandbox_recovers_review_if_chat_receipt_fails_after_sqlite_commit(services, sandbox, monkeypatch):
+    memory, _, model, http = services
+    store, owner, _ = sandbox
+    original_commit = memory.commit_turn
+    saved_id = None
+
+    async def fail_first_commit(*args, **kwargs):
+        nonlocal saved_id
+        if saved_id is None:
+            saved_id, = sandbox_review_ids(store)
+            raise RedisConnectionError("simulated lost Redis connection")
+        await original_commit(*args, **kwargs)
+
+    monkeypatch.setattr(memory, "commit_turn", fail_first_commit)
+    payload = body(f"确认提交退款核验 {DEMO_ORDER_ID}", "confirm")
+    assert (await http.post("/chat", json=payload, headers=owner)).status_code == 503
+    retry = await http.post("/chat", json=payload, headers=owner)
+    assert retry.status_code == 200
+    assert saved_id in retry.json()["response"]
+    assert sandbox_review_ids(store) == [saved_id]
+    model.messages.create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_billing_agent_reads_sandbox_ledger_but_cannot_authorize_write(services, sandbox, monkeypatch):
+    _, orch, model, http = services
+    store, owner, _ = sandbox
+    monkeypatch.setattr(api, "_tool_manager", SimpleNamespace())
+    monkeypatch.setattr(api, "_mcp_client", None)
+    monkeypatch.setattr(api, "_eval_orchestrator", None)
+    api._refresh_agent_tools()
+    read_tool = "query_sandbox_order_ledger"
+    assert read_tool in orch._pool[AgentType.BILLING][0].get_tools()
+    assert read_tool not in orch._pool[AgentType.TECHNICAL][0].get_tools()
+    model.messages.create.side_effect = [
+        SimpleNamespace(content=[
+            {"type": "tool_use", "id": "read", "name": read_tool, "input": {"order_id": DEMO_ORDER_ID}},
+            {"type": "tool_use", "id": "write", "name": "submit_sandbox_refund_review", "input": {"order_id": DEMO_ORDER_ID}},
+        ]),
+        text_response("已入账与预授权冻结是不同的状态。"),
+    ]
+    reply = await http.post("/chat", json=body(f"请帮我核对订单 {DEMO_ORDER_ID} 的扣款"), headers=owner)
+    assert reply.status_code == 200
+    assert reply.json()["tools_used"] == [read_tool]
+    tool_results = model.messages.create.await_args.kwargs["messages"][-1]["content"]
+    assert "authorization_hold" in tool_results[0]["content"]
+    assert tool_results[1]["is_error"] is True
+    assert sandbox_review_ids(store) == []
 
 
 @pytest.mark.asyncio

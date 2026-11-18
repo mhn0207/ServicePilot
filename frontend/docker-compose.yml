@@ -19,6 +19,7 @@ services:
       ZHIYING_SKILLS_DIR: /app/skills
     volumes:
       - zhiying-python-data:/app/data
+      - sandbox-data:/app/data/sandbox
       - ../backend/skills:/app/skills
       - ../backend/config/mcp_servers.json:/app/config/mcp_servers.json:ro
     depends_on:
@@ -95,3 +96,4 @@ volumes:
   redis-data:
   chromadb-data:
   zhiying-python-data:
+  sandbox-data:

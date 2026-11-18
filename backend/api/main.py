@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import pathlib
+import sqlite3
 import sys
 import time
 import uuid
@@ -26,8 +27,11 @@ from fastapi import FastAPI, HTTPException, Response, UploadFile, File, Query, P
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field, model_validator
+from redis.exceptions import RedisError
+from agents.sandbox_tools import COMMANDS, build_sandbox_tools, run_sandbox_command
 from core.performance import collect_performance, measure_stage, performance_snapshot
 from core.request_budget import POLICY, chat_budget
+from tooling.sandbox_store import SandboxStore
 
 load_dotenv(pathlib.Path(_ROOT) / '.env')
 
@@ -55,6 +59,7 @@ _eval_tool_manager = None
 _skill_manager = None
 _profile_updater = None
 _mcp_client = None
+_sandbox_store: SandboxStore | None = None
 from evaluation.jobs import EvaluationJobs
 _eval_jobs = EvaluationJobs()
 
@@ -75,9 +80,17 @@ def _anthropic_cfg() -> Dict[str, Any]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _eval_orchestrator, _eval_tool_manager, _orchestrator, _memory, _tool_manager, _monitor, _evaluator, _skill_manager, _profile_updater, _mcp_client
+    global _sandbox_store
 
     from core.access import identity
-    identity("")  # 启动时验证生产鉴权配置
+    auth_configured = identity("") is not None  # 同时验证生产鉴权配置
+    _sandbox_store = None
+    if os.getenv("SERVICEPILOT_SANDBOX_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
+        if not auth_configured:
+            raise RuntimeError("启用业务沙盒需要配置 SERVICEPILOT_API_TOKENS 或 ZHIYING_API_TOKENS")
+        sandbox_store = SandboxStore(pathlib.Path(_ROOT) / "data" / "sandbox" / "business.sqlite3")
+        await asyncio.to_thread(sandbox_store.initialize)
+        _sandbox_store = sandbox_store
     print(BANNER, flush=True)
 
     from agents.agent_orchestrator import AgentOrchestrator, Request, build_shared_rag_tools
@@ -224,6 +237,8 @@ def _refresh_agent_tools():
         tools = build_shared_rag_tools(_tool_manager)
         if _mcp_client is not None:
             tools.update(_mcp_client.agent_tools())
+        if _sandbox_store is not None:
+            tools.update(build_sandbox_tools(_sandbox_store))
         _orchestrator.set_shared_tools(tools)
     if _eval_orchestrator is not None:
         from dataclasses import replace
@@ -401,6 +416,14 @@ async def chat(req: ChatRequest, http_request: HTTPRequest):
     account = getattr(http_request.state, "account", None)
     if account:
         req.user_id = account["user_id"]
+    parts = req.message.split(maxsplit=1)
+    sandbox_command = parts[0] if parts and parts[0] in COMMANDS else None
+    sandbox_store = _sandbox_store
+    if sandbox_command:
+        if sandbox_store is None:
+            raise HTTPException(404, "业务沙盒未启用")
+        if not account:
+            raise HTTPException(401, "业务沙盒需要有效 Bearer Token")
     from agents.agent_orchestrator import Request as OrcReq
 
     client_id = req.client_request_id or str(uuid.uuid4())
@@ -423,6 +446,24 @@ async def chat(req: ChatRequest, http_request: HTTPRequest):
                 previous = ChatResponse(**receipt["response"])
                 if previous.status != "failed" or not previous.retryable:
                     return render(previous)
+            if sandbox_command and sandbox_store is not None:
+                # 用户确认命令直达 SQLite。写入可重试，Redis 回执丢失时可取回同一核验单。
+                try:
+                    message, tool = await run_sandbox_command(
+                        sandbox_store, req.user_id, sandbox_command, parts[1].strip() if len(parts) > 1 else "",
+                    )
+                    response = ChatResponse(
+                        conv_id=conv_id, request_id=str(uuid.uuid4()), response=message,
+                        intent="billing", intent_group="billing", agent_type="billing",
+                        agent_types=["billing"], primary_agent="billing", tools_used=[tool] if tool else [],
+                        routing_reason="沙盒聊天命令", escalated=False,
+                        latency_ms=round((time.monotonic() - started) * 1000, 1),
+                    )
+                    await _memory.commit_turn(req.user_id, conv_id, client_id, req.message, response.model_dump())
+                except (sqlite3.Error, RedisError) as ex:
+                    logger.warning("沙盒轮次暂时无法完成", exc_info=True)
+                    raise HTTPException(503, "业务沙盒暂时不可用，请使用相同 client_request_id 重试") from ex
+                return render(response)
             # 1. 读取记忆上下文
             with measure_stage("memory_read"):
                 mem_ctx = await _memory.get_context(req.user_id, conv_id, query=req.message)
@@ -449,6 +490,7 @@ async def chat(req: ChatRequest, http_request: HTTPRequest):
                 urgency=intent_result.urgency,
                 intent_confidence=intent_result.confidence,
                 conversation_state=getattr(mem_ctx, "state", {}),
+                authenticated=bool(account),
             )
 
             async def before_unsafe_tool(name):

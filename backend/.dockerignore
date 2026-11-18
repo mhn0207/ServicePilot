@@ -31,3 +31,4 @@ config/nginx/ssl/
 output/
 data/backups/
 data/eval/
+data/sandbox/

@@ -90,6 +90,7 @@ services:
     volumes:
       - ./data/chroma:/app/data/chroma
       - ./data/eval:/app/data/eval
+      - sandbox-data:/app/data/sandbox
       - ./skills:/app/skills
       - ./config/mcp_servers.json:/app/config/mcp_servers.json:ro
       - ./logs:/app/logs
@@ -148,6 +149,7 @@ volumes:
   chromadb-data:
   prometheus-data:
   nginx-logs:
+  sandbox-data:
 
 secrets:
   metrics_token:
