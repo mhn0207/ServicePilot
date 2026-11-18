@@ -184,12 +184,15 @@ def compare(left: ExperimentReport, right: ExperimentReport):
     for key in ('top_k','candidate_k','vector_k','lexical_k','rewrite_count','cache_mode','merge','rrf_constant'):
         if getattr(left.config,key)!=getattr(right.config,key):
             raise ExperimentInputError('非研究变量不同: '+key)
-    for key in ('embedding','distance','prompt','lexical'):
+    for key in ('embedding','distance','lexical'):
         default = 'match-prefix-limit-v1' if key == 'lexical' else None
         if left.dependencies.get(key, default)!=right.dependencies.get(key, default):
             raise ExperimentInputError('检索依赖不同: '+key)
-    if left.dependencies.get('model') and right.dependencies.get('model') and left.dependencies['model']!=right.dependencies['model']:
-        raise ExperimentInputError('改写/重排模型不同')
+    if left.dependencies['model'] and right.dependencies['model']:
+        if left.dependencies['model'] != right.dependencies['model']:
+            raise ExperimentInputError('改写/重排模型不同')
+        if left.dependencies['prompt'] != right.dependencies['prompt']:
+            raise ExperimentInputError('检索依赖不同: prompt')
     a={r.case.id:r for r in left.scoring.results}
     b={r.case.id:r for r in right.scoring.results}
     common=sorted(i for i in a if a[i].execution.status==b[i].execution.status=='success')

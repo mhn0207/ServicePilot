@@ -292,6 +292,19 @@ def test_end_to_end_evidence_report_compare_and_usage(suite):
     assert compare(a,failed)['eligible_denominator']==36
 
 
+def test_model_prompt_version_does_not_apply_to_no_model_baseline(suite):
+    class CompactModel(SyntheticModel):
+        prompt_version = 'rag-strategy-prompts-v3'
+
+    baseline = build_report(suite, 'B', mode='real')
+    current = build_report(suite, 'D', mode='real', model=CompactModel())
+    legacy = build_report(suite, 'D', mode='real')
+
+    assert compare(baseline, current)['eligible_denominator'] == 36
+    with pytest.raises(ValueError, match='检索依赖不同: prompt'):
+        compare(legacy, current)
+
+
 @pytest.mark.parametrize('field',['mode','split','knowledge_hash','evaluated_dataset_hash','source_dataset_hash',
     'case_set','freeze_hash','completed','config','dependencies','missing_result','changed_label','changed_score','protocol'])
 def test_comparison_rejects_incompatible_and_incomplete_reports(suite,field):
@@ -435,15 +448,18 @@ def test_provider_adapter_preserves_usage_on_invalid_json_without_global_statist
     monkeypatch.setattr(anthropic,'AsyncAnthropic',lambda **kw:SimpleNamespace(messages=SimpleNamespace(create=create)))
     monkeypatch.setenv('SERVICEPILOT_EVAL_MODEL','test-model')
     monkeypatch.setenv('SERVICEPILOT_EVAL_API_KEY','secret-placeholder')
-    monkeypatch.setenv('SERVICEPILOT_EVAL_BASE_URL','https://provider.invalid')
+    monkeypatch.setenv('SERVICEPILOT_EVAL_BASE_URL','https://api.deepseek.com/anthropic')
     before=copy.deepcopy(llm_usage_summary())
     model=ProviderModel()
     result=asyncio.run(model.call('rerank','question',[public_chunk(c) for c in small_snapshot().chunks],3,
                                   {'temperature':0.0,'max_tokens':2048}))
     assert result['value'] is None and result['truncated']
+    assert result['output_error'] == 'invalid_json'
     assert result['input_tokens']==23 and result['cache_read_input_tokens'] is None
     assert llm_usage_summary()==before
     prompt=observed[0]['messages'][0]['content']
+    assert observed[0]['extra_body'] == {'thinking': {'type': 'disabled'}}
+    assert 'array of 3 distinct integer indices' in prompt
     assert 'secret-placeholder' not in prompt and 'acceptable_chunk_ids' not in prompt
     assert 'chunk_id' not in prompt and 'rule payment' in prompt
 

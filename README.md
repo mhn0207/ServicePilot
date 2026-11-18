@@ -14,21 +14,20 @@ ServicePilot 用 FastAPI、Vue、Redis 和 ChromaDB 处理技术排障与账单�
 
 [复跑这条案例](backend/README.md#最短真实验收) · [体验工作台账单沙盒](backend/README.md#账单沙盒演示)
 
-## 单 Agent 与多 Agent 的实测对照
+## 评测结果
 
-两套 Docker 服务走实际 `POST /chat`，使用同一个 `deepseek-flash`、演示知识库和请求预算。用例包括单域、跨域、订单改口、证据不足和工具失败，每套 10 个用例、11 轮。
+| 评测 | 样本与运行方式 | 主要结果 |
+| --- | --- | --- |
+| [证据级检索](backend/README.md#检索证据) | 24 条中文固定结果，22 条有标注证据 | Hit@3 **27.27%**，证据 Recall@3 **25.00%**，MRR@3 **0.242**。固定结果故意包含漏召回和 1 次执行错误 |
+| [检索策略消融](backend/README.md#真实检索策略实测) | 20 题冻结验证集，真实 MiniLM ONNX，改写和重排调用 `deepseek-flash` | 纯向量 / 混合召回 MRR@3 **0.944 / 0.972**。重排优化后完整执行 **5/20 → 20/20**，P95 **20.92 秒 → 1.93 秒** |
+| [中文检索与候选池基准](backend/README.md#本地检索记录) | 短摘要、扩展池与 ChromaDB 回环 HTTP 基准 | 120 片扩展池 dev 中混合召回比纯向量多找回 **2/16** 题的证据。[历史词面候选基准](backend/README.md#业务词面候选基准)记录扩池后的截断和耗时 |
+| [成对回答与 Judge](backend/README.md#回答与系统验证) | 40 题英语 dev 固定回放，另取 2 道验证题调用真实模型 | 固定回放的事实覆盖两分支均为 **77/84**。真实复测 **4/4** 个答案生成，**8/8** 次 Judge 调用通过协议校验，**1/4** 个分支仍有断言支持度未决 |
+| [Agent 离线验收](backend/README.md#agent-与工作台) | 9 轮真实编排器，固定模型响应与模拟检索 | 角色覆盖 **9/9**，必需工具调用 **6/7**，返回证据 **4/7** |
+| [意图路由短路](backend/README.md#意图路由基准) | 19 个用例，真实本地向量与固定延迟模型替身 | 启用短路后每轮意图模型调用 **19 → 11**，路由错误保持 **0/19** |
+| [单 Agent 与多 Agent](backend/README.md#中文聊天配对实验) | 两套 Docker 服务走真实 `POST /chat`，各 10 个用例、11 轮 | 原自动评分 **11/11 / 10/11**，以修订规则重评分后均为 **11/11**。两组各满足 **15/15** 项工具调用断言 |
+| [Docker 与服务可靠性](backend/README.md#回答与系统验证) | 真实 Redis、ChromaDB、SQLite 和 Nginx | 8 个相同请求 ID 的并发请求只提交 **1 轮**。两进程知识缓存验证通过，后端换 IP 后网关自动恢复，Prometheus 采集为 `up` |
 
-| 指标 | 单 Agent | 多 Agent |
-| --- | ---: | ---: |
-| 自动验收通过 | 10/11 | 11/11 |
-| 复核后通过 | 11/11 | 11/11 |
-| HTTP 延迟 P50 | 6.88 秒 | 6.35 秒 |
-| HTTP 延迟 P95 | 10.51 秒 | 11.39 秒 |
-| 供应商报告输入 / 输出 Token | 40,229 / 5,549 | 60,229 / 7,802 |
-
-人工复核确认了单 Agent 答案中分开表述的币种、金额与状态。这轮多 Agent 的中位延迟较低，尾延迟和 Token 更高，复核后的通过数持平。系统在明确的跨域请求上启用协作。样本量为每组 11 轮，P95 对应该组最慢的一轮。
-
-[中文用例与评分规则](backend/evaluation/corpora/chat-paired.zh.v2.json) · [完整配对实验与复核步骤](backend/README.md#中文聊天配对实验)
+结果来自维护者的本地报告。各项使用不同语料和运行方式，分母与边界见[实验明细](backend/README.md#数据与已有实验结论)。原始报告由复跑命令生成到 `backend/data/eval/`。
 
 ## 工程实现
 
@@ -38,7 +37,7 @@ ServicePilot 用 FastAPI、Vue、Redis 和 ChromaDB 处理技术排障与账单�
 
 [后端架构与接口](backend/README.md#请求链路) · [评测入口](backend/README.md#评测入口)
 
-## 快速开始 (Quick Start)
+## 快速开始
 
 需要安装 Docker / Docker Compose，并准备兼容 Anthropic Messages API（支持 Tool Calling）的模型服务凭据。在仓库根目录打开 PowerShell：
 
@@ -53,17 +52,17 @@ docker compose -p servicepilot-local -f docker-compose.yml -f docker-compose.web
 | 服务入口 | 默认地址 | 说明 |
 | --- | --- | --- |
 | **Web 工作台** | http://localhost:5174 | 聊天、知识文档管理、工具轨迹审查、RAG 离线验收 |
+| **统一网关** | http://localhost | Nginx 提供工作台与 `/api/servicepilot/`，兼容 `/api/zhiying/` |
 | **Swagger API 文档** | http://localhost:8000/docs | FastAPI OpenAPI 交互式文档 |
 | **存储就绪探针** | http://localhost:8000/health | 2 秒预算内并发探测 Redis 与 ChromaDB 集合状态 |
 | **Prometheus** | http://localhost:9090 | 指标采集与监控面板 |
 
-- **默认开发配置**：默认启用 `SERVICEPILOT_ENV=development`（兼容 `ZHIYING_ENV`），空库启动时自动导入 `data/demo_docs/sample_knowledge.json` 演示政策，并默认关闭外部 MCP 连接（`MCP_EXTERNAL_ENABLED=false`）。
-- **工作台体验路径**：可依次体验 **401 登录故障排障**、**订单号与金额否定更正**、**复合问题并行协同（登录报错 + 重复扣款）**、**知识导入与按版本删除**，以及 **RAG · Agent 离线验收**。
-- **日常启停**：停止或重启容器时请勿附加 `down -v`，以免清除本地持久化的 Redis / ChromaDB 数据卷。
+- **本地演示**。示例配置启用 `SERVICEPILOT_ENV=development`，空库会导入演示政策，外部 MCP 默认关闭。复合订单案例另需[启用账单沙盒](backend/README.md#账单沙盒演示)。
+- **日常启停**。沿用上面的项目名和两个 Compose 文件，执行 `stop` 或 `restart` 时去掉 `up` 专用选项，即可保留本地数据卷。开启 API 鉴权后，按[采集配置](backend/README.md#prometheus-采集身份)设置独立指标令牌。
 
 ---
 
-## 本地开发与自动化测试 (Development & Testing)
+## 本地开发与自动化测试
 
 ```bash
 # 1. 后端测试（在 backend/ 目录下使用 Python 3.12 虚拟环境）
@@ -80,7 +79,7 @@ npm run build
 
 ---
 
-## 目录结构 (Repository Layout)
+## 目录结构
 
 ```text
 backend/

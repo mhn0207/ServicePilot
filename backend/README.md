@@ -67,7 +67,7 @@ docker compose -p servicepilot-local -f docker-compose.yml -f docker-compose.web
 python -c "from pathlib import Path; import secrets; Path('config/prometheus.token').open('x', encoding='utf-8').write(secrets.token_urlsafe(32) + '\n')"
 ```
 
-在本机 `.env` 设置 `SERVICEPILOT_METRICS_TOKEN_PATH=./config/prometheus.token`（或 `ZHIYING_METRICS_TOKEN_PATH`），再使用相同 Compose 命令更新服务。Compose 将该文件作为 secret 同时提供给应用和 Prometheus；应用读取 `SERVICEPILOT_METRICS_TOKEN_FILE` / `ZHIYING_METRICS_TOKEN_FILE=/run/secrets/metrics_token`，Prometheus 使用 `authorization.credentials_file`。非 Compose 启动时，直接设置应用的 `SERVICEPILOT_METRICS_TOKEN_FILE`（或 `ZHIYING_METRICS_TOKEN_FILE`）为本机文件路径。
+在本机 `.env` 设置 `SERVICEPILOT_METRICS_TOKEN_PATH=./config/prometheus.token`，再使用相同 Compose 命令更新服务。新变量为空时兼容 `ZHIYING_METRICS_TOKEN_PATH`。Compose 将该文件作为 secret 同时提供给应用和 Prometheus。应用读取 `SERVICEPILOT_METRICS_TOKEN_FILE` / `ZHIYING_METRICS_TOKEN_FILE=/run/secrets/metrics_token`，Prometheus 使用 `authorization.credentials_file`。非 Compose 启动时，直接设置应用的 `SERVICEPILOT_METRICS_TOKEN_FILE`（或 `ZHIYING_METRICS_TOKEN_FILE`）为本机文件路径。
 
 令牌至少 24 字符、不可含空白，只授权 `GET /metrics`，不能作为聊天、轨迹或管理身份。管理员 API Token 仍可读取指标，普通用户无此权限。凭据文件缺失或格式错误会拒绝采集；空文件不在启用 API 鉴权时提供访问能力。真实 `*.token` 同时被 Git 和后端镜像构建排除，不将凭据提交或写入前端。
 
@@ -119,6 +119,8 @@ python -X utf8 -m pytest tests -q
 
 `tests/conftest.py` 在 pytest 生命周期内禁用 dotenv 文件解析，覆盖 `api.main` 的 `load_dotenv` 及 MCP/Chroma 配置依赖的 `dotenv_values` 路径；测试配置通过 `monkeypatch.setenv` 等方式显式注入，临时假配置文件仍可创建。单元测试以固定模型、FakeRedis、MockTransport 或注入的 embedding 为主；不能由测试通过推导真实模型质量或真实存储在所有故障下的行为。`tests/verify_*.py` 与在线脚本是额外入口，执行前确认隔离环境。
 
+网关重建回归可从 `backend/` 运行 `python -X utf8 tests/verify_gateway_recovery.py`。脚本在独立 Docker 网络中更换同名 HTTP 上游的 IP，检查网关进程持续运行且请求路径、查询参数及两个 API 前缀正常转发。Compose 网关使用 Docker 内置 DNS，Nginx 镜像需支持开源版的动态上游解析（1.27.3 起）。
+
 自动化测试覆盖编排、会话重试与实体更正、知识维护、权限、存储探测和评测协议。独立 Docker 验证使用新数据卷，覆盖 HTTP 聊天、并发重试、用户隔离、Redis 故障恢复及重启后消息、知识和报告保留；模型固定响应的验证只检查工程行为。
 
 ## 评测入口
@@ -131,7 +133,7 @@ python -X utf8 -m pytest tests -q
 python -X utf8 scripts/evaluate_retrieval_evidence.py
 ```
 
-使用 6 篇中文演示知识、6 个片段和 24 条回归用例。默认 fixture 故意含一次执行错误，预期退出码 **1**；0 表示无执行错误，2 表示输入/协议校验失败。退出 0 不等于全部命中。
+使用 6 篇中文演示知识、6 个片段和 24 条回归用例。固定结果中有 22 道证据题，Hit@3 为 **6/22（27.27%）**，证据 Recall@3 为 **25.00%**，MRR@3 为 **0.2424**。fixture 故意放入一次执行错误，预期退出码为 **1**。退出码 0 表示无执行错误，命中情况以分项指标为准。退出码 2 表示输入或协议校验失败。
 
 切片与在线入库共用 `tooling/knowledge_chunks.py`。证据 ID 包含文档身份、原文 SHA-256 版本和片段序号；评分核对实际 ID、标题和正文，拒绝未知/过期证据。旧 Chroma 存储 ID 不变；缺元数据的旧片段不猜造证据 ID。
 
@@ -168,6 +170,8 @@ validation 禁止默认矩阵，需显式固定候选。比较要求知识、标
 
 真实 A/B 需要 `--mode real --onnx-cache <已有模型缓存目录>`；不会下载模型或使用业务库。C/D 还需要 `--enable-provider` 及进程环境中的 `SERVICEPILOT_EVAL_API_KEY`、`SERVICEPILOT_EVAL_MODEL`，可选 `SERVICEPILOT_EVAL_BASE_URL`。真实模式可能收费，应先限定样本和配置。
 
+真实 D 在所有候选中请求 Top-K 索引，每项发送前 80 字标题与前 200 字正文。DeepSeek 的改写和重排默认关闭思考。轨迹分别记录截断、JSON 解析和输出结构校验失败。A/B 可与不同提示词版本的模型策略比较，因为 A/B 不调用模型。两组均使用模型时，比较器要求模型与提示词身份一致。
+
 ### 成对回答质量
 
 ```powershell
@@ -183,6 +187,8 @@ python -X utf8 scripts/evaluate_answer_quality.py --run-id example-answer-dev
 
 真实回答入口需要显式 `--mode real --enable-provider` 与 `--limit` 或 `--case`，生成/Judge 凭据使用 `SERVICEPILOT_ANSWER_GENERATION_*` / `SERVICEPILOT_ANSWER_JUDGE_*` 进程环境。真实生成消费模拟检索时另需 `--allow-mixed`；不会加载真实 `.env`。
 
+真实 Judge 的引用偏移有误时，只有逐字引文在答案中恰好出现一次才重新定位。引用归属、必需字段和证据覆盖仍按协议验证。报告分别记录截断、JSON 解析、输出结构和证据校验错误，保留未决项。
+
 ### Agent 与工作台
 
 ```powershell
@@ -191,6 +197,8 @@ python -X utf8 scripts/evaluate_agents.py --run-id example-agent-dev
 ```
 
 固定 `agent-dev-v1` 使用真实 Orchestrator 和工具循环，搭配固定模型与 synthetic 检索。检查多轮实体、角色、检索调用及证据，记录 `scope=orchestrator`；不代表完整 `/chat` 或真实模型质量。
+
+本地固定回放覆盖 9 轮。角色覆盖 **9/9**，必需工具调用 **6/7**，调用执行成功 **5/6**，返回证据 **4/7**，必需事实 **6/7**，新实体更正 **4/4**，旧实体清理 **2/2**。固定漏调和工具失败用例用于验证评分分母与失败拦截。
 
 前端 RAG 区块通过异步任务接口运行同一 suite。报告追加到 `data/eval/rag/agents/`，历史终态可跨重启读取；进程内运行中任务不恢复。固定 Judge 判定只做 fixture 验收，不是独立语义模型或人工校准。
 
@@ -223,6 +231,29 @@ python -X utf8 scripts/evaluate_agents.py --run-id example-agent-dev
 
 用项目虚拟环境运行 `scripts/freeze_public_zh_expanded.py` 可以核对衍生冻结文件，加 `--write` 可以重新生成。策略 CLI 的 `--suite` 指向 `evaluation/corpora/public_zh_expanded.v1/suite.json` 即可复跑。先核对漏掉的正例是否进入融合前候选，再决定是否测 C/D。报告仅支持本地小样本离线检索结论。
 
+### 真实检索策略实测
+
+2026-11-19 在同一份英语冻结 validation 上逐题执行，20 题中 18 题有标注证据。参数为 Top-3、候选预算各 20、结果缓存绕过。向量使用真实 MiniLM ONNX，C 和 D 的模型为 `deepseek-flash`。延迟为单次顺序执行的请求侧 P95，建索引耗时单独记录。
+
+| 策略 | 证据 Recall@3 | MRR@3 | P95 | 完整执行 |
+| --- | ---: | ---: | ---: | ---: |
+| A · 纯向量 | 1.000 | 0.944 | 46 ms | 20/20 |
+| B · 混合召回 | 1.000 | 0.972 | 79 ms | 20/20 |
+| C · 查询改写，旧提示协议 | 1.000 | 0.972 | 2.56 秒 | 20/20 |
+| D · 旧重排协议 | 1.000 | 1.000 | 20.92 秒 | 5/20 |
+| D · 精简候选与 Top-K 输出 | 1.000 | 1.000 | 1.93 秒 | 20/20 |
+
+旧 D 有 15 题触及输出上限并回退。D 两次运行合计输出 Token 分别为 **42,541** 与 **572**，均含改写与重排。C 行是旧协议结果，比较新版 C 与新版 D 时应重跑 C。这些结果用于评估排序、延迟和协议完成率，生产语料上的收益仍待验证。
+
+在 `backend/` 配置真实模型环境变量后，用本机已缓存的 ONNX 目录替换示例路径。每次运行使用新的 run ID。
+
+```powershell
+$onnxCache = 'C:/path/to/all-MiniLM-L6-v2'
+python -X utf8 scripts/evaluate_retrieval_strategies.py --split validation --candidate D --with-baselines --mode real --onnx-cache $onnxCache --enable-provider --run-id example-real-validation-D
+```
+
+将候选改为 `C` 并更换运行 ID 可复跑查询改写。报告位于 `data/eval/rag/experiments/<run-id>/`。
+
 ### 业务词面候选基准
 
 2026-11-18 本地复测直接执行 `KnowledgeBase.search()`，使用回环 HTTP 的 Chroma 0.5.23（单 worker）和已缓存的 MiniLM ONNX。24 条冻结查询固定向量候选 20、词面候选 200、Top-3。每组预热 1 轮、计时 3 轮，共 72 次请求，其中 69 次有标注证据。计时绕过应用结果缓存、查询改写和模型重排，从工作线程开始计算。120 片来自中文扩展冻结快照，较大池加入同一批合成干扰项。
@@ -244,7 +275,34 @@ python -X utf8 scripts/evaluate_agents.py --run-id example-agent-dev
 
 ### 回答与系统验证
 
-已有小样本中文真实生成与聊天冒烟记录，用于观察检索、角色协作及额外断言等问题；尚未形成完整中文回答指标或独立 Judge 校准结论。
+2026-11-19 使用英语 dev 的 40 题固定回放。标准证据分支仅适用于 36 道有答案的题。
+
+| 固定回放指标 | 检索证据 | 标准证据 |
+| --- | ---: | ---: |
+| 生成成功 | 40/40 | 36/36 |
+| Judge 完整评分 | 39/40 | 35/36 |
+| 标注事实覆盖 | 77/84 | 77/84 |
+| 断言证据支持 | 68/80 | 76/79 |
+
+另用真实 B 的检索报告，对 validation 的 `v2-041` 与 `v2-042` 运行 `deepseek-flash` 生成和 Judge。两题各有两个分支，4 个答案均生成成功。修复偏移处理后，8 次 Judge 调用均通过协议校验。检索证据分支的断言支持为 **11/12**，标准证据分支为 **7/7**，其中检索证据分支有 1 条断言支持度未决。样本用于验证真实协议和诊断，未做独立 Judge 校准。
+
+```powershell
+python -X utf8 scripts/evaluate_answer_quality.py --split validation --source-report data/eval/rag/experiments/example-real-validation-D/B/report.json --mode real --enable-provider --case v2-041 --case v2-042 --run-id example-real-answer
+```
+
+Docker 验收覆盖相同请求 ID 的 8 个并发重试只提交一轮、服务重启后 Redis 回执与历史、Chroma 文档及 SQLite 核验单均保留，以及两个 API 进程之间的知识缓存失效。SSE 在沙盒核验工具执行阶段断流后，用同一 ID 重试拿到原回执，SQLite 新增 1 张核验单，Redis 保留 2 条消息。后端容器换 IP 后，原 Nginx 进程恢复新旧 API 前缀的转发。配置新令牌变量后，Prometheus 的应用采集目标为 `up`。重建回归可用[离线测试](#离线测试)中的脚本复跑。
+
+### 意图路由基准
+
+2026-11-18 的本地冷缓存基准包含 19 个用例，预热 1 轮，计时 3 轮。向量分支使用真实本地 n-gram，LLM 分支使用延迟 40 ms 的固定响应替身。
+
+| 本地配置 | 每轮意图模型调用 | 每轮路由错误 | P50 / P95 |
+| --- | ---: | ---: | ---: |
+| 对齐基线 | 19 | 3/19 | 42.65 / 56.77 ms |
+| 权重归一化，短路关闭 | 19 | 0/19 | 48.07 / 58.41 ms |
+| 权重归一化，短路开启 | 11 | 0/19 | 33.04 / 57.60 ms |
+
+语义和路由边界可用 `python -X utf8 -m pytest tests/test_intent_routing.py -q` 回归。耗时来自本地替身基准，记录在维护者的 `data/eval/intent-routing-20261118/`。
 
 ### 中文聊天配对实验
 
@@ -272,6 +330,18 @@ python -X utf8 scripts/evaluate_chat_pairs.py --image servicepilot-chat-pairs:lo
 
 v2 有 10 个用例、11 轮，逐轮记录工具参数、回答、事实规则、HTTP 延迟和供应商报告的 Token。跨域角色直接运行混合召回，单域保留查询改写与模型重排。加 `--verify-shared-knowledge` 时，脚本启动额外 API 进程。实测在读端预热缓存后，从写端更新和删除文档，读端读到了新版，删除后旧片段消失。P95 在这一样本量下等于最慢一轮。
 
+2026-11-19 完整真实 API 运行使用 `deepseek-flash`，本地报告 ID 为 `servicepilot-pair-e1c6cf74`。
+
+| 指标 | 单 Agent | 多 Agent |
+| --- | ---: | ---: |
+| 当时的自动评分 | 11/11 | 10/11 |
+| 按修订规则重评分 | 11/11 | 11/11 |
+| 预期工具调用 | 15/15 | 15/15 |
+| HTTP 延迟 P50 / P95 | 6.71 / 10.06 秒 | 6.26 / 11.57 秒 |
+| 供应商报告输入 / 输出 Token | 39,646 / 5,488 | 53,003 / 8,551 |
+
+同一订单的共享币种与金额表述造成了一次多 Agent 评分漏判。规则修订后单独重跑 `--case correction`，两组各 **2/2 轮通过**。完整对照中，多 Agent 的中位延迟较短，尾延迟和供应商报告的 Token 较高。
+
 对规则遗漏的改述，可用 `--review-report 原报告.json --reviews 复核记录.json --output 复核报告.json` 在离线模式附加人工判断。复核记录包含原报告的 `run_id`、`suite_sha256` 和 `reviews` 数组。每条判断带 `arm`、`case`、`turn`、`fact`、`covered`、`reviewer`、`reason` 与答复原文摘录 `quote`。复核报告保留原自动判定及其汇总。
 
-待扩大验证的范围包括真实 C/D 策略收益、不同任务分布下的单 Agent／多 Agent 表现，以及多 worker 长时间并发写入和依赖故障恢复。业务检索判定使用有限规则，知识和身份映射面向本项目演示场景。
+待扩大验证的范围包括真实 C/D 在更大语料中的收益、不同任务分布下的单 Agent／多 Agent 表现，以及多 worker 长时间并发写入和依赖故障恢复。业务检索判定使用有限规则，知识和身份映射面向本项目演示场景。

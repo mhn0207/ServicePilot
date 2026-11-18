@@ -153,4 +153,4 @@ volumes:
 
 secrets:
   metrics_token:
-    file: ${ZHIYING_METRICS_TOKEN_PATH:-./config/prometheus.token.example}
+    file: ${SERVICEPILOT_METRICS_TOKEN_PATH:-${ZHIYING_METRICS_TOKEN_PATH:-./config/prometheus.token.example}}

@@ -4,7 +4,7 @@ import json
 import time
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from evaluation.answer_data import Citation
 from evaluation.retrieval import StrictModel, Text, canonical_hash
@@ -63,9 +63,15 @@ class Span(StrictModel):
     end: int = Field(gt=0)
     quote: Text
 
-    def check(self, answer):
-        if self.end <= self.start or answer[self.start:self.end] != self.quote:
-            raise ValueError('invalid answer span')
+    def check(self, answer, *, rebase=False):
+        if self.start < self.end <= len(answer) and answer[self.start:self.end] == self.quote:
+            return False
+        if rebase:
+            start = answer.find(self.quote)
+            if start >= 0 and answer.find(self.quote, start + 1) == -1:
+                self.start, self.end = start, start + len(self.quote)
+                return True
+        raise ValueError('invalid answer span')
 
 
 class FactResult(StrictModel):
@@ -120,26 +126,31 @@ def exact_ids(rows, expected, field):
         raise ValueError('missing duplicate or unknown ID')
 
 
-def check_correctness(value, case, answer):
+def check_correctness(value, case, answer, *, rebase_spans=False):
     result = Correctness.model_validate(value)
     exact_ids(result.facts, [f.fact_id for f in case.facts], 'fact_id')
     exact_ids(result.forbidden, [f.forbidden_claim_id for f in case.forbidden], 'forbidden_claim_id')
     for row in result.facts + result.forbidden:
         if row.answer_span:
-            row.answer_span.check(answer)
+            row.answer_span.check(answer, rebase=rebase_spans)
         if row.status in ('covered', 'contradicted', 'violation') and row.answer_span is None:
             raise ValueError('positive judgement missing answer excerpt')
     return result
 
 
-def check_grounding(value, answer, context, *, legacy_units=False, span_coverage=True):
+def check_grounding(value, answer, context, *, legacy_units=False, span_coverage=True, rebase_spans=False):
     result = Grounding.model_validate(value)
     exact_ids(result.claims, [c.claim_id for c in result.claims], 'claim_id')
     units = {u['unit_id']: u for u in answer_units(answer, legacy=legacy_units)}
     chunks = {c['chunk_id']: c['content'] for c in context}
     seen, assertions = set(), set()
     for row in result.claims:
-        row.answer_span.check(answer)
+        if row.answer_span.check(answer, rebase=rebase_spans):
+            # Unit IDs are determined by the relocated literal quotation.
+            row.unit_ids = [key for key, unit in units.items()
+                            if row.answer_span.start < unit['end'] and row.answer_span.end > unit['start']]
+            if not row.unit_ids:
+                raise ValueError('claim unit mismatch')
         identity = (row.answer_span.start, row.answer_span.end)
         if identity in assertions or len(row.unit_ids) != len(set(row.unit_ids)):
             raise ValueError('duplicate assertion or unit')
@@ -234,8 +245,9 @@ async def observed_call(dependency, stage, payload, config, calls, validate):
         for field in ('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'):
             v = response.get(field)
             setattr(call, field, v if type(v) is int and v >= 0 else None)
-        if response.get('stop_reason') != 'end_turn':
-            call.error_code = 'incomplete_output'
+        stop_reason = response.get('stop_reason')
+        if stop_reason != 'end_turn':
+            call.error_code = 'truncated_output' if stop_reason == 'max_tokens' else 'incomplete_output'
             raise ValueError('incomplete output')
         raw = response.get('text')
         if not isinstance(raw, str) or not raw.strip():
@@ -252,9 +264,16 @@ async def observed_call(dependency, stage, payload, config, calls, validate):
         try:
             value = raw if stage == 'generation' else json.loads(raw, object_pairs_hook=pairs,
                 parse_constant=lambda _: (_ for _ in ()).throw(ValueError('nonfinite JSON')))
+        except ValueError:
+            call.error_code = 'invalid_json'
+            raise
+        try:
             value = validate(value)
-        except Exception:
-            call.error_code = 'output_validation_error'
+        except ValidationError:
+            call.error_code = 'invalid_output_schema'
+            raise
+        except ValueError:
+            call.error_code = 'invalid_judge_evidence'
             raise
         call.status = 'success'
         return value
@@ -294,10 +313,11 @@ async def evaluate_branch(case, branch, chunks, execution, generation, judge, co
             # Grounding receives NO reference or oracle annotation.
             grounded = request(GROUND_SYSTEM, dict(question=case.question, answer=row.answer,
                 actual_context=values, units=answer_units(row.answer)))
+            rebase_spans = getattr(judge, 'mode', None) == 'real'
             row.correctness = await observed_call(judge, 'correctness', correct, config, row.calls,
-                lambda v: check_correctness(v, case, row.answer))
+                lambda v: check_correctness(v, case, row.answer, rebase_spans=rebase_spans))
             row.grounding = await observed_call(judge, 'grounding', grounded, config, row.calls,
-                lambda v: check_grounding(v, row.answer, values))
+                lambda v: check_grounding(v, row.answer, values, rebase_spans=rebase_spans))
             row.judge_status = 'error' if row.correctness is None or row.grounding is None else (
                 'partial' if unresolved(row) else 'valid')
         row.errors.extend(c.stage + ':' + c.error_code for c in row.calls if c.status == 'error')

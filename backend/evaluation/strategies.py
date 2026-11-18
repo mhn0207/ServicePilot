@@ -61,6 +61,7 @@ class ModelCall(StrictModel):
     prompt_version: str = 'rag-strategy-prompts-v2'
     parameters: dict
     status: Literal['success', 'error'] = 'error'
+    error_code: str | None = None
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     cache_read_input_tokens: int | None = Field(default=None, ge=0)
@@ -77,6 +78,8 @@ class ModelCall(StrictModel):
             data.pop('request_data', None)
         if self.response_value is None:
             data.pop('response_value', None)
+        if self.error_code is None:
+            data.pop('error_code', None)
         return data
 
 
@@ -121,7 +124,7 @@ class StrategyRunner:
 
     def identity(self):
         return {'embedding': self.index.identity, 'model': self.model.identity if self.model else None,
-                'prompt': 'rag-strategy-prompts-v2', 'distance': 'cosine',
+                'prompt': getattr(self.model, 'prompt_version', 'rag-strategy-prompts-v2'), 'distance': 'cosine',
                 'lexical': getattr(self.index, 'lexical_policy', 'unspecified-injected-policy')}
 
     async def run(self, case_id, query, config: Strategy, context=None):
@@ -131,6 +134,8 @@ class StrategyRunner:
         trace = Trace(case_id=case_id, requested_config=config, embedding_identity=self.index.identity,
                       effective_steps={name: Step(status='disabled', reason='configuration') for name in ('rewrite','retrieval','rerank')},
                       rewrite_query_list=[query])
+        if config.rerank and hasattr(self.model, 'rerank_prompt_policy'):
+            trace.rerank_prompt_policy = self.model.rerank_prompt_policy
         base = dict(config=config.model_dump(), knowledge=self.snapshot.knowledge_hash,
                     dependencies=self.identity(), context=context or {})
         key = canonical_hash(dict(base, query=query))
@@ -151,9 +156,6 @@ class StrategyRunner:
         if config.rewrite:
             try:
                 rewritten = await self._model_call('rewrite', query, [], config.rewrite_count, trace)
-                if not isinstance(rewritten, list) or not rewritten or any(
-                        not isinstance(q, str) or not q.strip() or len(q) > 2000 for q in rewritten):
-                    raise ValueError('invalid rewrite')
                 queries = list(dict.fromkeys([query] + rewritten[:config.rewrite_count]))
                 trace.effective_steps['rewrite'] = Step(status='executed', reason='validated_model_queries')
             except Exception:
@@ -226,8 +228,6 @@ class StrategyRunner:
             else:
                 try:
                     order = await self._model_call('rerank',query,candidates,config.top_k,trace)
-                    if not isinstance(order, list) or not order or any(type(i) is not int or not 0 <= i < len(candidates) for i in order):
-                        raise ValueError('invalid indices')
                     # 兼容原策略：有效索引去重，遗漏项按原顺序补齐。
                     unique = list(dict.fromkeys(order))
                     trace.counts['rerank_duplicate_indices'] = len(order)-len(unique)
@@ -255,6 +255,7 @@ class StrategyRunner:
         parameters = {'temperature': .3 if stage == 'rewrite' else 0.0,
                       'max_tokens': 512 if stage == 'rewrite' else 2048}
         observation = ModelCall(stage=stage, model=self.model.identity, parameters=parameters,
+            prompt_version=getattr(self.model, 'prompt_version', 'rag-strategy-prompts-v2'),
             request_data=dict(query=query, n=n, candidates=[c.model_dump() for c in candidates]))
         trace.model_calls.append(observation)
         started = time.perf_counter()
@@ -265,14 +266,27 @@ class StrategyRunner:
                 value = response.get(field)
                 setattr(observation, field, value if type(value) is int and value >= 0 else None)
             if response.get('truncated'):
+                observation.error_code = 'truncated_output'
                 raise ValueError('truncated output')
+            if response.get('output_error'):
+                observation.error_code = response['output_error']
+                raise ValueError('invalid model JSON')
             value = response.get('value')
             # Only preserve bounded protocol values, not arbitrary provider output.
             if isinstance(value, list) and len(value) <= 1000 and all(
                     type(v) is int or (isinstance(v,str) and len(v)<=2000) for v in value):
                 observation.response_value = value
+            valid_item = (lambda item: isinstance(item, str) and bool(item.strip()) and len(item) <= 2000
+                          ) if stage == 'rewrite' else (lambda item: type(item) is int and 0 <= item < len(candidates))
+            if not isinstance(value, list) or not value or not all(map(valid_item, value)):
+                observation.error_code = 'invalid_output_schema'
+                raise ValueError('invalid model output')
             observation.status = 'success'
-            return response['value']
+            return value
+        except Exception as ex:
+            if observation.error_code is None:
+                observation.error_code = 'timeout' if isinstance(ex, TimeoutError) else 'request_error'
+            raise
         finally:
             observation.elapsed_ms = (time.perf_counter()-started)*1000
             trace.stages_ms[stage] = observation.elapsed_ms

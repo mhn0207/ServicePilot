@@ -594,10 +594,28 @@ def test_provider_mocktransport_isolated_usage_and_truncation(monkeypatch):
         calls=[]
         result = await observed_call(dep,'correctness',request(CORRECT_SYSTEM,{'answer':'hello'}),AnswerConfig(),calls,lambda v:v)
         assert result is None and calls[0].input_tokens == 0 and calls[0].output_tokens == 9
-        assert calls[0].error_code == 'incomplete_output'
+        assert calls[0].error_code == 'truncated_output'
         await dep.close()
     asyncio.run(run())
     assert len(requests) == 1 and llm_usage_summary() == before
+
+
+@pytest.mark.parametrize(('answer', 'quote', 'end', 'expected'), [
+    ('First. Second.', 'Second.', 7, (7, 14)),
+    ('First. First.', 'First.', 5, None),
+    ('First. Second.', 'Third.', 6, None),
+])
+def test_real_judge_span_rebases_only_unique_literal_quotes(answer, quote, end, expected):
+    from evaluation.answer_quality import Span
+
+    span = Span(start=0, end=end, quote=quote)
+    if expected is None:
+        with pytest.raises(ValueError, match='invalid answer span'):
+            span.check(answer, rebase=True)
+    else:
+        assert span.check(answer, rebase=True)
+        assert (span.start, span.end) == expected
+        assert not span.check(answer)
 
 
 @pytest.mark.parametrize('url', ['https://name:secret@host/path','https://host/path?key=secret','https://host/#secret','file:///secret'])

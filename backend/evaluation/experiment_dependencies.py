@@ -4,6 +4,7 @@ import json
 import math
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from evaluation.errors import ExperimentInputError
@@ -164,6 +165,9 @@ def real_index(snapshot, cache_path: Path):
 
 class ProviderModel:
     """直接 SDK；不经过会更新模块全局统计的 core.llm_utils.create_message。"""
+    prompt_version = 'rag-strategy-prompts-v3'
+    rerank_prompt_policy = 'all candidates; title[:80], content[:200]; request Top-K stable indices'
+
     def __init__(self):
         from anthropic import AsyncAnthropic
         model=os.environ.get('SERVICEPILOT_EVAL_MODEL')
@@ -174,24 +178,30 @@ class ProviderModel:
         # base_url 不落盘，只保存不可逆身份哈希以拒绝混比不同服务。
         url=os.environ.get('SERVICEPILOT_EVAL_BASE_URL','https://api.anthropic.com')
         self.identity=model+':endpoint-'+canonical_hash(url)
+        self.deepseek = urlsplit(url).hostname == 'api.deepseek.com'
         self.client=AsyncAnthropic(api_key=key,base_url=url,max_retries=0,timeout=30)
 
     async def call(self,stage,query,candidates,n,parameters):
         if stage=='rewrite':
             prompt=f'Rewrite this search query into at most {n} distinct search queries. Return only a JSON string array. Query: {query}'
         else:
-            items=[{'index':i,'title':c.title[:160],'content':c.content[:400]} for i,c in enumerate(candidates)]
-            prompt=f'Rank all these candidates for the query. Return only a JSON array of integer indices, most relevant first. Query: {query}\nCandidates: '+json.dumps(items,ensure_ascii=False)
-        response=await self.client.messages.create(model=self.model,**parameters,
+            items = [[i, chunk.title[:80], chunk.content[:200]] for i, chunk in enumerate(candidates)]
+            prompt = (f'Select the {n} most relevant candidates for the query. Candidates are [index,title,text]. '
+                      f'Return only a JSON array of {n} distinct integer indices, most relevant first. '
+                      f'Query: {query}\nCandidates: ' + json.dumps(items, ensure_ascii=False, separators=(',', ':')))
+        extra = {'extra_body': {'thinking': {'type': 'disabled'}}} if self.deepseek else {}
+        response=await self.client.messages.create(model=self.model,**parameters, **extra,
                                                    messages=[{'role':'user','content':prompt}])
         # 仅协议值和供应商用量离开适配器；异常/未知响应正文不写入报告。
         raw=''.join(b.text for b in response.content if getattr(b,'type',None)=='text')
         usage=getattr(response,'usage',None)
+        output_error = None
         try:
             value=json.loads(raw)
         except (ValueError,TypeError):
             value=None
-        return {'value':value,'truncated':response.stop_reason=='max_tokens',
+            output_error = 'invalid_json'
+        return {'value':value,'truncated':response.stop_reason=='max_tokens', 'output_error': output_error,
                 **{field:getattr(usage,field,None) for field in (
                     'input_tokens','output_tokens','cache_read_input_tokens','cache_creation_input_tokens')}}
 
