@@ -81,6 +81,10 @@ system 提示词按“工具 → 角色契约 → Skills”排列，三者不含
 
 历史读取只返回 Redis 当前保留的最多 20 条用户/助手消息，按时间顺序排列，不返回内部 metadata、画像或工具轨迹；启用鉴权时身份由 Token 决定，传入其他 `user_id` 不改变读取对象，管理员也只读自己的会话。响应禁止缓存。工作记忆 TTL 为 24 小时，后台压缩可能只保留更少的近期消息，因此这不是完整聊天归档；不存在或已过期的工作记忆返回空列表。读取异常或超时返回 503，不把依赖故障伪装成空会话。
 
+### 意图识别短路
+
+首轮明确请求可启用 `SERVICEPILOT_INTENT_FAST_PATH=true`（兼容 `ZHIYING_INTENT_FAST_PATH`，默认关闭）。规则需匹配整句，向量 Top-1 需与规则同意图且相似度至少为 0.82。符合规则的请求给向量最多 50 毫秒的启动窗口，慢向量与意图 LLM 随后继续并行。带历史的请求直接走完整识别。短路只影响意图 LLM，业务 Agent 仍正常执行。融合权重按实际启用且可用的分支归一化，低于阈值时交给既有澄清和协作逻辑。
+
 ## 聊天阶段事件
 
 `POST /chat/stream` 使用与 `POST /chat` 相同的请求体和访问 Token。客户端发送 `Accept: text/event-stream` 并读取结构化事件。每次实际执行按路径发出 `stage` 事件，例如 `lease_acquired`、`intent_recognized`、`agent_routing`、`tool_call`、`composing`、`committing`。工具事件只带名称与 Agent，回复正文随事务完成后的 `final` 返回，格式与 JSON 聊天接口一致。

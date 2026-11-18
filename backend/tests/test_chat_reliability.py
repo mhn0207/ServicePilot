@@ -78,6 +78,33 @@ def body(message="退款规则", request_id="one", conv_id="c"):
     return {"message": message, "user_id": "u", "conv_id": conv_id, "client_request_id": request_id}
 
 
+@pytest.mark.asyncio
+async def test_chat_intent_shortcut_only_on_first_turn(services, monkeypatch):
+    _, orchestrator, agent_model, http = services
+    monkeypatch.setenv("SERVICEPILOT_INTENT_FAST_PATH", "true")
+    monkeypatch.setenv("INTENT_EMBEDDING_ENABLED", "true")
+    monkeypatch.setenv("INTENT_EMBEDDING_PROVIDER", "local")
+    intent_model = AsyncMock(return_value=text_response('{"intent":"refund","confidence":0.93}'))
+    monkeypatch.setattr("core.intent_recognizer.AsyncAnthropic",
+                        Mock(return_value=SimpleNamespace(messages=SimpleNamespace(create=intent_model))))
+    orchestrator._intent_recognizer = IntentRecognizer("offline")
+    monkeypatch.delattr(orchestrator, "recognize_intent")
+
+    first = await http.post("/chat", json=body("我要申请退款", "first"))
+    assert first.status_code == 200
+    assert first.json()["primary_agent"] == "billing" and first.json()["supporting_agents"] == []
+    assert first.json()["intent_source_scores"]["llm"] == 0
+    intent_model.assert_not_awaited()
+
+    second = await http.post("/chat", json=body("我要申请退款", "second"))
+    assert second.status_code == 200
+    assert second.json()["primary_agent"] == "billing" and second.json()["intent"] == "refund"
+    assert second.json()["intent_source_scores"]["llm"] == .93
+    assert "最近对话" in intent_model.call_args.kwargs["messages"][0]["content"]
+    intent_model.assert_awaited_once()
+    assert agent_model.messages.create.await_count == 2
+
+
 @pytest.fixture
 def sandbox(monkeypatch, tmp_path):
     store = SandboxStore(tmp_path / "sandbox.sqlite3")

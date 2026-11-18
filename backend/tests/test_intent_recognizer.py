@@ -1,6 +1,9 @@
+import asyncio
+from unittest.mock import AsyncMock, Mock
+
 import pytest
 
-from core.intent_recognizer import IntentCategory, IntentRecognizer
+from core.intent_recognizer import IntentCategory, IntentRecognizer, extract_error_codes
 
 
 def make_recognizer(threshold=0.5):
@@ -55,3 +58,119 @@ def test_pattern_can_still_refine_within_the_winning_group():
     assert intent is IntentCategory.TECHNICAL_LOGIN
     assert confidence == pytest.approx(0.61)
     assert sources["refined_by_pattern"] == pytest.approx(0.5)
+
+
+def test_unavailable_embedding_is_removed_from_weight_denominator():
+    intent, confidence, sources = make_recognizer()._vote(
+        {"intent": IntentCategory.BILLING, "confidence": .6},
+        {"intent": IntentCategory.OTHER, "confidence": 0, "source": "unavailable"},
+        {"intent": IntentCategory.OTHER, "confidence": 0},
+    )
+    assert intent is IntentCategory.BILLING
+    assert confidence == pytest.approx((.7 * .6) / .8)
+    assert sources == {"llm": .6, "embedding": 0, "pattern": 0}
+
+
+@pytest.mark.parametrize("failed", [
+    {"confidence": .9, "failed": True},
+    {"confidence": float("nan")},
+    {"confidence": True},
+    {"confidence": 1.01},
+])
+def test_llm_failure_cannot_promote_a_weak_vector(failed):
+    llm = {"intent": IntentCategory.REFUND, **failed}
+    intent, confidence, sources = make_recognizer()._vote(
+        llm, {"intent": IntentCategory.REFUND, "confidence": .35},
+        {"intent": IntentCategory.OTHER, "confidence": 0},
+    )
+    assert intent is IntentCategory.OTHER
+    assert confidence == pytest.approx((.2 * .35) / .3)
+    assert sources["llm"] == 0
+
+
+def test_failed_llm_and_vector_keep_strong_rule_fallback():
+    intent, confidence, _ = make_recognizer()._vote(
+        {"intent": IntentCategory.OTHER, "confidence": 0, "failed": True},
+        {"intent": IntentCategory.OTHER, "confidence": 0, "source": "unavailable"},
+        {"intent": IntentCategory.REFUND, "confidence": .5},
+    )
+    assert (intent, confidence) == (IntentCategory.REFUND, .5)
+
+
+def test_pattern_refinement_still_requires_the_group_threshold():
+    intent, confidence, sources = vote(
+        make_recognizer(),
+        (IntentCategory.TECHNICAL, .3),
+        (IntentCategory.OTHER, 0),
+        (IntentCategory.TECHNICAL_LOGIN, .5),
+    )
+    assert intent is IntentCategory.OTHER
+    assert confidence == pytest.approx(.26)
+    assert "refined_by_pattern" not in sources
+
+
+@pytest.mark.parametrize(("message", "expected"), [
+    ("报 500 元，实际只扣了 401 元。", []),
+    ("401 和 500", []),
+    ("接口返回 HTTP 502. 登录报401", ["502", "401"]),
+    ("页面报错 401.5 元", []),
+])
+def test_http_code_requires_a_code_context_and_numeric_boundary(message, expected):
+    assert extract_error_codes(message) == expected
+
+
+@pytest.fixture
+def fast_recognizer(monkeypatch):
+    monkeypatch.setenv("SERVICEPILOT_INTENT_FAST_PATH", "true")
+    monkeypatch.setenv("INTENT_EMBEDDING_ENABLED", "true")
+    monkeypatch.setenv("INTENT_EMBEDDING_PROVIDER", "local")
+    monkeypatch.setattr("core.intent_recognizer.AsyncAnthropic", Mock())
+    return IntentRecognizer("offline")
+
+
+@pytest.mark.asyncio
+async def test_slow_embedding_head_start_does_not_cancel_or_duplicate_lookup(fast_recognizer, monkeypatch):
+    monkeypatch.setattr("core.intent_recognizer._FAST_PATH_WAIT_S", .001)
+    llm_started = asyncio.Event()
+
+    async def embedding(_):
+        await llm_started.wait()
+        return {"intent": IntentCategory.REFUND, "confidence": .95, "source": "local-ngram"}
+
+    async def llm(*_):
+        llm_started.set()
+        return {"intent": IntentCategory.REFUND, "confidence": .95}
+
+    fast_recognizer._embedding_recognize = AsyncMock(side_effect=embedding)
+    fast_recognizer._llm_recognize = AsyncMock(side_effect=llm)
+    result = await asyncio.wait_for(fast_recognizer.recognize("我要申请退款"), 1)
+    assert result.intent is IntentCategory.REFUND
+    fast_recognizer._embedding_recognize.assert_awaited_once()
+    fast_recognizer._llm_recognize.assert_awaited_once()
+
+
+@pytest.mark.parametrize(("category", "confidence", "source"), [
+    (IntentCategory.REFUND, .81, "local-ngram"),
+    (IntentCategory.INVOICE, .99, "local-ngram"),
+    (IntentCategory.REFUND, .99, "unavailable"),
+])
+@pytest.mark.asyncio
+async def test_vector_must_be_available_strong_and_agree_to_shortcut(fast_recognizer, category, confidence, source):
+    fast_recognizer._embedding_recognize = AsyncMock(return_value={
+        "intent": category, "confidence": confidence, "source": source,
+    })
+    fast_recognizer._llm_recognize = AsyncMock(return_value={"intent": IntentCategory.REFUND, "confidence": .95})
+    assert (await fast_recognizer.recognize("我要申请退款")).intent is IntentCategory.REFUND
+    fast_recognizer._llm_recognize.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_shortcut_is_cached_by_history(fast_recognizer):
+    fast_recognizer._llm_recognize = AsyncMock(return_value={"intent": IntentCategory.REFUND, "confidence": .95})
+    fresh = await fast_recognizer.recognize("我要申请退款")
+    assert await fast_recognizer.recognize("我要申请退款") is fresh
+    assert fresh.source_scores["llm"] == 0
+    fast_recognizer._llm_recognize.assert_not_awaited()
+    with_history = await fast_recognizer.recognize("我要申请退款", [{"role": "user", "content": "修改金额"}])
+    assert with_history.source_scores["llm"] == .95
+    fast_recognizer._llm_recognize.assert_awaited_once()

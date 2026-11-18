@@ -43,7 +43,7 @@ from agents.tools import (
     technical_tools,
 )
 from core.chat_progress import emit_chat_stage
-from core.intent_recognizer import IntentCategory, IntentRecognizer, UrgencyLevel
+from core.intent_recognizer import IntentCategory, IntentRecognizer, UrgencyLevel, extract_error_codes
 from core.llm_utils import create_message, extract_text_content
 from core.request_budget import POLICY, phase_budget, can_start, limit_timeout, observe, remaining
 
@@ -1258,11 +1258,12 @@ class AgentOrchestrator:
         ):
             scores[AgentType.BILLING] += 0.75
 
-        technical_kws = ["崩溃", "报错", "error", "crash", "无法登录", "登录失败", "500", "401", "验证码"]
+        technical_kws = ["崩溃", "报错", "error", "crash", "无法登录", "登录失败", "验证码"]
         billing_kws = ["退款", "退货", "扣款", "发票", "账单", "支付", "订阅", "refund", "invoice", "多扣"]
         general_kws = ["订单", "物流", "快递", "配送", "会员", "积分", "咨询", "帮助"]
 
         technical_hits = sum(1 for kw in technical_kws if kw in msg)
+        technical_hits += len({"401", "500"}.intersection(extract_error_codes(msg)))
         billing_hits = sum(1 for kw in billing_kws if kw in msg)
         general_hits = sum(1 for kw in general_kws if kw in msg)
 
@@ -1308,14 +1309,14 @@ class AgentOrchestrator:
         msg = req.message.lower()
         targets: List[AgentType] = []
 
-        technical_kws = ["崩溃", "报错", "error", "crash", "无法登录", "登录失败", "500", "401"]
+        technical_kws = ["崩溃", "报错", "error", "crash", "无法登录", "登录失败"]
         billing_kws = ["退款", "扣款", "发票", "账单", "支付", "订阅", "refund", "invoice"]
 
         if req.intent in (
             IntentCategory.TECHNICAL,
             IntentCategory.TECHNICAL_LOGIN,
             IntentCategory.TECHNICAL_CRASH,
-        ) or any(kw in msg for kw in technical_kws):
+        ) or any(kw in msg for kw in technical_kws) or extract_error_codes(msg):
             targets.append(AgentType.TECHNICAL)
         if req.intent in (
             IntentCategory.BILLING,
