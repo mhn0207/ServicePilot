@@ -153,7 +153,7 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
 
     def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """
-        向量与词面混合检索；词面候选最多 200 条，不读取全部向量。
+        向量与词面混合检索；先按相关性计分，再截取 Top-K。
         """
         if type(top_k) is not int or not 1 <= top_k <= 20:
             raise ValueError("top_k 必须是 1–20 的整数")
@@ -194,7 +194,7 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
             clauses = [{"$contains": term} for term in terms]
             lexical = self._collection.get(
                 where_document=clauses[0] if len(clauses) == 1 else {"$or": clauses},
-                include=["documents", "metadatas"], limit=200,
+                include=["documents", "metadatas"],
             )
         except Exception as ex:
             logger.warning("词面召回不可用，保留向量结果: %s", type(ex).__name__)

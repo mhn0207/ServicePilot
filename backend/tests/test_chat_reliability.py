@@ -3,6 +3,7 @@ import asyncio
 import json
 import sqlite3
 import sys
+import time
 import types
 from collections import deque
 from contextlib import closing
@@ -248,6 +249,79 @@ def stream_events(text):
             event, data = frame.splitlines()
             events.append((event.removeprefix("event: "), json.loads(data.removeprefix("data: "))))
     return events
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("billing_text, expected_status", [
+    ("两笔都已入账。", "success"),
+    ("", "partial"),
+])
+async def test_cross_domain_chat_preserves_verified_ledger(services, sandbox, billing_text, expected_status):
+    _, orch, model, http = services
+    store, owner, _ = sandbox
+    from agents.sandbox_tools import ORDER_LOOKUP, build_sandbox_tools
+
+    orch.set_shared_tools(build_sandbox_tools(store))
+
+    async def reply(**kwargs):
+        tools = {tool["name"] for tool in kwargs.get("tools", [])}
+        if "inspect_request_context" in tools:
+            return text_response("")
+        if ORDER_LOOKUP not in tools:
+            return text_response("401 可先检查 Token 是否过期。")
+        if isinstance(kwargs["messages"][-1]["content"], list):
+            return text_response(billing_text)
+        return SimpleNamespace(content=[{
+            "type": "tool_use", "id": "ledger", "name": ORDER_LOOKUP,
+            "input": {"order_id": DEMO_ORDER_ID},
+        }])
+
+    model.messages.create.side_effect = reply
+    message = f"登录时报 401，同时订单 {DEMO_ORDER_ID} 疑似重复扣款，请分别说明如何处理"
+    response = await http.post("/chat", json=body(message), headers=owner)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["status"] == expected_status
+    assert ORDER_LOOKUP in result["tools_used"]
+    assert "401 可先检查 Token 是否过期" in result["response"]
+    assert "CHG-DEMO-01：199.00 元，已入账" in result["response"]
+    assert "CHG-DEMO-02：199.00 元，预授权冻结（未入账）" in result["response"]
+    assert "两笔都已入账" not in result["response"]
+    assert all("tools" in call.kwargs for call in model.messages.create.await_args_list)
+    assert sandbox_review_ids(store) == []
+
+
+@pytest.mark.asyncio
+async def test_parallel_branches_reserve_same_write_once(services):
+    _, orch, model, http = services
+    attempted = []
+
+    async def write(req, args):
+        attempted.append(args["case_id"])
+        await asyncio.sleep(.01)
+        return {"success": True}
+
+    orch.set_shared_tools({"write_case": AgentToolSpec(
+        "write_case", "test operation",
+        {"type": "object", "properties": {"case_id": {"type": "string"}}, "required": ["case_id"]},
+        write, retry_safe=False,
+    )})
+
+    async def reply(**kwargs):
+        if not kwargs.get("tools") or isinstance(kwargs["messages"][-1]["content"], list):
+            return text_response("已处理该分支。")
+        return SimpleNamespace(content=[{
+            "type": "tool_use", "id": "write", "name": "write_case", "input": {"case_id": "same"},
+        }])
+
+    model.messages.create.side_effect = reply
+    response = await http.post("/chat", json=body("登录报 401，同时这笔订单重复扣款，分别处理"))
+    assert response.status_code == 200
+    trace = orch.get_tool_trace(response.json()["request_id"])
+    writes = [call for call in trace["tool_calls"] if call["tool_name"] == "write_case"]
+    assert len(writes) == 2
+    assert sum(call["result_success"] is True for call in writes) == 1
+    assert attempted == ["same"]
 
 
 @pytest.mark.asyncio
@@ -688,15 +762,20 @@ async def test_http_timing_includes_memory_commit_and_metrics_work_without_extra
     monitor = PerformanceMonitor(orch, SimpleNamespace(), registry=registry)
     monkeypatch.setattr(api, "_monitor", monitor)
     original_commit = memory.commit_turn
+    commit_delay_ms = 0.0
 
     async def delayed_commit(*args, **kwargs):
-        await asyncio.sleep(.025)
+        nonlocal commit_delay_ms
+        started = time.monotonic()
+        await asyncio.sleep(.05)
+        commit_delay_ms = (time.monotonic() - started) * 1000
         return await original_commit(*args, **kwargs)
 
     monkeypatch.setattr(memory, "commit_turn", delayed_commit)
     response = await http.post("/chat", json=body())
     total = float(response.headers["Server-Timing"].split("=")[1])
-    assert total >= response.json()["latency_ms"] + 20
+    assert commit_delay_ms > 0
+    assert total >= response.json()["latency_ms"] + commit_delay_ms - .2
     samples = [s for metric in registry.collect() for s in metric.samples]
     assert next(s.value for s in samples if s.name == "requests_total") == 1
     assert next(s.value for s in samples if s.name == "chat_latency_ms_count") == 1

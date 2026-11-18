@@ -20,6 +20,17 @@ COMMANDS = {
 }
 
 
+def format_order_ledger(ledger: dict) -> str:
+    order_id = ledger["order_id"]
+    entries = "\n".join(
+        f'{entry["entry_id"]}：{entry["amount_cents"] / 100:.2f} 元，'
+        + ("已入账" if entry["status"] == "settled" else "预授权冻结（未入账）")
+        for entry in ledger["entries"]
+    )
+    return (f'沙盒订单 {order_id} 的流水如下\n{entries}\n\n'
+            f'如需提交人工核验，请发送「确认提交退款核验 {order_id}」。')
+
+
 def build_sandbox_tools(store: SandboxStore):
     async def query_order(req, args):
         if not req.authenticated:
@@ -40,7 +51,7 @@ def build_sandbox_tools(store: SandboxStore):
     return {
         ORDER_LOOKUP: replace(make_tool(
             ORDER_LOOKUP,
-            "核对疑似重复扣款时，若用户提供 ORD-20261024 这类 ORD- 加 8 位数字的订单号，"
+            "查询沙盒订单的流水、入账状态或疑似重复扣款。若用户提供 ORD-20261024 这类 ORD- 加 8 位数字的订单号，"
             "先用本工具查当前已验证账号下的合成账单，再解释入账和预授权的区别。"
             "如用户需要人工核验，引导用户发送结果中的 review_command。查询本身不创建核验单。",
             {"order_id": {"type": "string", "minLength": 12, "maxLength": 12,
@@ -62,13 +73,7 @@ async def run_sandbox_command(store: SandboxStore, user_id: str, command: str, a
         ledger = await asyncio.to_thread(store.order_ledger, user_id, identifier)
         if ledger is None:
             return "未找到当前账号的沙盒订单。", tool_name
-        entries = "\n".join(
-            f'{entry["entry_id"]}：{entry["amount_cents"] / 100:.2f} 元，'
-            + ("已入账" if entry["status"] == "settled" else "预授权冻结（未入账）")
-            for entry in ledger["entries"]
-        )
-        return (f'沙盒订单 {identifier} 的流水如下\n{entries}\n\n'
-                f'如需提交人工核验，请发送「确认提交退款核验 {identifier}」。'), tool_name
+        return format_order_ledger(ledger), tool_name
 
     if command == "确认提交退款核验":
         review = await asyncio.to_thread(store.submit_refund_review, user_id, identifier)

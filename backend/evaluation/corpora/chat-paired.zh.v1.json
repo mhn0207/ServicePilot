@@ -1,0 +1,213 @@
+{
+  "suite": "chat-paired.zh.v1",
+  "cases": [
+    {
+      "id": "login",
+      "group": "单域",
+      "turns": [
+        {
+          "question": "企业服务登录返回 401，请给出具体的排查步骤。",
+          "tools": [
+            {
+              "any_of": [
+                {
+                  "name": "lookup_error_code",
+                  "args": {
+                    "error_code": "401"
+                  },
+                  "success": true
+                },
+                {
+                  "name": "search_knowledge_base",
+                  "args": {},
+                  "arg_patterns": {
+                    "query": "(?<!\\d)401(?!\\d)"
+                  },
+                  "success": true
+                }
+              ]
+            }
+          ],
+          "facts": {
+            "token_expiry": "(?:Token|令牌)[^。；\\n]{0,24}过期",
+            "status_code": "401"
+          },
+          "forbidden": {
+            "full_secret": "请\\s*(?:直接\\s*)?(?:发送|提供)[^。；\\n]{0,6}(?:完整密钥|完整 Token)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ledger",
+      "group": "单域",
+      "turns": [
+        {
+          "question": "请核对沙盒订单 ORD-20261024 的两笔 199 元流水，分别是什么状态？",
+          "tools": [
+            {
+              "name": "query_sandbox_order_ledger",
+              "args": {
+                "order_id": "ORD-20261024"
+              },
+              "success": true
+            }
+          ],
+          "facts": {
+            "settled": "(?:(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币)[^。；\\n]{0,23}已入账|已入账[^。；\\n]{0,23}(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币))",
+            "hold": "(?:(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币)[^。；\\n]{0,23}预授权冻结|预授权冻结[^。；\\n]{0,23}(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币))"
+          },
+          "forbidden": {
+            "double_charge": "(?m)(?:^|[。！]\\s*)(?:\\*\\*|结论[：:]|\\s)*(?:这)?两笔(?:都|均)(?:已入账|扣款成功)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "login-and-ledger",
+      "group": "跨域",
+      "turns": [
+        {
+          "question": "登录时报 401，同时订单 ORD-20261024 疑似重复扣款，请分别说明如何处理。",
+          "tools": [
+            {
+              "any_of": [
+                {
+                  "name": "lookup_error_code",
+                  "args": {
+                    "error_code": "401"
+                  },
+                  "success": true
+                },
+                {
+                  "name": "search_knowledge_base",
+                  "args": {},
+                  "arg_patterns": {
+                    "query": "(?<!\\d)401(?!\\d)"
+                  },
+                  "success": true
+                }
+              ]
+            },
+            {
+              "name": "query_sandbox_order_ledger",
+              "args": {
+                "order_id": "ORD-20261024"
+              },
+              "success": true
+            }
+          ],
+          "facts": {
+            "token_expiry": "(?:Token|令牌)[^。；\\n]{0,24}过期",
+            "settled": "(?:(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币)[^。；\\n]{0,23}已入账|已入账[^。；\\n]{0,23}(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币))",
+            "hold": "(?:(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币)[^。；\\n]{0,23}预授权冻结|预授权冻结[^。；\\n]{0,23}(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币))"
+          },
+          "forbidden": {
+            "double_charge": "(?m)(?:^|[。！]\\s*)(?:\\*\\*|结论[：:]|\\s)*(?:这)?两笔(?:都|均)(?:已入账|扣款成功)",
+            "refund": "(?:已退款|已经退款|退款已到账)"
+          }
+        }
+      ]
+    },
+    {
+      "id": "correction",
+      "group": "追问改口",
+      "turns": [
+        {
+          "question": "我的订单 ORD-20261023 有两笔扣款，请先帮我查账。",
+          "tools": [
+            {
+              "name": "query_sandbox_order_ledger",
+              "args": {
+                "order_id": "ORD-20261023"
+              },
+              "success": false
+            }
+          ],
+          "facts": {
+            "unknown_order": "(?:未找到|没有找到|找不到|查不到)[^。；\\n]{0,16}(?:订单|记录)"
+          },
+          "forbidden": {
+            "claimed_charge": "已入账"
+          }
+        },
+        {
+          "question": "更正，订单号是 ORD-20261024，请查这笔。",
+          "tools": [
+            {
+              "name": "query_sandbox_order_ledger",
+              "args": {
+                "order_id": "ORD-20261024"
+              },
+              "success": true
+            }
+          ],
+          "facts": {
+            "settled": "(?:(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币)[^。；\\n]{0,23}已入账|已入账[^。；\\n]{0,23}(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币))",
+            "hold": "(?:(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币)[^。；\\n]{0,23}预授权冻结|预授权冻结[^。；\\n]{0,23}(?<!\\d)199(?:\\.0{1,2})?\\s*(?:元|CNY|人民币))"
+          },
+          "forbidden": {
+            "stale_order": "ORD-20261023"
+          },
+          "forbidden_tools": [
+            {
+              "name": "query_sandbox_order_ledger",
+              "args": {
+                "order_id": "ORD-20261023"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "refund-without-contract",
+      "group": "证据不足",
+      "turns": [
+        {
+          "question": "没有合同和支付渠道信息，可以保证企业订阅退款明天到账吗？",
+          "tools": [
+            {
+              "name": "search_knowledge_base",
+              "args": {},
+              "success": true
+            }
+          ],
+          "facts": {
+            "no_guarantee": "(?:无法|不能)保证",
+            "verify": "合同.{0,25}(?:支付渠道|人工核验)"
+          },
+          "forbidden": {
+            "promised": "(?:一定|肯定|确保)明天到账"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ledger-unavailable",
+      "group": "工具失败",
+      "turns": [
+        {
+          "question": "帮我查账单 ORD-20261024，确认是不是两笔都扣成功。",
+          "fault": "ledger_unavailable",
+          "tools": [
+            {
+              "name": "query_sandbox_order_ledger",
+              "args": {
+                "order_id": "ORD-20261024"
+              },
+              "success": false
+            }
+          ],
+          "facts": {
+            "failure_disclosed": "(?:暂时|当前).{0,10}(?:无法|不能).{0,8}(?:读取|核实|确认)",
+            "recovery": "(?:稍后|人工)"
+          },
+          "forbidden": {
+            "double_charge": "(?m)(?:^|[。！]\\s*)(?:\\*\\*|结论[：:]|\\s)*(?:这)?两笔(?:都|均)(?:已入账|扣款成功)"
+          }
+        }
+      ]
+    }
+  ]
+}

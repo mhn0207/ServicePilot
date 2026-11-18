@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from agents.agent_orchestrator import (
@@ -120,6 +121,37 @@ def test_composer_fallback_preserves_primary_and_supporting_results():
     assert content.startswith("先排查 Token 是否过期。")
     assert "补充说明" in content
     assert "两笔扣款" in content
+
+
+def test_composer_rejects_successful_model_response_that_drops_a_branch():
+    draft = SimpleNamespace(content=[{"type": "text", "text": "先检查 Token 是否过期。"}], stop_reason="end_turn")
+    composer = ResponseComposer(FakeClient(response=draft), "test-model")
+    responses = [
+        AgentResponse(AgentType.TECHNICAL, "先检查 Token 是否过期。", True),
+        AgentResponse(AgentType.BILLING, "请核对两笔流水的交易时间。", True),
+    ]
+    result = asyncio.run(composer.compose_result(make_request(), responses))
+    assert result.status == "success"
+    assert all(response.content in result.content for response in responses)
+
+
+def test_declining_billing_keeps_payment_page_case_in_technical_domain():
+    client = FakeClient()
+    orchestrator = AgentOrchestrator(api_key="fixture", client=client)
+    req = make_request(message="付款页面登录报 401，请只排查认证失败；暂不查询账单或扣款。")
+    decision = orchestrator._route_decision(req)
+    assert decision.agent_types == [AgentType.TECHNICAL]
+
+
+def test_order_ledger_terms_add_billing_agent_without_billing_intent():
+    orchestrator = AgentOrchestrator(api_key="fixture", client=FakeClient())
+    for message in (
+        "登录报 401，请给排查步骤。同时帮我核对查不到流水的订单 ORD-20261023。",
+        "登录报401，请给排查步骤。同时查订单ORD-20261023的流水。",
+    ):
+        req = make_request(message=message, entities={"error_code": ["401"], "order_id": ["ORD-20261023"]})
+        decision = orchestrator._route_decision(req)
+        assert set(decision.agent_types) == {AgentType.TECHNICAL, AgentType.BILLING}
 
 
 def test_routing_decision_can_target_escalation_pool():

@@ -48,3 +48,18 @@ def test_import_changes_are_visible_without_stale_lexical_cache():
     assert kb.search("退款", top_k=1)[0]["title"] == "账单"
     kb._collection.get = lambda **kwargs: {"documents": ["退款新规则"], "metadatas": [{"title": "新政策"}]}
     assert kb.search("退款", top_k=1)[0]["title"] == "新政策"
+
+
+def test_lexical_ranking_reaches_evidence_after_two_hundred_matches():
+    lexical = [(f"常见问题 {i}", "退款普通说明") for i in range(220)]
+    lexical.append(("退款错误码 431", "退款错误码 431 的处理需要工单编号"))
+    kb = make_kb([("无关配送", "计算配送进度")], lexical)
+    uncapped = kb._collection.get
+
+    def simulate_chroma(**kwargs):
+        all_matches = uncapped()
+        limit = kwargs.get("limit")
+        return {key: rows[:limit] for key, rows in all_matches.items()}
+
+    kb._collection.get = simulate_chroma
+    assert kb.search("退款错误码 431", top_k=1)[0]["title"] == "退款错误码 431"

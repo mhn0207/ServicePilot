@@ -13,32 +13,20 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
 # ── 阶段 2：安装 Python 依赖 ──────────────────────────────────────────────────
+FROM scratch AS onnx_input
+COPY requirements.txt /requirements.txt
+
 FROM base AS dependencies
 
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
-# 预下载 ChromaDB 内置的 ONNX embedding 模型（~79MB），避免运行时下载超时
-RUN python - <<'PY'
-import pathlib
-import shutil
-import tarfile
-import urllib.request
-
-url = "https://chroma-onnx-models.s3.amazonaws.com/all-MiniLM-L6-v2/onnx.tar.gz"
-dest_dir = pathlib.Path("/root/.cache/chroma/onnx_models/all-MiniLM-L6-v2")
-dest_dir.mkdir(parents=True, exist_ok=True)
-archive = dest_dir / "onnx.tar.gz"
-
-with urllib.request.urlopen(url, timeout=60) as response, open(archive, "wb") as target:
-    shutil.copyfileobj(response, target)
-
-with tarfile.open(archive, "r:gz") as tar:
-    tar.extractall(dest_dir)
-
-archive.unlink()
-PY
+# 可用 --build-context onnx_input=PATH 提供含 onnx.tar.gz 的目录。
+COPY scripts/cache_onnx.py /tmp/cache_onnx.py
+RUN --mount=type=bind,from=onnx_input,target=/onnx-input \
+    --mount=type=cache,id=servicepilot-minilm-onnx-v1,target=/onnx-cache,sharing=locked \
+    python /tmp/cache_onnx.py
 
 # ── 阶段 3：生产镜像 ──────────────────────────────────────────────────────────
 FROM base AS production

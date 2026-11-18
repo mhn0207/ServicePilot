@@ -132,6 +132,31 @@ test('chat progress handles fragmented UTF-8, and a disconnect retains the reque
   assert.deepEqual(calls[0].body, calls[1].body)
 })
 
+test('a fresh page module recovers an unfinished chat ID without storing the message or token', async t => {
+  const session = storage()
+  const writes = []
+  const save = session.setItem
+  session.setItem = (key, value) => { writes.push([key, value]); save(key, value) }
+  replaceGlobal(t, 'sessionStorage', session)
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push(JSON.parse(options.body))
+    if (calls.length === 1) throw new Error('connection lost')
+    return json({ conv_id: 'c-python', request_id: 'r-python', response: '已恢复' })
+  })
+  const first = await import('../src/lib/api.js?chat-before-refresh')
+  const refreshed = await import('../src/lib/api.js?chat-after-refresh')
+  const message = '刷新后重试此消息'
+  await assert.rejects(first.requestChat(settings, message), /connection lost/)
+  assert.equal(writes.length, 1)
+  const saved = JSON.stringify(writes)
+  assert.ok(!saved.includes(message) && !saved.includes(settings.pythonToken))
+  await refreshed.requestChat(settings, message)
+  await refreshed.requestChat(settings, message)
+  assert.equal(calls[0].client_request_id, calls[1].client_request_id)
+  assert.notEqual(calls[1].client_request_id, calls[2].client_request_id)
+})
+
 test('chat falls back to legacy only when the stream route is unavailable', async t => {
   const calls = []
   t.mock.method(globalThis, 'fetch', async (url, options) => {

@@ -188,11 +188,13 @@ def build_shared_rag_tools(tool_manager: Any) -> Dict[str, AgentToolSpec]:
         if tool_manager is None:
             return {"success": False, "error": "RAG 工具未初始化", "results": []}
 
-        result = await tool_manager.search_with_rewrite(
-            "knowledge_search",
-            query,
-            top_k=top_k,
-        )
+        direct_search = getattr(tool_manager, "call", None)
+        if req.parallel_scope is not None and direct_search is not None:
+            # The specialist already formulates a domain-specific query.
+            # Avoid running a second rewrite and rerank model per branch.
+            result = await direct_search("knowledge_search", {"query": query, "top_k": top_k})
+        else:
+            result = await tool_manager.search_with_rewrite("knowledge_search", query, top_k=top_k)
         if not getattr(result, "success", False):
             return {
                 "success": False,
@@ -211,6 +213,12 @@ def build_shared_rag_tools(tool_manager: Any) -> Dict[str, AgentToolSpec]:
             "reranked": bool(getattr(result, "reranked", False)),
         }
 
+    def revision():
+        read = getattr(tool_manager, "cache_revision", None)
+        return read("knowledge_search") if read is not None else getattr(
+            tool_manager, "_cache_versions", {},
+        ).get("knowledge_search", 0)
+
     return {
         "search_knowledge_base": replace(make_tool(
             "search_knowledge_base",
@@ -221,7 +229,7 @@ def build_shared_rag_tools(tool_manager: Any) -> Dict[str, AgentToolSpec]:
             },
             search_knowledge_base,
             required=["query"],
-        ), revision=lambda: getattr(tool_manager, '_cache_versions', {}).get('knowledge_search', 0))
+        ), revision=revision)
     }
 
 

@@ -34,6 +34,8 @@ from agents.sandbox_tools import COMMANDS, build_sandbox_tools, run_sandbox_comm
 from core.chat_progress import collect_chat_progress, emit_chat_stage
 from core.performance import collect_performance, measure_stage, performance_snapshot
 from core.request_budget import POLICY, chat_budget
+from core.concurrency import ConversationBusyError, LeaseLostError
+from core.knowledge_revision import KnowledgeRevision
 from tooling.knowledge_chunks import MARKDOWN_CHUNKING, ChunkStrategy
 from tooling.sandbox_store import SandboxStore
 
@@ -64,6 +66,7 @@ _skill_manager = None
 _profile_updater = None
 _mcp_client = None
 _sandbox_store: SandboxStore | None = None
+_knowledge_revision: KnowledgeRevision | None = None
 _stream_turns: set[asyncio.Task] = set()
 from evaluation.jobs import EvaluationJobs
 _eval_jobs = EvaluationJobs()
@@ -85,7 +88,7 @@ def _anthropic_cfg() -> Dict[str, Any]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _eval_orchestrator, _eval_tool_manager, _orchestrator, _memory, _tool_manager, _monitor, _evaluator, _skill_manager, _profile_updater, _mcp_client
-    global _sandbox_store
+    global _sandbox_store, _knowledge_revision
 
     from core.access import identity
     auth_configured = identity("") is not None  # 同时验证生产鉴权配置
@@ -144,6 +147,7 @@ async def lifespan(app: FastAPI):
         base_url=cfg.get("base_url"),
         model=cfg["model"],
     )
+    _knowledge_revision = KnowledgeRevision(_memory._redis)
 
     # MCP 工具管理器 + RAG 知识库（基于 ChromaDB 的真实检索）
     _tool_manager = MCPToolManager(
@@ -181,6 +185,7 @@ async def lifespan(app: FastAPI):
             "required": ["query"],
         },
         cache_ttl=300.0,
+        cache_epoch=_knowledge_revision.current,
         supports_rerank=True,
         fallback=knowledge_fallback,
     ))
@@ -234,6 +239,7 @@ async def lifespan(app: FastAPI):
             await _monitor.stop()
             if _memory is not None:
                 await _memory.close()
+            _knowledge_revision = None
             configure(None)
             logger.info("ServicePilot 已关闭")
 
@@ -492,7 +498,6 @@ async def _run_chat(req: ChatRequest, account) -> ChatResponse:
     conv_id = req.conv_id or str(uuid.uuid5(uuid.NAMESPACE_URL, req.user_id + ":" + client_id))
     started = time.monotonic()
 
-    from core.concurrency import ConversationBusyError, LeaseLostError
     try:
         async with asyncio.timeout(POLICY.hard_timeout_s), chat_budget(POLICY.request_s), _memory.conversation(req.user_id, conv_id):
             emit_chat_stage("lease_acquired")
@@ -708,6 +713,30 @@ class EvalRunInput(BaseModel):
     dialog_cases: Optional[List[EvalDialogInput]] = Field(default=None, max_length=100)
 
 
+async def _knowledge_mutation(method, *args):
+    revision = _knowledge_revision
+    managers = (_tool_manager, _eval_tool_manager)
+
+    async def write():
+        try:
+            async with revision.mutation() if revision is not None else nullcontext():
+                return await method(*args)
+        except (RedisError, ConversationBusyError, LeaseLostError) as ex:
+            raise HTTPException(503, "知识库变更状态暂时不可用，请刷新后确认") from ex
+        finally:
+            for manager in managers:
+                if manager is not None:
+                    manager.invalidate_cache("knowledge_search")
+
+    # A running Chroma write can outlive cancellation of the HTTP waiter.
+    task = asyncio.create_task(write())
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        task.add_done_callback(lambda done: done.exception() if not done.cancelled() else None)
+        raise
+
+
 @app.post("/knowledge/add", tags=["知识库"])
 async def add_knowledge(body: BatchDocInput):
     """
@@ -730,13 +759,9 @@ async def add_knowledge(body: BatchDocInput):
         raise HTTPException(503, "知识库未初始化")
     kb = tool.handler.__self__
     try:
-        count = await kb.add_documents_async([d.model_dump(exclude_none=True) for d in body.documents])
+        count = await _knowledge_mutation(kb.add_documents_async, [d.model_dump(exclude_none=True) for d in body.documents])
     except ValueError as ex:
         raise HTTPException(400, str(ex)) from ex
-    finally:
-        _tool_manager.invalidate_cache("knowledge_search")
-        if _eval_tool_manager is not None:
-            _eval_tool_manager.invalidate_cache("knowledge_search")
     total = await kb.doc_count_async()
     return {"message": f"成功导入 {count} 个文档片段", "added_chunks": count, "total_chunks": total}
 
@@ -783,13 +808,9 @@ async def upload_knowledge(file: UploadFile = File(...)):
 
     try:
         validated = [DocInput.model_validate(doc).model_dump(exclude_none=True) for doc in docs]
-        count = await kb.add_documents_async(validated)
+        count = await _knowledge_mutation(kb.add_documents_async, validated)
     except ValueError as ex:
         raise HTTPException(400, "文档格式不正确：需要非空 title、content，可选 document_id、chunk_strategy") from ex
-    finally:
-        _tool_manager.invalidate_cache("knowledge_search")
-        if _eval_tool_manager is not None:
-            _eval_tool_manager.invalidate_cache("knowledge_search")
     total = await kb.doc_count_async()
     return {
         "message": f"文件 {filename} 导入成功",
@@ -805,12 +826,15 @@ def _knowledge_documents_store():
     return tool.handler.__self__
 
 
-async def _knowledge_document_operation(method, *args):
+async def _knowledge_document_operation(method, *args, mutate=False):
     from fastapi.responses import JSONResponse
     from tooling.knowledge_documents import DocumentMissing, DocumentConflict, DocumentLimit
     try:
-        data = await asyncio.to_thread(method, *args)
+        data = (await _knowledge_mutation(asyncio.to_thread, method, *args)
+                if mutate else await asyncio.to_thread(method, *args))
         return JSONResponse(data, headers={'Cache-Control': 'no-store'})
+    except HTTPException:
+        raise
     except DocumentMissing as ex:
         raise HTTPException(404, '文档不存在，请刷新列表') from ex
     except DocumentConflict as ex:
@@ -835,20 +859,9 @@ async def get_knowledge_document(document_id: str = ApiPath(pattern=r'^[0-9a-f]{
 async def delete_knowledge_document(document_id: str = ApiPath(pattern=r'^[0-9a-f]{64}$'),
                                     expected_version: str = Query(pattern=r'^[0-9a-f]{64}$')):
     kb = _knowledge_documents_store()
-    loop = asyncio.get_running_loop()
-    managers = (_tool_manager, _eval_tool_manager)
-    def evict():
-        for manager in managers:
-            if manager is not None:
-                manager.invalidate_cache('knowledge_search')
     def remove():
-        try:
-            return dict(document_id=document_id, deleted_chunks=kb.delete_document(document_id, expected_version))
-        finally:
-            # Cancelling an HTTP wait cannot stop a synchronous Chroma write.
-            # Evict on the event loop AFTER the worker settles, even on error.
-            loop.call_soon_threadsafe(evict)
-    return await _knowledge_document_operation(remove)
+        return dict(document_id=document_id, deleted_chunks=kb.delete_document(document_id, expected_version))
+    return await _knowledge_document_operation(remove, mutate=True)
 
 
 @app.get("/knowledge/stats", tags=["知识库"])

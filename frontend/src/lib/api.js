@@ -132,12 +132,28 @@ export async function runRagEvaluation(settings, options = {}, resumeOnly = fals
 
 export async function requestChat(settings, message, { onStage, signal } = {}) {
   const payload = buildChatPayload(settings, message)
-  const attemptKey = JSON.stringify([apiBaseUrl(settings), settings.userId, settings.conversationId, message])
-  if (!chatAttempts.has(attemptKey)) {
-    if (chatAttempts.size > 100) chatAttempts.clear()
-    chatAttempts.set(attemptKey, crypto.randomUUID())
+  const scope = JSON.stringify([apiBaseUrl(settings), settings.userId, settings.pythonToken || '',
+    settings.conversationId || '', message])
+  const digest = crypto.subtle && await crypto.subtle.digest('SHA-256', new TextEncoder().encode(scope))
+  const storageKey = digest && 'servicepilot.chat:' + Array.from(new Uint8Array(digest),
+    byte => byte.toString(16).padStart(2, '0')).join('')
+  const attemptKey = storageKey || scope
+  let attempt = chatAttempts.get(attemptKey)
+  if (!attempt && storageKey) {
+    try {
+      attempt = JSON.parse(globalThis.sessionStorage?.getItem(storageKey) || 'null')
+    } catch { /* Storage may be unavailable in private environments. */ }
   }
-  payload.client_request_id = chatAttempts.get(attemptKey)
+  if (typeof attempt?.id !== 'string' || !(attempt.expiresAt > Date.now())) {
+    attempt = { id: crypto.randomUUID(), expiresAt: Date.now() + 24 * 60 * 60 * 1000 }
+  }
+  chatAttempts.set(attemptKey, attempt)
+  if (storageKey) {
+    try {
+      globalThis.sessionStorage?.setItem(storageKey, JSON.stringify(attempt))
+    } catch { /* Keep the in-memory attempt when storage is unavailable. */ }
+  }
+  payload.client_request_id = attempt.id
   const timeout = AbortSignal.timeout(55000)
   const options = {
     method: 'POST',
@@ -148,7 +164,14 @@ export async function requestChat(settings, message, { onStage, signal } = {}) {
   const raw = onStage
     ? await requestStreamingChat(settings, options, onStage)
     : await requestFor(settings, '/chat', options)
-  chatAttempts.delete(attemptKey)
+  if (raw?.status !== 'failed' && chatAttempts.get(attemptKey) === attempt) {
+    chatAttempts.delete(attemptKey)
+    if (storageKey) {
+      try {
+        globalThis.sessionStorage?.removeItem(storageKey)
+      } catch { /* The in-memory attempt was already cleared. */ }
+    }
+  }
   return normalizeChatResponse(raw)
 }
 

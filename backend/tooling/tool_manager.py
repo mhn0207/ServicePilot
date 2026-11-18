@@ -136,6 +136,7 @@ class Tool:
     timeout_s:   float = 30.0
     supports_rerank: bool = False            # 是否支持结果重排
     fallback:    Optional[Callable] = None    # sync/async (params, context, error) -> Any
+    cache_epoch: Optional[Callable] = None    # async shared generation, None result bypasses caching
 
     # 运行时状态（不参与构造）
     stats:   ToolStats    = field(default_factory=ToolStats, init=False)
@@ -209,10 +210,16 @@ class MCPToolManager:
             return ToolResult(success=False, data=None, tool_name=name, error=str(ex))
         cache_version = self._cache_versions.get(name, 0)
         cache_rerank_top_k = rerank_top_k if rerank_top_k > 0 and tool.supports_rerank else 0
+        cache_context = context
+        cache_enabled = use_cache and tool.cache_ttl > 0
+        if cache_enabled and tool.cache_epoch is not None:
+            epoch = await tool.cache_epoch()
+            cache_enabled = epoch is not None
+            cache_context = {**(context or {}), "_knowledge_epoch": epoch}
 
         # 缓存命中
-        if use_cache and tool.cache_ttl > 0:
-            cached = self._get_cache(name, params, cache_rerank_top_k, context)
+        if cache_enabled:
+            cached = self._get_cache(name, params, cache_rerank_top_k, cache_context)
             if cached is not None:
                 cached_data, cached_reranked = cached
                 tool.stats.total += 1
@@ -255,8 +262,8 @@ class MCPToolManager:
             tool.breaker.record_success(generation)
 
             # 写缓存：缓存最终返回结果，避免下次命中未重排的原始结果。
-            if use_cache and tool.cache_ttl > 0 and cache_version == self._cache_versions.get(name, 0) and not budget_degraded():
-                self._set_cache(name, params, data, tool.cache_ttl, cache_rerank_top_k, reranked, context)
+            if cache_enabled and cache_version == self._cache_versions.get(name, 0) and not budget_degraded():
+                self._set_cache(name, params, data, tool.cache_ttl, cache_rerank_top_k, reranked, cache_context)
 
             return ToolResult(success=True, data=data, tool_name=name,
                               latency_ms=latency, reranked=reranked)
@@ -383,13 +390,15 @@ class MCPToolManager:
         cache_name = f"{tool_name}:pipeline"
         params = {"query": query, "top_k": top_k, "version": version}
         # TTL=0 保留禁用缓存的语义，也不合并可能具有副作用的调用。
-        if tool.cache_ttl <= 0:
+        epoch = await tool.cache_epoch() if tool.cache_ttl > 0 and tool.cache_epoch is not None else None
+        if tool.cache_ttl <= 0 or (tool.cache_epoch is not None and epoch is None):
             with measure_stage("rag_search"):
                 return await self._search_uncached(tool_name, query, top_k, context)
-        key = self._cache_key(cache_name, params, context=context)
+        cache_context = context if tool.cache_epoch is None else {**(context or {}), "_knowledge_epoch": epoch}
+        key = self._cache_key(cache_name, params, context=cache_context)
         with measure_stage("rag_search"):
             async with self._search_locks.hold(key):
-                cached = self._get_cache(cache_name, params, context=context)
+                cached = self._get_cache(cache_name, params, context=cache_context)
                 if cached is not None:
                     record_event("rag_pipeline_cache_hit")
                     data, reranked = cached
@@ -398,7 +407,7 @@ class MCPToolManager:
                 result = await self._search_uncached(tool_name, query, top_k, context)
                 if result.success and version == self._cache_versions.get(tool_name, 0) and not budget_degraded():
                     self._set_cache(cache_name, params, result.data, tool.cache_ttl,
-                                    reranked=result.reranked, context=context)
+                                    reranked=result.reranked, context=cache_context)
                 return result
 
     async def _search_uncached(self, tool_name, query, top_k, context):
@@ -529,6 +538,14 @@ class MCPToolManager:
         for key in list(self._cache):
             if key.startswith(f"{name}:"):
                 del self._cache[key]
+
+    async def cache_revision(self, name: str):
+        version = self._cache_versions.get(name, 0)
+        tool = self._tools.get(name)
+        if tool is None or tool.cache_epoch is None:
+            return version
+        epoch = await tool.cache_epoch()
+        return (version, epoch) if epoch is not None else None
 
     # ── 参数校验 ──────────────────────────────────────────────────────────────
 

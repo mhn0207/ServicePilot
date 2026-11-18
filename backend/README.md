@@ -16,6 +16,13 @@ docker compose -p servicepilot-local -f docker-compose.yml -f docker-compose.web
 
 若容器调用模型需要宿主机代理，须单独配置容器可访问的代理地址。容器中的 `127.0.0.1` 指向容器自身，不能直接复用宿主机回环代理。不要为排查连接问题关闭证书校验。
 
+## 请求链路
+
+1. Vue 工作台通过 `/chat/stream` 接收 SSE 阶段事件和最终答复。FastAPI 绑定请求身份，读取会话状态和近期消息。
+2. 编排器结合意图、实体和近期 Agent 表现选择专业角色。明确的跨域请求并行执行，账单流水从工具结果直接渲染，汇总漏掉分支时回退到分段输出。
+3. ChromaDB 提供向量召回、情景记忆和画像。知识库还使用词面 BM25 排序，单域检索可按剩余预算执行查询改写和模型重排。
+4. Redis 会话租约串行化同一会话。消息、槽位和请求回执在同一事务提交。SQLite 唯一约束保护沙盒核验单，重试同一业务操作可取回已有单号。
+
 ## 主要接口与身份
 
 | 接口 | 用途 |
@@ -47,7 +54,7 @@ docker compose -p servicepilot-local -f docker-compose.yml -f docker-compose.web
 
 删除清理该文档全部片段，不能撤销；文档中的知识可能影响所有聊天用户。缺少文档身份的旧片段单独只读展示，缺版本、混合版本或缺片段的文档禁止删除，不自动迁移或猜测归属。管理扫描上限为 5000 片，超限明确报错，不静默截断列表。
 
-导入与版本检查/删除共用当前进程的写锁；这不是多 worker 的全局事务。删除工作线程结束后，不论成功或异常，都会在事件循环清除业务与旧评测工具缓存；即使 HTTP 等待被取消，也在实际存储操作结束后清理。HTTP 失败可能表示结果未知，应刷新核对，不自动重放删除；已经取得证据的在途请求并不因此被撤回。
+导入、上传与版本删除通过 Redis 租约协调，依赖同一 Redis 数据库和 Chroma 知识库。变更中绕过检索缓存，写入完成后用共享版本让其他 API 进程识别旧结果。取消 HTTP 等待时，已经启动的写入仍会继续收尾。删除接口失败后请刷新并核对文档版本。
 
 `/health` 在两秒总预算内检查 Redis、记忆/画像及知识库正在使用的 Chroma collection。远端 Chroma 采用有一秒传输超时的独立异步 count 请求，API 版本跟随实际客户端；本地模式合并未完成探测，避免取消等待后重复创建阻塞线程。未初始化、依赖异常或超时返回 503，恢复后返回 200；不会调用模型、生成 embedding 或写业务数据，也不证明模型 Key、额度或模型名称可用。
 
@@ -231,10 +238,40 @@ python -X utf8 scripts/evaluate_agents.py --run-id example-agent-dev
 
 取消词面 200 条上限后，1,000 和 5,000 片池分别找回 16 和 25 个原先同时缺于两路候选的证据组。同期分别有 1 和 3 个证据组已进入候选，却未进入 Top-3。按预先确定的 ID 读取同一批候选时，四组 p95 为 19–111 ms，原谓词为 258–546 ms。对照逐项核对 ID、正文和元数据，计时省略了确定候选 ID 的成本。重开装载完成的同一数据库后，触顶和召回率一致，计时有波动。
 
-暂缓接入生产倒排索引。索引方案需要在同样的 200 条预算下同时验证证据召回、延迟和跨进程增删改一致性。生产语料与部署性能尚未实测。原始计时和对照产物保存在维护者本地 `data/eval/`。
+以上是 200 条预截断仍存在时的历史基准。当前实现对 Chroma 返回的词面匹配集合计算 BM25 和融合分数，再截取 Top-K。常见查询命中大量片段时，传输量和排序成本会增加。原始计时和对照产物保存在维护者本地 `data/eval/`。
+
+工作台的知识新增、上传和版本删除通过同一 Redis 版本协调。多个 API 进程连接同一个 Redis 数据库和 Chroma 知识库时，读取共享版本后再命中进程缓存。变更进行中或 Redis 版本不可用时直接查询知识库。
 
 ### 回答与系统验证
 
 已有小样本中文真实生成与聊天冒烟记录，用于观察检索、角色协作及额外断言等问题；尚未形成完整中文回答指标或独立 Judge 校准结论。
 
-当前仍需进一步验证的范围包括：真实 C/D 策略收益、多 Agent 相对单 Agent 的收益，以及多 worker 下的知识写入与缓存一致性。业务检索判定使用有限规则，知识和身份映射面向本项目演示场景。
+### 中文聊天配对实验
+
+#### 最短真实验收
+
+准备 Docker、Python 3.12 虚拟环境和支持工具调用的 Anthropic Messages 兼容模型。在 `backend/` 中，按 [.env.example](.env.example) 创建 `.env`，填入 `ANTHROPIC_API_KEY`、`ANTHROPIC_MODEL` 和适用的 `ANTHROPIC_BASE_URL`。下面的命令会调用真实模型并消耗额度，输出路径需使用新文件名。
+
+```powershell
+python -X utf8 -m pip install -r requirements.txt
+docker build --target production -t servicepilot-chat-pairs:local .
+python -X utf8 scripts/evaluate_chat_pairs.py --image servicepilot-chat-pairs:local --provider-env .env --output data/eval/login-and-ledger.json --case login-and-ledger
+```
+
+检查报告中 `routed` 行的 `roles` 包含 `technical` 与 `billing`，工具轨迹包含对 `ORD-20261024` 的账单查询，回复同时保留 401 排查建议、199 元已入账和 199 元预授权冻结。`same_receipt` 和 `one_committed_turn` 都应为 `true`。
+
+Docker 构建会校验 ONNX 归档并复用 BuildKit 缓存。下载受阻时，可以给生产构建追加 `--build-context "onnx_input=PATH"`，其中 `PATH` 是包含原始 `onnx.tar.gz` 的目录，例如 `$env:USERPROFILE/.cache/chroma/onnx_models/all-MiniLM-L6-v2`。同一个模型归档适用于 Docker 和本机 Chroma 客户端。
+
+#### 全量实验与共享缓存验证
+
+```powershell
+python -X utf8 scripts/evaluate_chat_pairs.py --image servicepilot-chat-pairs:local --provider-env .env --output data/eval/chat-paired.zh.v2.json --verify-shared-knowledge
+```
+
+脚本创建并清理独立容器和网络，两组均走实际 `POST /chat`，使用同一模型、合成账单、演示知识库和请求预算。单 Agent 可使用两域只读工具的并集，多 Agent 沿用角色白名单。实验关闭外部 MCP 与在线意图向量，工具失败用例注入 SQLite 读取错误。
+
+v2 有 10 个用例、11 轮，逐轮记录工具参数、回答、事实规则、HTTP 延迟和供应商报告的 Token。跨域角色直接运行混合召回，单域保留查询改写与模型重排。加 `--verify-shared-knowledge` 时，脚本启动额外 API 进程。实测在读端预热缓存后，从写端更新和删除文档，读端读到了新版，删除后旧片段消失。P95 在这一样本量下等于最慢一轮。
+
+对规则遗漏的改述，可用 `--review-report 原报告.json --reviews 复核记录.json --output 复核报告.json` 在离线模式附加人工判断。复核记录包含原报告的 `run_id`、`suite_sha256` 和 `reviews` 数组。每条判断带 `arm`、`case`、`turn`、`fact`、`covered`、`reviewer`、`reason` 与答复原文摘录 `quote`。复核报告保留原自动判定及其汇总。
+
+待扩大验证的范围包括真实 C/D 策略收益、不同任务分布下的单 Agent／多 Agent 表现，以及多 worker 长时间并发写入和依赖故障恢复。业务检索判定使用有限规则，知识和身份映射面向本项目演示场景。

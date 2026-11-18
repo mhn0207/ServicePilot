@@ -33,6 +33,7 @@ def test_deepseek_bounded_tasks_do_not_spend_answer_budget_on_thinking(task):
             "rerank": '[2,0,1]',
             "judge": '{"relevance":0.9,"accuracy":0.9,"completeness":0.9,"helpfulness":0.9}',
             "profile": '{"preferences":[],"entities":{}}',
+            "composer": "技术诊断\n\n账单核验",
         }.get(task, "处理完成")
 
         def handle(request):

@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from anthropic import AsyncAnthropic
 
+from agents.sandbox_tools import ORDER_LOOKUP, format_order_ledger
 from agents.tools import (
     AgentToolSpec,
     build_shared_rag_tools,
@@ -198,6 +199,7 @@ class AgentResponse:
     tool_traces: List[Dict[str, Any]] = field(default_factory=list)
     status: str = "success"
     error_code: Optional[str] = None
+    verified_ledgers: Dict[str, dict] = field(default_factory=dict, repr=False)
 
 
 @dataclass
@@ -239,6 +241,8 @@ class Request:
     reuse_retrieval: bool = False
     tool_observer: Any = field(default=None, repr=False)
     authenticated: bool = False
+    verified_ledgers: Dict[str, dict] = field(default_factory=dict, repr=False)
+    parallel_scope: Optional[AgentType] = None
 
 
 @dataclass
@@ -336,6 +340,7 @@ class BaseAgent:
                 tools_used=call_result.tools_used,
                 tool_traces=call_result.tool_traces,
                 status=call_result.status,
+                verified_ledgers=dict(req.verified_ledgers),
             )
         except asyncio.CancelledError:
             elapsed = (time.monotonic() - t0) * 1000
@@ -356,6 +361,7 @@ class BaseAgent:
                 latency_ms=ms,
                 tools_used=list(tools_used),
                 tool_traces=list(tool_traces),
+                verified_ledgers=dict(req.verified_ledgers),
                 status="failed",
                 error_code="agent_failed",
             )
@@ -365,6 +371,10 @@ class BaseAgent:
     async def _call_llm(self, req: Request) -> AgentCallResult:
         def _clean(s: str) -> str:
             return s.encode("utf-8", errors="ignore").decode("utf-8")
+
+        async def tool_revision(spec):
+            value = spec.revision() if spec.revision else 0
+            return await value if inspect.isawaitable(value) else value
 
         messages = []
         if req.context:
@@ -377,7 +387,14 @@ class BaseAgent:
         elif req.entities:
             entities_text = json.dumps(req.entities, ensure_ascii=False)
             messages.append({"role": "user", "content": f"[结构化实体]\n{_clean(entities_text)}"})
-        messages.append({"role": "user", "content": _clean(req.message)})
+        question = _clean(req.message)
+        scope = {
+            AgentType.TECHNICAL: "仅处理技术故障和排查步骤。账单由另一分支处理，请跳过账单问题，不评价流水或退款。",
+            AgentType.BILLING: "仅处理订单、账单与资金核验。技术故障由另一分支处理，请跳过技术排障。",
+        }.get(req.parallel_scope)
+        if scope:
+            question = f"[本轮分工]\n{scope}\n\n[用户原始请求]\n{question}"
+        messages.append({"role": "user", "content": question})
 
         tools = self.get_tools()
         tools_used: List[str] = []
@@ -387,7 +404,7 @@ class BaseAgent:
             for saved in req.retrieval_results.values():
                 spec = tools.get(saved['name'])
                 if (spec is None or not spec.retry_safe or spec.handler is not saved['handler']
-                        or (spec.revision() if spec.revision else None) != saved['revision']):
+                        or saved['revision'] is None or await tool_revision(spec) != saved['revision']):
                     continue
                 reuse_id = 'reuse-' + uuid.uuid4().hex
                 messages.extend([
@@ -473,9 +490,10 @@ class BaseAgent:
                             try:
                                 cache_key = json.dumps(args, sort_keys=True, ensure_ascii=False)
                                 saved = req.retrieval_results.get(cache_key)
-                                revision = spec.revision() if spec.revision else None
+                                revision = await tool_revision(spec)
                                 if (req.reuse_retrieval and name == 'search_knowledge_base' and spec.retry_safe
-                                        and saved and saved['handler'] is spec.handler and saved['revision'] == revision):
+                                        and saved and saved['handler'] is spec.handler
+                                        and revision is not None and saved['revision'] == revision):
                                     result = copy.deepcopy(saved['result'])
                                     result.update(cached=True)
                                     request_reused = True
@@ -490,6 +508,9 @@ class BaseAgent:
                             tools_used.append(name)
                             if isinstance(result, dict) and "success" in result:
                                 result_success = bool(result.get("success"))
+                            if (name == ORDER_LOOKUP and result_success is True
+                                    and result.get("source") == "sandbox"):
+                                req.verified_ledgers[result["order_id"]] = copy.deepcopy(result)
                             if name == 'search_knowledge_base' and spec.retry_safe and result_success is True and not request_reused:
                                 key = json.dumps(args,sort_keys=True,ensure_ascii=False)
                                 req.retrieval_results[key] = dict(name=name,handler=spec.handler,args=copy.deepcopy(args),
@@ -801,6 +822,14 @@ class ResponseComposer:
     async def compose_result(self, req: Request, responses: List[AgentResponse]) -> AgentCallResult:
         successful = [response for response in responses if response.success and response.content.strip()]
         status = "success" if len(successful) == len(responses) and all(r.status == "success" for r in successful) else "partial"
+        ledgers = {order_id: ledger for response in responses for order_id, ledger in response.verified_ledgers.items()}
+        if ledgers:
+            emit_chat_stage("composing")
+            # Render verified amounts and statuses directly. A prose summary can
+            # omit a row or present a hold as a completed charge.
+            sections = [response.content for response in successful if not response.verified_ledgers]
+            sections.extend(format_order_ledger(ledger) for ledger in ledgers.values())
+            return AgentCallResult("\n\n".join(sections), status=status)
         if not successful:
             return AgentCallResult("抱歉，所有 Agent 均处理失败。", status="failed")
         if len(successful) == 1:
@@ -836,8 +865,9 @@ class ResponseComposer:
                 messages=[{"role": "user", "content": prompt}],
             ), timeout=max(1, _env_float("ZHIYING_COMPOSER_TIMEOUT_S", POLICY.composer_timeout_default_s)))
             content = extract_text_content(response.content).strip()
-            if content:
-                return AgentCallResult(content, status="partial" if getattr(response, "stop_reason", None) == "max_tokens" else status)
+            if (content and getattr(response, "stop_reason", None) != "max_tokens"
+                    and all(branch.content.strip() in content for branch in successful)):
+                return AgentCallResult(content, status=status)
         except Exception as ex:
             logger.warning("Response Composer 失败，使用确定性合并: %s", ex)
 
@@ -1075,15 +1105,17 @@ class AgentOrchestrator:
             replace(
                 req,
                 tool_attempts=[],
-                unsafe_tool_calls=set(req.unsafe_tool_calls),
+                # Reservations are shared within this event loop. The tool
+                # loop checks and reserves the operation before its first await.
+                verified_ledgers={},
+                parallel_scope=agent_type,
             )
-            for _ in agent_types
+            for agent_type in agent_types
         ]
         tasks = [self._execute(b_req, at) for b_req, at in zip(branch_reqs, agent_types)]
         responses = await asyncio.gather(*tasks, return_exceptions=True)
         for b_req in branch_reqs:
             req.tool_attempts.extend(b_req.tool_attempts)
-            req.unsafe_tool_calls.update(b_req.unsafe_tool_calls)
 
         valid_responses = [r for r in responses if isinstance(r, AgentResponse)]
         composed = await self._composer.compose_result(req, valid_responses)
@@ -1166,6 +1198,8 @@ class AgentOrchestrator:
             )
 
         scores = self._domain_scores(req)
+        for excluded in self._declined_domains(req.message):
+            scores.pop(excluded, None)
         degraded_agents = {
             agent_type
             for agent_type in (AgentType.TECHNICAL, AgentType.BILLING)
@@ -1269,6 +1303,8 @@ class AgentOrchestrator:
 
         scores[AgentType.TECHNICAL] += min(0.45, technical_hits * 0.18)
         scores[AgentType.BILLING] += min(0.45, billing_hits * 0.18)
+        if self._asks_order_ledger(msg):
+            scores[AgentType.BILLING] += 0.85
         scores[AgentType.GENERAL] += min(0.35, general_hits * 0.12)
 
         entities = req.entities or {}
@@ -1325,12 +1361,29 @@ class AgentOrchestrator:
             IntentCategory.REFUND,
             IntentCategory.INVOICE,
             IntentCategory.PAYMENT_ISSUE,
-        ) or any(kw in msg for kw in billing_kws):
+        ) or any(kw in msg for kw in billing_kws) or self._asks_order_ledger(msg):
             targets.append(AgentType.BILLING)
 
         # 保持顺序去重，并只返回当前有实例的 Agent 类型。
         deduped = list(dict.fromkeys(targets))
-        return [agent_type for agent_type in deduped if self._pool.get(agent_type)]
+        excluded = self._declined_domains(msg)
+        return [agent_type for agent_type in deduped if self._pool.get(agent_type) and agent_type not in excluded]
+
+    @staticmethod
+    def _asks_order_ledger(message: str) -> bool:
+        return bool(re.search(r"(?<![A-Za-z0-9_-])ORD-[0-9]{8}(?![A-Za-z0-9_-])", message, re.I)
+                    and re.search(r"流水|实扣|入账|预授权|两笔[^。；\n]{0,12}状态", message))
+
+    @staticmethod
+    def _declined_domains(message: str) -> set[AgentType]:
+        """Honor explicitly declined work even when its keywords appear in the request."""
+        negated_action = r"(?:暂不|先不|不用|不必|不要|无需)(?:查询|核对|处理|排查|诊断)"
+        targets = {
+            AgentType.BILLING: r"(?:账单|扣款|发票|退款|订阅)",
+            AgentType.TECHNICAL: r"(?:技术问题|登录问题|认证问题|报错|故障)",
+        }
+        return {agent for agent, pattern in targets.items()
+                if re.search(negated_action + r"\s*" + pattern, message)}
 
     def _needs_clarification(self, req: Request) -> bool:
         """低置信度且无明确意图时，先追问，避免误路由。"""

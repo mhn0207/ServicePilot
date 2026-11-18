@@ -7,6 +7,7 @@ import fakeredis.aioredis
 import pytest
 
 from core.llm_utils import create_message
+from core.knowledge_revision import KnowledgeRevision
 from core.performance import collect_performance, performance_snapshot, measure_stage
 from memory.conversation_memory import MemoryManager, Message, MsgRole
 from tooling.tool_manager import MCPToolManager, Tool
@@ -19,6 +20,31 @@ def search_manager(ttl=30):
     manager.register(Tool("search", "", retrieve, {"type": "object"}, cache_ttl=ttl))
     manager.rewrite_query = AsyncMock(return_value=["退款"])
     return manager
+
+
+@pytest.mark.asyncio
+async def test_shared_knowledge_revision_invalidates_raw_and_pipeline_caches_across_workers():
+    async with fakeredis.aioredis.FakeRedis(decode_responses=True) as redis:
+        writer = KnowledgeRevision(redis)
+        reader = KnowledgeRevision(redis)
+        manager = search_manager()
+        body = "old"
+
+        async def retrieve(params, context):
+            return [{"content": body, "document_id": "refund"}]
+
+        manager.register(Tool("search", "", retrieve, {"type": "object"},
+                              cache_ttl=30, cache_epoch=reader.current))
+        assert (await manager.search_with_rewrite("search", "退款")).data[0]["content"] == "old"
+        assert (await manager.search_with_rewrite("search", "退款")).cached
+        async with writer.mutation():
+            body = "new"
+            result = await manager.search_with_rewrite("search", "退款")
+            assert result.data[0]["content"] == "new" and not result.cached
+        result = await manager.search_with_rewrite("search", "退款")
+        assert result.data[0]["content"] == "new" and not result.cached
+        assert (await manager.search_with_rewrite("search", "退款")).cached
+        await manager._client.close()
 
 
 @pytest.mark.asyncio
