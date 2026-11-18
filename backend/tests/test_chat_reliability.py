@@ -214,6 +214,102 @@ async def test_billing_agent_reads_sandbox_ledger_but_cannot_authorize_write(ser
     assert sandbox_review_ids(store) == []
 
 
+def stream_events(text):
+    events = []
+    for frame in text.split("\n\n"):
+        if frame.startswith("event: "):
+            event, data = frame.splitlines()
+            events.append((event.removeprefix("event: "), json.loads(data.removeprefix("data: "))))
+    return events
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_observes_actual_billing_steps_and_can_replay_via_json(services, sandbox, monkeypatch):
+    memory, _, model, http = services
+    _, owner, _ = sandbox
+    monkeypatch.setattr(api, "_tool_manager", SimpleNamespace())
+    monkeypatch.setattr(api, "_mcp_client", None)
+    monkeypatch.setattr(api, "_eval_orchestrator", None)
+    api._refresh_agent_tools()
+    tool = "query_sandbox_order_ledger"
+    model.messages.create.side_effect = [
+        SimpleNamespace(content=[{
+            "type": "tool_use", "id": "read", "name": tool, "input": {"order_id": DEMO_ORDER_ID},
+        }]),
+        text_response(),
+    ]
+    payload = body(f"请核对 {DEMO_ORDER_ID} 的扣款")
+    assert (await http.post("/chat/stream", json=payload)).status_code == 401
+    result = await http.post("/chat/stream", json=payload, headers=owner)
+    assert result.headers["content-type"].startswith("text/event-stream")
+    assert result.headers["x-accel-buffering"] == "no"
+    events = stream_events(result.text)
+    assert [data["step"] for kind, data in events if kind == "stage"] == [
+        "lease_acquired", "intent_recognized", "agent_routing", "tool_call", "committing",
+    ]
+    assert events[-3][1] == {"step": "tool_call", "tool": tool, "agent": "billing"}
+    final_kind, final = events[-1]
+    assert final_kind == "final" and final["tools_used"] == [tool]
+    assert "agent_execution" in final["performance"]["stages_ms"]
+    assert (await http.post("/chat", json=payload, headers=owner)).json() == final
+    assert model.messages.create.await_count == 2
+    assert len(await memory.get_history(DEMO_USER_ID, payload["conv_id"])) == 2
+    conflict = await http.post("/chat/stream", json={**payload, "message": "不同问题"}, headers=owner)
+    assert stream_events(conflict.text)[-1][1]["status"] == 409
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_disconnect_during_sandbox_commit_replays_one_turn(services, sandbox, monkeypatch):
+    memory, _, _, http = services
+    store, owner, _ = sandbox
+    payload = body(f"确认提交退款核验 {DEMO_ORDER_ID}")
+    disconnected, resuming = asyncio.Event(), asyncio.Event()
+    original_commit = memory.commit_turn
+    commit_started = asyncio.Event()
+    sent = []
+
+    async def paused_commit(*args, **kwargs):
+        commit_started.set()
+        await resuming.wait()
+        return await original_commit(*args, **kwargs)
+
+    monkeypatch.setattr(memory, "commit_turn", paused_commit)
+    inbound = asyncio.Queue()
+    inbound.put_nowait({"type": "http.request", "body": json.dumps(payload).encode()})
+
+    async def send(message):
+        sent.append(message)
+        if message["type"] == "http.response.body" and b'"step": "committing"' in message.get("body", b""):
+            inbound.put_nowait({"type": "http.disconnect"})
+            disconnected.set()
+
+    scope = {
+        "type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1", "method": "POST", "scheme": "http",
+        "path": "/chat/stream", "query_string": b"",
+        "headers": [(b"content-type", b"application/json"), (b"authorization", owner["Authorization"].encode())],
+    }
+    connection = asyncio.create_task(api.app(scope, inbound.get, send))
+    retry = None
+    try:
+        await asyncio.wait_for(disconnected.wait(), 2)
+        await asyncio.wait_for(commit_started.wait(), 2)
+        await asyncio.wait_for(connection, 2)
+        assert not any(b"event: final" in message.get("body", b"") for message in sent)
+        review_id, = sandbox_review_ids(store)
+        assert await memory.get_history(DEMO_USER_ID, payload["conv_id"]) == []
+        retry = asyncio.create_task(http.post("/chat/stream", json=payload, headers=owner))
+        resuming.set()
+        events = stream_events((await asyncio.wait_for(retry, 2)).text)
+        assert [data["step"] for kind, data in events if kind == "stage"] == ["lease_acquired", "replayed"]
+        assert events[-1][0] == "final" and review_id in events[-1][1]["response"]
+        assert sandbox_review_ids(store) == [review_id]
+        assert len(await memory.get_history(DEMO_USER_ID, payload["conv_id"])) == 2
+    finally:
+        resuming.set()
+        await asyncio.gather(connection, retry or connection, *api._stream_turns, return_exceptions=True)
+
+
 @pytest.mark.asyncio
 async def test_chat_reports_stage_timings_and_provider_usage_without_changing_replay(services):
     memory, orch, client, http = services

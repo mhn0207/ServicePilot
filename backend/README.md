@@ -21,6 +21,7 @@ docker compose -p servicepilot-local -f docker-compose.yml -f docker-compose.web
 | 接口 | 用途 |
 | --- | --- |
 | `POST /chat` | 聊天；重试沿用 `client_request_id` |
+| `POST /chat/stream` | 同一聊天事务，以 SSE 推送实际阶段及最终回复 |
 | `GET /conversation/history?conv_id=...` | 当前用户、当前会话已提交的近期消息；不调用模型 |
 | `POST /search?query=...&top_k=3` | 当前业务 RAG 流水线；会改写查询并可能重排 |
 | `POST /knowledge/add`、`POST /knowledge/upload` | 导入 JSON、TXT 或 Markdown，上传限制 10 MB |
@@ -77,6 +78,12 @@ system 提示词按“工具 → 角色契约 → Skills”排列，三者不含
 后台压缩用快照与 WATCH 提交，避免覆盖新增消息；画像更新按用户合并并节流。上述机制不是跨 Redis、ChromaDB 与外部工具的全局事务，也不等于任意故障下 exactly-once。
 
 历史读取只返回 Redis 当前保留的最多 20 条用户/助手消息，按时间顺序排列，不返回内部 metadata、画像或工具轨迹；启用鉴权时身份由 Token 决定，传入其他 `user_id` 不改变读取对象，管理员也只读自己的会话。响应禁止缓存。工作记忆 TTL 为 24 小时，后台压缩可能只保留更少的近期消息，因此这不是完整聊天归档；不存在或已过期的工作记忆返回空列表。读取异常或超时返回 503，不把依赖故障伪装成空会话。
+
+## 聊天阶段事件
+
+`POST /chat/stream` 使用与 `POST /chat` 相同的请求体和访问 Token。客户端发送 `Accept: text/event-stream` 并读取结构化事件。每次实际执行按路径发出 `stage` 事件，例如 `lease_acquired`、`intent_recognized`、`agent_routing`、`tool_call`、`composing`、`committing`。工具事件只带名称与 Agent，回复正文随事务完成后的 `final` 返回，格式与 JSON 聊天接口一致。
+
+鉴权与请求体验证按常规 HTTP 状态返回。连接建立后的处理失败以 `error` 返回逻辑状态、错误详情与是否可重试。断流后原轮次在既有超时和会话租约下继续处理。重试需保留同一消息、`client_request_id` 和会话参数，命中成功回执时收到 `replayed` 和原回复。工作台的「重试此请求」会保留这些参数。
 
 ## 账单沙盒演示
 

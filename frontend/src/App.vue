@@ -101,6 +101,13 @@
                       <small v-else-if="item.role === 'assistant'">Agent</small>
                     </div>
                     <p>{{ item.content }}</p>
+                    <button
+                      v-if="item.id === failedChat?.id"
+                      class="chat-retry"
+                      type="button"
+                      :disabled="busy"
+                      @click="performAction('chat', sendMessage, failedChat.content)"
+                    >重试此请求</button>
                     <span v-if="item.meta && !item.error" class="agent-tag">
                       <AppIcon name="route" />
                       {{ item.meta }}
@@ -131,18 +138,13 @@
                     </button>
                   </div>
                 </article>
-                <div v-if="busy && pendingAction === 'chat'" class="thinking" role="status">
-                  <span class="message-avatar">知</span>
-                  <span class="thinking-dots">
-                    <i></i>
-                    <i></i>
-                    <i></i>
-                  </span>
-                  <span>正在处理问题</span>
-                </div>
               </template>
             </div>
             <div class="composer-area">
+              <div v-if="busy && pendingAction === 'chat'" class="thinking" role="status">
+                <span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span>{{ chatProgress }}</span>
+              </div>
               <form class="composer" @submit.prevent="performAction('chat', sendMessage)">
                 <textarea
                   ref="composerInput"
@@ -504,6 +506,8 @@ const connectionDialog = ref(null)
 const inspectorDialog = ref(null)
 const connectionDraft = reactive({ endpoint: '', userId: '', conversationId: '', pythonToken: '' })
 const pendingAction = ref('')
+const chatProgress = ref('')
+const failedChat = ref(null)
 const searched = ref(false)
 const searchError = ref('')
 const views = [
@@ -526,6 +530,22 @@ const toast = ref('')
 let toastTimer
 let messageSequence = 0
 let knowledgeSearchRevision = 0
+let chatController
+
+const stageLabels = {
+  lease_acquired: '已取得会话锁，正在读取上下文',
+  agent_routing: '正在分派 Agent',
+  composing: '正在合并 Agent 回复',
+  committing: '正在保存会话结果',
+  replayed: '正在取回已保存的回复'
+}
+const agentLabels = { billing: '账单', technical: '技术', general: '通用', escalation: '人工交接' }
+const toolLabels = {
+  query_sandbox_order_ledger: '正在核对沙盒账单流水',
+  submit_sandbox_refund_review: '正在提交人工核验单',
+  get_sandbox_refund_review: '正在查询人工核验单',
+  search_knowledge_base: '正在查找相关知识'
+}
 
 const currentApiUrl = computed(() => apiBaseUrl(settings))
 const docsUrl = computed(() => `${currentApiUrl.value}/docs`)
@@ -535,6 +555,7 @@ watch(() => settings.conversationId, persist)
 onMounted(() => { restoreConversation(); refreshConsole() })
 onBeforeUnmount(() => {
   requestState.invalidate()
+  chatController?.abort()
   clearTimeout(toastTimer)
 })
 
@@ -570,6 +591,8 @@ function saveConnection() {
   const changed = connectionDraft.pythonToken !== settings.pythonToken || endpoint !== currentApiUrl.value || connectionDraft.userId.trim() !== settings.userId || connectionDraft.conversationId.trim() !== settings.conversationId
   if (changed) {
     requestState.invalidate()
+    chatController?.abort()
+    failedChat.value = null
     busy.value = false
     messages.value = []
     lastResponse.value = null
@@ -694,19 +717,43 @@ async function restoreConversation() {
   }
 }
 
-async function sendMessage() {
-  const content = draft.value.trim()
+function updateChatProgress(stage) {
+  if (stage.step === 'intent_recognized') {
+    chatProgress.value = '已识别意图，正在选择 Agent'
+  } else if (stage.step === 'agent_routing' && stage.agents?.length) {
+    chatProgress.value = `正在交由 ${stage.agents.map(agent => agentLabels[agent] || agent).join('、')} Agent 处理`
+  } else if (stage.step === 'tool_call') {
+    chatProgress.value = toolLabels[stage.tool] || `正在调用工具 ${stage.tool}`
+  } else if (stageLabels[stage.step]) {
+    chatProgress.value = stageLabels[stage.step]
+  }
+}
+
+async function sendMessage(retryContent) {
+  const content = retryContent ?? draft.value.trim()
   if (!content || busy.value || historyError.value) return
-  messages.value.push({ id: createMessageId(), role: 'user', content })
-  draft.value = ''
+  if (failedChat.value?.content === content) {
+    messages.value = messages.value.filter(item => item.id !== failedChat.value.id)
+  } else {
+    messages.value.push({ id: createMessageId(), role: 'user', content })
+  }
+  failedChat.value = null
+  if (retryContent === undefined || draft.value.trim() === content) draft.value = ''
   lastResponse.value = null
   lastTrace.value = null
   nextTick(() => messageList.value?.scrollTo({ top: messageList.value.scrollHeight, behavior: 'smooth' }))
   const request = requestState.begin('action')
+  const controller = new AbortController()
+  chatController = controller
   busy.value = true
+  chatProgress.value = '正在连接并等待会话锁'
   try {
-    const response = await requestChat(request.settings, content)
+    const response = await requestChat(request.settings, content, {
+      signal: controller.signal,
+      onStage(stage) { if (request.isCurrent()) updateChatProgress(stage) }
+    })
     if (!request.isCurrent()) return
+    chatProgress.value = '已保存回复，正在加载运行详情'
     if (response.conversationId && !settings.conversationId) {
       settings.conversationId = response.conversationId
       persist()
@@ -720,8 +767,13 @@ async function sendMessage() {
     await loadMonitor()
   } catch (error) {
     if (!request.isCurrent()) return
-    messages.value.push({ id: createMessageId(), role: 'assistant', content: error.message, meta: '请求失败', error: true })
+    const id = createMessageId()
+    messages.value.push({ id, role: 'assistant', content: error.message, meta: '请求失败', error: true })
+    if (error.retryable !== false && (!error.status || error.status >= 500)) {
+      failedChat.value = { id, content }
+    }
   } finally {
+    if (chatController === controller) chatController = null
     if (!request.isCurrent()) return
     busy.value = false
     await nextTick()
@@ -733,6 +785,8 @@ function usePrompt(prompt) { draft.value = prompt; nextTick(() => composerInput.
 
 function clearConversation() {
   requestState.invalidate()
+  chatController?.abort()
+  failedChat.value = null
   busy.value = false
   messages.value = []
   lastResponse.value = null

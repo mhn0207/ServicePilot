@@ -6,6 +6,7 @@ import sqlite3
 from dataclasses import replace
 
 from agents.tools import make_tool
+from core.chat_progress import emit_chat_stage
 from tooling.sandbox_store import DEMO_ORDER_ID, SandboxStore
 
 
@@ -56,6 +57,7 @@ async def run_sandbox_command(store: SandboxStore, user_id: str, command: str, a
     if not re.fullmatch(pattern, identifier):
         return f"请输入完整编号，例如「{command} {example}」。", None
 
+    emit_chat_stage("tool_call", tool=tool_name, agent="billing")
     if command == "沙盒查账":
         ledger = await asyncio.to_thread(store.order_ledger, user_id, identifier)
         if ledger is None:

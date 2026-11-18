@@ -5,6 +5,7 @@ ServicePilot 企业服务咨询系统 — FastAPI 入口
 所有核心组件在 lifespan 中初始化，通过环境变量配置。
 """
 import asyncio
+import json
 import logging
 import os
 import pathlib
@@ -25,10 +26,12 @@ import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Response, UploadFile, File, Query, Path as ApiPath, Request as HTTPRequest
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field, model_validator
 from redis.exceptions import RedisError
 from agents.sandbox_tools import COMMANDS, build_sandbox_tools, run_sandbox_command
+from core.chat_progress import collect_chat_progress, emit_chat_stage
 from core.performance import collect_performance, measure_stage, performance_snapshot
 from core.request_budget import POLICY, chat_budget
 from tooling.sandbox_store import SandboxStore
@@ -60,6 +63,7 @@ _skill_manager = None
 _profile_updater = None
 _mcp_client = None
 _sandbox_store: SandboxStore | None = None
+_stream_turns: set[asyncio.Task] = set()
 from evaluation.jobs import EvaluationJobs
 _eval_jobs = EvaluationJobs()
 
@@ -221,6 +225,8 @@ async def lifespan(app: FastAPI):
         try:
             yield
         finally:
+            if _stream_turns:
+                await asyncio.gather(*_stream_turns, return_exceptions=True)
             await _eval_jobs.close()
             await _profile_updater.close()
             await _mcp_client.close()
@@ -287,7 +293,7 @@ async def access_control(request: HTTPRequest, call_next):
     if account is not None and not scrape_access and request.url.path != "/health" and request.method != "OPTIONS":
         if not account:
             return JSONResponse({"detail": "需要有效 Bearer Token"}, status_code=401)
-        reader = request.url.path in {"/chat", "/conversation/history", "/search", "/knowledge/stats", "/skills", "/mcp", "/mcp/"}
+        reader = request.url.path in {"/chat", "/chat/stream", "/conversation/history", "/search", "/knowledge/stats", "/skills", "/mcp", "/mcp/"}
         if not reader and account["role"] != "admin":
             return JSONResponse({"detail": "该接口需要管理员权限"}, status_code=403)
     is_chat = request.url.path == "/chat" and request.method == "POST"
@@ -406,6 +412,62 @@ async def conversation_history(http_request: HTTPRequest,
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, http_request: HTTPRequest):
+    reply = await _run_chat(req, getattr(http_request.state, "account", None))
+    if reply.status == "failed":
+        return JSONResponse(reply.model_dump(), status_code=503)
+    return reply
+
+
+@app.post("/chat/stream", response_class=StreamingResponse, responses={
+    200: {"content": {"text/event-stream": {}}},
+})
+async def chat_stream(req: ChatRequest, http_request: HTTPRequest):
+    account = getattr(http_request.state, "account", None)
+    events = asyncio.Queue()
+
+    async def run_turn():
+        started = time.monotonic()
+        status = 500
+        if _monitor is not None and "requests_total" in _monitor._prom:
+            _monitor._prom["requests_total"].inc()
+        try:
+            with collect_performance(), collect_chat_progress(lambda stage: events.put_nowait(("stage", stage))):
+                reply = await _run_chat(req, account)
+            if reply.status == "failed":
+                status = 503
+                events.put_nowait(("error", {"status": status, "detail": reply.response,
+                                            "retryable": reply.retryable, "response": reply.model_dump()}))
+            else:
+                status = 200
+                events.put_nowait(("final", reply.model_dump()))
+        except HTTPException as error:
+            status = error.status_code
+            events.put_nowait(("error", {"status": status, "detail": error.detail, "retryable": status >= 500}))
+        except Exception:
+            logger.exception("流式聊天请求失败")
+            events.put_nowait(("error", {"status": status, "detail": "请求处理失败，请重试", "retryable": True}))
+        finally:
+            if _monitor is not None and "chat_latency_ms" in _monitor._prom:
+                _monitor._prom["chat_latency_ms"].labels(status=str(status)).observe((time.monotonic() - started) * 1000)
+
+    async def stream():
+        # Keep the bounded transaction independent of the response connection.
+        # A retry queues behind its lease and observes the same committed receipt.
+        turn = asyncio.create_task(run_turn())
+        _stream_turns.add(turn)
+        turn.add_done_callback(_stream_turns.discard)
+        yield ": connected\n\n"
+        while True:
+            event, data = await events.get()
+            yield f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+            if event != "stage":
+                break
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+
+
+async def _run_chat(req: ChatRequest, account) -> ChatResponse:
     """
     主对话接口。完整流程：
       记忆读取 → 意图识别 → Agent 路由 → 执行 → 记忆写入
@@ -413,7 +475,6 @@ async def chat(req: ChatRequest, http_request: HTTPRequest):
     if _orchestrator is None or _memory is None:
         raise HTTPException(503, "服务未就绪")
 
-    account = getattr(http_request.state, "account", None)
     if account:
         req.user_id = account["user_id"]
     parts = req.message.split(maxsplit=1)
@@ -430,25 +491,22 @@ async def chat(req: ChatRequest, http_request: HTTPRequest):
     conv_id = req.conv_id or str(uuid.uuid5(uuid.NAMESPACE_URL, req.user_id + ":" + client_id))
     started = time.monotonic()
 
-    def render(reply):
-        if reply.status == "failed":
-            from fastapi.responses import JSONResponse
-            return JSONResponse(reply.model_dump(), status_code=503)
-        return reply
-
     from core.concurrency import ConversationBusyError, LeaseLostError
     try:
         async with asyncio.timeout(POLICY.hard_timeout_s), chat_budget(POLICY.request_s), _memory.conversation(req.user_id, conv_id):
+            emit_chat_stage("lease_acquired")
             receipt = await _memory.get_turn_receipt(req.user_id, conv_id, client_id)
             if receipt:
                 if receipt["message"] != req.message:
                     raise HTTPException(409, "同一 client_request_id 不能用于不同消息")
                 previous = ChatResponse(**receipt["response"])
                 if previous.status != "failed" or not previous.retryable:
-                    return render(previous)
+                    emit_chat_stage("replayed")
+                    return previous
             if sandbox_command and sandbox_store is not None:
                 # 用户确认命令直达 SQLite。写入可重试，Redis 回执丢失时可取回同一核验单。
                 try:
+                    emit_chat_stage("agent_routing", agents=["billing"], mode="sandbox")
                     message, tool = await run_sandbox_command(
                         sandbox_store, req.user_id, sandbox_command, parts[1].strip() if len(parts) > 1 else "",
                     )
@@ -459,11 +517,12 @@ async def chat(req: ChatRequest, http_request: HTTPRequest):
                         routing_reason="沙盒聊天命令", escalated=False,
                         latency_ms=round((time.monotonic() - started) * 1000, 1),
                     )
+                    emit_chat_stage("committing")
                     await _memory.commit_turn(req.user_id, conv_id, client_id, req.message, response.model_dump())
                 except (sqlite3.Error, RedisError) as ex:
                     logger.warning("沙盒轮次暂时无法完成", exc_info=True)
                     raise HTTPException(503, "业务沙盒暂时不可用，请使用相同 client_request_id 重试") from ex
-                return render(response)
+                return response
             # 1. 读取记忆上下文
             with measure_stage("memory_read"):
                 mem_ctx = await _memory.get_context(req.user_id, conv_id, query=req.message)
@@ -476,6 +535,7 @@ async def chat(req: ChatRequest, http_request: HTTPRequest):
 
             with measure_stage("intent"):
                 intent_result = await _orchestrator.recognize_intent(req.message, history=history)
+            emit_chat_stage("intent_recognized", intent=intent_result.intent.value)
             full_context = mem_ctx.to_prompt_text()
 
             orch_req = OrcReq(
@@ -532,11 +592,12 @@ async def chat(req: ChatRequest, http_request: HTTPRequest):
                 error_code=result.error_code,
                 performance=performance_snapshot(),
             )
+            emit_chat_stage("committing")
             await _memory.commit_turn(req.user_id, conv_id, client_id, req.message, response.model_dump(),
                                       _orchestrator.get_tool_trace(result.request_id), state=orch_req.conversation_state)
             if response.status != "failed" and _profile_updater is not None:
                 _profile_updater.submit(req.user_id, conv_id)
-            return render(response)
+            return response
     except TimeoutError as ex:
         raise HTTPException(504, "本轮处理超过 50 秒，请使用相同 client_request_id 重试") from ex
     except (ConversationBusyError, LeaseLostError) as ex:

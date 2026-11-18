@@ -185,7 +185,8 @@ summary::-webkit-details-marker { display: none; }
 .copy-button .icon { width: 14px; height: 14px; }
 .error-label { color: var(--danger); font-size: 10px; }
 .message-error p { color: var(--danger); font-size: 13px; }
-.thinking { display: flex; align-items: center; gap: 13px; color: var(--muted); font-size: 11px; margin-bottom: 30px; }
+.thinking { display: flex; align-items: center; gap: 13px; color: var(--muted); font-size: 11px; margin: 0 0 8px; min-height: 16px; }
+.chat-retry { margin-top: 8px; color: var(--ink); font-size: 12px; }
 .thinking-dots { display: flex; gap: 4px; }
 .thinking-dots i { width: 4px; height: 4px; border-radius: 50%; background: #9999a2; animation: breathe 1.2s infinite; }
 .thinking-dots i:nth-child(2) { animation-delay: .15s; }

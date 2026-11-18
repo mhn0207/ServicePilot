@@ -130,7 +130,7 @@ export async function runRagEvaluation(settings, options = {}, resumeOnly = fals
   }
 }
 
-export async function requestChat(settings, message) {
+export async function requestChat(settings, message, { onStage, signal } = {}) {
   const payload = buildChatPayload(settings, message)
   const attemptKey = JSON.stringify([apiBaseUrl(settings), settings.userId, settings.conversationId, message])
   if (!chatAttempts.has(attemptKey)) {
@@ -138,13 +138,66 @@ export async function requestChat(settings, message) {
     chatAttempts.set(attemptKey, crypto.randomUUID())
   }
   payload.client_request_id = chatAttempts.get(attemptKey)
-  const raw = await requestFor(settings, '/chat', {
+  const timeout = AbortSignal.timeout(55000)
+  const options = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
+    body: JSON.stringify(payload),
+    signal: signal ? AbortSignal.any([signal, timeout]) : timeout
+  }
+  const raw = onStage
+    ? await requestStreamingChat(settings, options, onStage)
+    : await requestFor(settings, '/chat', options)
   chatAttempts.delete(attemptKey)
   return normalizeChatResponse(raw)
+}
+
+async function requestStreamingChat(settings, options, onStage) {
+  const response = await fetch(`${apiBaseUrl(settings)}/chat/stream`, {
+    ...options,
+    headers: authHeaders(settings, { ...options.headers, Accept: 'text/event-stream' })
+  })
+  // An older backend can reject this route before starting any turn.
+  if (response.status === 404 || response.status === 405) {
+    await response.body?.cancel()
+    return requestFor(settings, '/chat', options)
+  }
+  if (!response.ok) return readJsonResponse(response)
+  if (!response.body || !response.headers.get('content-type')?.startsWith('text/event-stream')) {
+    throw new Error('服务没有返回聊天事件流，请重试')
+  }
+
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let pending = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) throw new Error('连接在最终结果返回前中断，请重试')
+      pending += value
+      const frames = pending.split(/\r?\n\r?\n/)
+      pending = frames.pop()
+      for (const frame of frames) {
+        const lines = frame.split(/\r?\n/)
+        const event = lines.find(line => line.startsWith('event:'))?.slice(6).trim()
+        if (!['stage', 'final', 'error'].includes(event)) continue
+        const data = JSON.parse(lines.filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n'))
+        if (event === 'stage') onStage(data)
+        else if (event === 'final') {
+          if (!data?.conv_id || !data.request_id || typeof data.response !== 'string') {
+            throw new Error('聊天最终结果不完整，请重试')
+          }
+          return data
+        } else {
+          const error = new Error(data.detail || '请求处理失败')
+          error.status = data.status
+          error.retryable = data.retryable
+          throw error
+        }
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {})
+  }
 }
 
 export async function requestToolTrace(settings, requestId) {
@@ -219,16 +272,22 @@ function normalizeToolTraceResponse(raw) {
 }
 
 const chatAttempts = new Map()
-async function requestFor(settings, path, options = {}) {
-  const headers = new Headers(options.headers || {})
+function authHeaders(settings, initial) {
+  const headers = new Headers(initial)
   if (settings.pythonToken) headers.set('Authorization', `Bearer ${settings.pythonToken}`)
-  return requestJson(apiBaseUrl(settings), path, { ...options, headers,
-    signal: options.signal || AbortSignal.timeout(path === '/chat' ? 55000 : 20000) })
+  return headers
 }
 
-async function requestJson(baseUrl, path, options = {}) {
-  const url = `${normalizeBaseUrl(baseUrl)}${path}`
-  const response = await fetch(url, options)
+async function requestFor(settings, path, options = {}) {
+  const response = await fetch(`${apiBaseUrl(settings)}${path}`, {
+    ...options,
+    headers: authHeaders(settings, options.headers),
+    signal: options.signal || AbortSignal.timeout(20000)
+  })
+  return readJsonResponse(response)
+}
+
+async function readJsonResponse(response) {
   const text = await response.text()
   let data = null
   try {
@@ -240,6 +299,7 @@ async function requestJson(baseUrl, path, options = {}) {
     const detail = typeof data === 'string' ? data : JSON.stringify(data)
     const error = new Error(`${response.status} ${response.statusText}: ${detail}`)
     error.status = response.status
+    error.retryable = data?.retryable
     throw error
   }
   return data

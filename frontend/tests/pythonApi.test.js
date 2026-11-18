@@ -93,6 +93,64 @@ test('Python chat retry reuses its request ID, maps snake_case fields and sends 
   assert.notEqual(calls[1].body.client_request_id, calls[2].body.client_request_id)
 })
 
+test('chat progress handles fragmented UTF-8, and a disconnect retains the request ID', async t => {
+  const calls = []
+  const chunks = new TextEncoder().encode('event: stage\r\ndata: {"step":"tool_call","tool":"核对"}\r\n\r\n')
+  const split = chunks.indexOf(0xe6)
+  assert.ok(split > 0)
+  const streamHeaders = { 'Content-Type': 'text/event-stream; charset=utf-8' }
+  let interruptedStream
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, options, body: JSON.parse(options.body) })
+    if (calls.length === 1) {
+      return new Response(new ReadableStream({
+        start(controller) {
+          interruptedStream = controller
+          controller.enqueue(chunks.slice(0, split + 1))
+          controller.enqueue(chunks.slice(split + 1))
+        }
+      }), { headers: streamHeaders })
+    }
+    return new Response('event: stage\ndata: {"step":"replayed"}\n\nevent: final\ndata: {"request_id":"r","conv_id":"c","response":"已保存"}\n\n', {
+      headers: streamHeaders
+    })
+  })
+  const stages = []
+  const first = requestChat(settings, '断流重试', {
+    onStage(stage) {
+      stages.push(stage)
+      interruptedStream.close()
+    }
+  })
+  await assert.rejects(first, /最终结果返回前中断/)
+  assert.deepEqual(stages, [{ step: 'tool_call', tool: '核对' }])
+  const reply = await requestChat(settings, '断流重试', { onStage: stage => stages.push(stage) })
+  assert.equal(reply.response, '已保存')
+  assert.deepEqual(stages.at(-1), { step: 'replayed' })
+  assert.equal(calls[0].url, '/api/zhiying/chat/stream')
+  assert.equal(calls[0].options.headers.get('Authorization'), 'Bearer access-token')
+  assert.deepEqual(calls[0].body, calls[1].body)
+})
+
+test('chat falls back to legacy only when the stream route is unavailable', async t => {
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, body: JSON.parse(options.body) })
+    if (calls.length === 1) return json({ detail: 'Not Found' }, 404)
+    if (calls.length === 2) return json({ conv_id: 'c', request_id: 'r', response: '原接口回复' })
+    return new Response('event: error\ndata: {"status":503,"detail":"先核验结果","retryable":false}\n\n', {
+      headers: { 'Content-Type': 'text/event-stream' }
+    })
+  })
+  assert.equal((await requestChat(settings, '旧服务', { onStage() {} })).response, '原接口回复')
+  assert.equal(calls[1].url, '/api/zhiying/chat')
+  assert.deepEqual(calls[0].body, calls[1].body)
+  await assert.rejects(requestChat(settings, '禁止重放', { onStage() {} }), {
+    message: '先核验结果', status: 503, retryable: false
+  })
+  assert.equal(calls.length, 3)
+})
+
 test('knowledge, upload and trace requests follow the Python API contract', async t => {
   const calls = []
   t.mock.method(globalThis, 'fetch', async (url, options) => {

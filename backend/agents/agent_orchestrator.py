@@ -42,6 +42,7 @@ from agents.tools import (
     general_tools,
     technical_tools,
 )
+from core.chat_progress import emit_chat_stage
 from core.intent_recognizer import IntentCategory, IntentRecognizer, UrgencyLevel
 from core.llm_utils import create_message, extract_text_content
 from core.request_budget import POLICY, phase_budget, can_start, limit_timeout, observe, remaining
@@ -479,6 +480,7 @@ class BaseAgent:
                                     result.update(cached=True)
                                     request_reused = True
                                 else:
+                                    emit_chat_stage("tool_call", tool=name, agent=self.agent_type.value)
                                     result = spec.handler(req, args)
                                     if inspect.isawaitable(result):
                                         timeout = limit_timeout(POLICY.tool_handler_s)
@@ -804,6 +806,7 @@ class ResponseComposer:
         if len(successful) == 1:
             return AgentCallResult(successful[0].content, status=status)
 
+        emit_chat_stage("composing")
         evidence = "\n\n".join(
             f"[{response.agent_type.value} Agent 输出]\n{response.content}"
             for response in successful
@@ -1023,9 +1026,11 @@ class AgentOrchestrator:
         # 复杂问题自动并行协作，例如同一句同时涉及登录故障和扣款/退款。
         decision = self._route_decision(req)
         if decision.multi_agent:
+            emit_chat_stage("agent_routing", agents=[agent.value for agent in decision.agent_types], mode="parallel")
             return await self.run_parallel(req, decision)
 
         # 2. 执行主 Agent（含降级）
+        emit_chat_stage("agent_routing", agents=[decision.primary_agent.value], mode="single")
         response = await self._execute(req, decision.primary_agent)
 
         # 4. 升级检查

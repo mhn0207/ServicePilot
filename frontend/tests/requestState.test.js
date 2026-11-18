@@ -144,10 +144,14 @@ for (const outcome of ['pending', 'failed']) {
     })
     const old = requestChat({ ...settings }, '相同的首句话')
     if (outcome === 'failed') await assert.rejects(old, /503/)
+    const chatController = new AbortController()
     const context = vm.createContext({ settings, crypto, requestState: requests, busy: { value: true },
+      chatController, failedChat: { value: { id: 'old' } },
       historyError: { value: 'old' }, messages: { value: ['old'] }, lastResponse: { value: 'old' }, lastTrace: { value: 'old' }, persist() {} })
     loadFunction('clearConversation', context)
     context.clearConversation()
+    assert.equal(chatController.signal.aborted, true)
+    assert.equal(context.failedChat.value, null)
     assert.ok(settings.conversationId)
     await requestChat({ ...settings }, '相同的首句话')
     assert.notEqual(calls[0].client_request_id, calls[1].client_request_id)
@@ -156,6 +160,29 @@ for (const outcome of ['pending', 'failed']) {
     if (release) { release(); await old }
   })
 }
+
+test('retry replaces the failed reply and keeps a single user message', async () => {
+  const settings = { ...state(), conversationId: 'c' }
+  let attempts = 0, nextId = 0
+  const context = vm.createContext({
+    settings, requestState: createRequestState(settings), AbortController,
+    busy: { value: false }, historyError: { value: '' }, draft: { value: '确认提交退款核验' },
+    messages: { value: [] }, failedChat: { value: null }, chatProgress: { value: '' },
+    lastResponse: { value: null }, lastTrace: { value: null }, chatController: null,
+    createMessageId: () => ++nextId, nextTick: async () => {}, messageList: { value: null },
+    loadToolTrace: async () => null, loadMonitor: async () => {},
+    requestChat: async () => {
+      if (++attempts === 1) throw new Error('连接中断')
+      return { response: '待人工核验', intent: 'billing', primaryAgent: 'billing' }
+    }
+  })
+  loadFunction('sendMessage', context)
+  await context.sendMessage()
+  assert.equal(context.messages.value.at(-1).error, true)
+  await context.sendMessage(context.failedChat.value.content)
+  assert.equal(context.failedChat.value, null)
+  assert.deepEqual(Array.from(context.messages.value, item => item.content), ['确认提交退款核验', '待人工核验'])
+})
 
 test('a failed search renders an error rather than a successful empty search', async t => {
   const settings = state(), requests = createRequestState(settings), toasts = []
