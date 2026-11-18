@@ -18,7 +18,7 @@ def score_results(results, expected_title, top_k):
 
 
 async def evaluate(base_url, cases, top_k):
-    token = os.getenv("ZHIYING_EVAL_TOKEN", "")
+    token = os.getenv("SERVICEPILOT_EVAL_TOKEN") or os.getenv("ZHIYING_EVAL_TOKEN", "")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     rows = []
     async with httpx.AsyncClient(base_url=base_url.rstrip("/"), headers=headers, timeout=90) as client:

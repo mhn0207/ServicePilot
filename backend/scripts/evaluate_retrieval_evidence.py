@@ -52,7 +52,7 @@ async def request_executions(base_url: str, dataset: Dataset, top_k: int) -> lis
     parsed = urlsplit(base_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("base-url 必须为不含凭据、查询参数或 fragment 的 HTTP(S) 地址")
-    token = os.getenv("ZHIYING_EVAL_TOKEN", "")
+    token = os.getenv("SERVICEPILOT_EVAL_TOKEN") or os.getenv("ZHIYING_EVAL_TOKEN", "")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     rows = []
     async with httpx.AsyncClient(base_url=base_url.rstrip("/") + "/", headers=headers,

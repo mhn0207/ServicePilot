@@ -59,7 +59,8 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
             self._use_server = True
             logger.info(f"知识库 ChromaDB 已连接: {chroma_host}:{chroma_port}")
         except Exception as ex:
-            if os.getenv("ZHIYING_ENV", "development").lower() == "production":
+            env = (os.getenv("SERVICEPILOT_ENV") or os.getenv("ZHIYING_ENV", "development")).lower()
+            if env == "production":
                 raise RuntimeError("生产环境知识库 ChromaDB 不可用，禁止切换到本地库") from ex
             logger.info(f"知识库 ChromaDB 服务不可用，使用本地模式: {chroma_path}")
             self._client = chromadb.PersistentClient(
@@ -71,7 +72,7 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
         # Docker 已预下载模型，本地运行首次使用可能触发下载。
         self._collection = self._client.get_or_create_collection(
             name=self.COLLECTION_NAME,
-            metadata={"description": "ServicePilot RAG 知识库"},
+            metadata={"description": "ServicePilot RAG 知识库", "hnsw:space": "cosine"},
         )
         self._health_probe = ChromaHealthProbe(
             self._collection, host=chroma_host if self._use_server else None, port=chroma_port,
@@ -79,8 +80,10 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
         )
 
         # 如果知识库为空，导入默认文档
-        seed_demo = os.getenv("ZHIYING_SEED_DEMO_DOCS", "true").lower() in {"1", "true", "yes"}
-        if os.getenv("ZHIYING_ENV", "development").lower() != "production" and seed_demo and self._collection.count() == 0:
+        seed_raw = os.getenv("SERVICEPILOT_SEED_DEMO_DOCS") or os.getenv("ZHIYING_SEED_DEMO_DOCS", "true")
+        seed_demo = seed_raw.lower() in {"1", "true", "yes"}
+        env = (os.getenv("SERVICEPILOT_ENV") or os.getenv("ZHIYING_ENV", "development")).lower()
+        if env != "production" and seed_demo and self._collection.count() == 0:
             self._load_default_docs()
 
     # ── 文档管理 ──────────────────────────────────────────────────────────────
@@ -171,7 +174,7 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
                 items.append({
                     "title":    meta.get("title", ""),
                     "content":  doc,
-                    "score":    round(1.0 - dist, 4),  # ChromaDB 返回距离，转为相似度
+                    "score":    round(max(0.0, min(1.0, 1.0 - float(dist))), 4),  # ChromaDB 返回距离，转为有界相似度
                     "chunk":    meta.get("chunk_index", 0),
                     "document_id": meta.get("document_id", ""),
                     "version": meta.get("version", ""),

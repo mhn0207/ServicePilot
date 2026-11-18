@@ -76,21 +76,36 @@ class AgentProfile:
     max_tokens: int = 1024
 
 
+def _env_value(name: str) -> Optional[str]:
+    if name.startswith("ZHIYING_"):
+        sp_name = "SERVICEPILOT_" + name[len("ZHIYING_"):]
+        val = os.getenv(sp_name)
+        if val is not None:
+            return val
+    return os.getenv(name)
+
+
 def _env_float(name: str, default: float) -> float:
     """读取可选浮点配置；错误配置不应阻塞服务启动。"""
+    raw = _env_value(name)
+    if raw is None:
+        return default
     try:
-        return float(os.getenv(name, str(default)))
+        return float(raw)
     except (TypeError, ValueError):
-        logger.warning("忽略非法浮点配置 %s=%r", name, os.getenv(name))
+        logger.warning("忽略非法浮点配置 %s=%r", name, raw)
         return default
 
 
 def _env_int(name: str, default: int) -> int:
     """读取可选整数配置；错误配置不应阻塞服务启动。"""
+    raw = _env_value(name)
+    if raw is None:
+        return default
     try:
-        return int(os.getenv(name, str(default)))
+        return int(raw)
     except (TypeError, ValueError):
-        logger.warning("忽略非法整数配置 %s=%r", name, os.getenv(name))
+        logger.warning("忽略非法整数配置 %s=%r", name, raw)
         return default
 
 
@@ -154,9 +169,19 @@ class AgentStats:
         return self.total_ms / self.completed if self.completed else 0.0
 
     def routing_score(self) -> float:
-        """路由评分：成功率高、延迟低的 Agent 得分高。"""
-        latency_score = 1.0 / (1.0 + self.avg_ms / 1000)
-        base_score = self.success_rate * 0.7 + latency_score * 0.3
+        """路由评分：优先结合 5 分钟滑窗成功率与延迟，兼顾累计历史。"""
+        recent_n, recent_sr, recent_ms = self.recent()
+        if recent_n >= 3:
+            sr = recent_sr * 0.7 + self.success_rate * 0.3
+            ms = recent_ms * 0.7 + self.avg_ms * 0.3
+        elif recent_n > 0:
+            sr = recent_sr * 0.4 + self.success_rate * 0.6
+            ms = recent_ms * 0.4 + self.avg_ms * 0.6
+        else:
+            sr = self.success_rate
+            ms = self.avg_ms
+        latency_score = 1.0 / (1.0 + ms / 1000.0)
+        base_score = sr * 0.7 + latency_score * 0.3
         return base_score * max(0.0, 1.0 - self.monitor_penalty)
 
 
@@ -577,7 +602,8 @@ class BaseAgent:
         一个断点。默认关闭，请求内容与原先逐字节一致。
         """
         base_prompt, skill_block = self._system_parts(req)
-        if os.getenv("ZHIYING_PROMPT_CACHE_BREAKPOINTS", "").strip().lower() not in ("1", "true", "yes"):
+        cache_bp = (os.getenv("SERVICEPILOT_PROMPT_CACHE_BREAKPOINTS") or os.getenv("ZHIYING_PROMPT_CACHE_BREAKPOINTS", "")).strip().lower()
+        if cache_bp not in ("1", "true", "yes"):
             return base_prompt + skill_block
         return [
             {"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}
@@ -892,8 +918,12 @@ class AgentOrchestrator:
         可使用更强模型，通用接待可使用更快模型，升级节点本身不需要调用 LLM。
         """
         profile = agent_cls.profile
-        env_name = f"ZHIYING_{agent_cls.agent_type.value.upper()}_MODEL"
-        model = os.getenv(env_name, "").strip() or profile.model
+        role_upper = agent_cls.agent_type.value.upper()
+        model = (
+            os.getenv(f"SERVICEPILOT_{role_upper}_MODEL", "").strip()
+            or os.getenv(f"ZHIYING_{role_upper}_MODEL", "").strip()
+            or profile.model
+        )
         configured_profile = replace(profile, model=model) if model else profile
         return agent_cls(client, default_model, skill_manager, profile=configured_profile)
 
@@ -1035,8 +1065,19 @@ class AgentOrchestrator:
         """
         t0 = time.monotonic()
         agent_types = decision.agent_types
-        tasks = [self._execute(req, at) for at in agent_types]
+        branch_reqs = [
+            replace(
+                req,
+                tool_attempts=[],
+                unsafe_tool_calls=set(req.unsafe_tool_calls),
+            )
+            for _ in agent_types
+        ]
+        tasks = [self._execute(b_req, at) for b_req, at in zip(branch_reqs, agent_types)]
         responses = await asyncio.gather(*tasks, return_exceptions=True)
+        for b_req in branch_reqs:
+            req.tool_attempts.extend(b_req.tool_attempts)
+            req.unsafe_tool_calls.update(b_req.unsafe_tool_calls)
 
         valid_responses = [r for r in responses if isinstance(r, AgentResponse)]
         composed = await self._composer.compose_result(req, valid_responses)

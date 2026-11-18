@@ -1,5 +1,5 @@
 import { pollEvaluation } from './evaluationJobs.js'
-const DEFAULT_API_URL = runtimeConfig().zhiyingApiUrl || import.meta.env?.VITE_PYTHON_API_URL || '/api/zhiying'
+const DEFAULT_API_URL = runtimeConfig().servicepilotApiUrl || runtimeConfig().zhiyingApiUrl || import.meta.env?.VITE_PYTHON_API_URL || '/api/zhiying'
 
 export function createInitialSettings() {
   const saved = readSettings()
@@ -260,5 +260,5 @@ function readSettings() {
 
 function runtimeConfig() {
   if (typeof window === 'undefined') return {}
-  return window.__ZHIYING_CONFIG__ || {}
+  return window.__SERVICEPILOT_CONFIG__ || window.__ZHIYING_CONFIG__ || {}
 }

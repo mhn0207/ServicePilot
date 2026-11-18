@@ -202,3 +202,84 @@ async def test_monitor_shutdown_releases_registry_and_http_server(monkeypatch):
     await monitor.start()
     assert list(registry.collect())
     await monitor.stop()
+
+
+@pytest.mark.parametrize(
+    "message,expected_error_codes,expected_amounts",
+    [
+        ("订单被多扣了500元，请帮我核查退款", [], ["500元"]),
+        ("我拨打了400客服电话，还是没退500块", [], ["500块"]),
+        ("登录报错 401，而且被重复扣款 500元", ["401"], ["500元"]),
+        ("接口返回500错误，页面崩溃", ["500"], []),
+    ],
+)
+def test_error_code_extraction_ignores_amounts_and_hotline_numbers(
+    message, expected_error_codes, expected_amounts
+):
+    rec = IntentRecognizer.__new__(IntentRecognizer)
+    entities = rec._extract_entities(message)
+    assert entities["error_code"] == expected_error_codes
+    assert entities["amount"] == expected_amounts
+
+
+@pytest.mark.asyncio
+async def test_store_episodic_uses_deterministic_content_hash_and_upsert():
+    mem = MemoryManager.__new__(MemoryManager)
+    upsert = Mock()
+    mem._episodic = SimpleNamespace(upsert=upsert, add=Mock())
+    await mem._store_episodic("u1", "c1", "user: 退款\nassistant: 请提供订单号", "用户咨询退款")
+    await mem._store_episodic("u1", "c1", "user: 退款\nassistant: 请提供订单号", "用户咨询退款")
+    assert upsert.call_count == 2
+    first_id = upsert.call_args_list[0].kwargs["ids"][0]
+    second_id = upsert.call_args_list[1].kwargs["ids"][0]
+    assert first_id == second_id
+
+
+def test_agent_stats_routing_score_incorporates_sliding_window():
+    import time
+    from agents.agent_orchestrator import AgentStats
+
+    stats = AgentStats(total=100, success=100, total_ms=10000.0)
+    high_score = stats.routing_score()
+    now = time.monotonic()
+    for _ in range(5):
+        stats.samples.append((now, False, 5000.0))
+    degraded_score = stats.routing_score()
+    assert degraded_score < high_score
+
+
+@pytest.mark.asyncio
+async def test_run_parallel_isolates_branch_requests_and_merges_attempts():
+    orch = AgentOrchestrator.__new__(AgentOrchestrator)
+    orch._recent_tool_traces = deque(maxlen=10)
+    orch._composer = ResponseComposer(None, "test")
+    seen_req_ids = []
+
+    async def fake_execute(branch_req, agent_type):
+        seen_req_ids.append(id(branch_req))
+        branch_req.tool_attempts.append({"tool_name": f"tool_{agent_type.value}", "retry_safe": True})
+        branch_req.unsafe_tool_calls.add(f"op_{agent_type.value}")
+        return AgentResponse(agent_type, f"{agent_type.value} ok", True)
+
+    orch._execute = fake_execute
+    req = Request("技术和账单问题", "u1", "c1", intent=IntentCategory.TECHNICAL)
+    result = await orch.run_parallel(req, RoutingDecision(AgentType.TECHNICAL, [AgentType.BILLING]))
+    assert result.status == "success"
+    assert len(set(seen_req_ids)) == 2 and id(req) not in seen_req_ids
+    assert len(req.tool_attempts) == 2
+    assert req.unsafe_tool_calls == {"op_technical", "op_billing"}
+
+
+def test_knowledge_base_clamps_distance_score_to_unit_interval():
+    kb = KnowledgeBase.__new__(KnowledgeBase)
+    kb._collection = SimpleNamespace(
+        count=lambda: 1,
+        query=lambda **kwargs: {
+            "documents": [["远距离文档"]],
+            "metadatas": [[{"title": "文档", "document_id": "doc-1", "version": "v1"}]],
+            "distances": [[1.45]],
+        },
+    )
+    item = kb.search("测试")[0]
+    assert item["score"] == 0.0
+

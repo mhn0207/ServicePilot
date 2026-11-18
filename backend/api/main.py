@@ -100,10 +100,11 @@ async def lifespan(app: FastAPI):
     )
 
     # Skills：启动时从目录加载业务能力说明，并在 Agent 调用 LLM 时动态注入。
-    skills_dir = os.getenv("ZHIYING_SKILLS_DIR", str(pathlib.Path(_ROOT) / "skills"))
+    skills_dir = os.getenv("SERVICEPILOT_SKILLS_DIR") or os.getenv("ZHIYING_SKILLS_DIR", str(pathlib.Path(_ROOT) / "skills"))
+    max_prompt_chars = os.getenv("SERVICEPILOT_SKILLS_MAX_PROMPT_CHARS") or os.getenv("ZHIYING_SKILLS_MAX_PROMPT_CHARS", "5000")
     _skill_manager = SkillManager(
         root_dir=skills_dir,
-        max_prompt_chars=int(os.getenv("ZHIYING_SKILLS_MAX_PROMPT_CHARS", "5000")),
+        max_prompt_chars=int(max_prompt_chars),
     )
     _skill_manager.load()
 
@@ -347,7 +348,7 @@ async def health():
             raise ValueError('storage unavailable')
     except Exception:
         raise HTTPException(503, '存储依赖未就绪') from None
-    return {"status": "ok", "agents": {} if os.getenv("ZHIYING_API_TOKENS") else _orchestrator.get_stats()}
+    return {"status": "ok", "agents": {} if (os.getenv("SERVICEPILOT_API_TOKENS") or os.getenv("ZHIYING_API_TOKENS")) else _orchestrator.get_stats()}
 
 
 @app.get("/skills", tags=["Skills"])

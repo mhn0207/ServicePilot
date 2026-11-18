@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 from anthropic import AsyncAnthropic
 
 from core.llm_utils import create_message, extract_text_content
-from core.amount_entities import amount_mentions
+from core.amount_entities import AMOUNT, amount_mentions
 from core.request_budget import POLICY
 
 logger = logging.getLogger(__name__)
@@ -297,13 +297,14 @@ class IntentRecognizer:
         prompt = self._clean_text(prompt)
 
         try:
+            timeout_s = os.getenv("SERVICEPILOT_INTENT_TIMEOUT_S") or os.getenv("ZHIYING_INTENT_TIMEOUT_S", str(POLICY.intent_timeout_default_s))
             resp = await asyncio.wait_for(create_message(self.client,
                 stage="intent",
                 model=self.model,
                 max_tokens=256,
                 temperature=0.1,
                 messages=[{"role": "user", "content": prompt}],
-            ), timeout=max(0.1, float(os.getenv("ZHIYING_INTENT_TIMEOUT_S", str(POLICY.intent_timeout_default_s)))))
+            ), timeout=max(0.1, float(timeout_s)))
             raw = extract_text_content(resp.content)
             s, e = raw.find("{"), raw.rfind("}") + 1
             data = json.loads(raw[s:e])
@@ -427,15 +428,33 @@ class IntentRecognizer:
     def _extract_entities(self, message: str) -> Dict[str, List[str]]:
         """用规则提取高价值实体，避免每次识别都额外调用 LLM。"""
         message = self._clean_text(message)
+        amounts = amount_mentions(message)[0]
+        amount_spans = [m.span() for m in AMOUNT.finditer(message)]
+
+        explicit_error_codes = re.findall(
+            r"(?:error(?:_code)?|错误码|状态码|http|报错|返回|异常|报)\s*[:：#]?\s*([45]\d{2})(?!\d)",
+            message,
+            re.I,
+        )
+        contextual_error_codes: List[str] = []
+        for match in re.finditer(
+            r"(?<![A-Za-z0-9¥￥.])([45]\d{2})(?![A-Za-z0-9.]|\s*(?:元|块|rmb|cny|usd|美元|客服|热线|电话|分|天|小时|人|次|个|件|条|页|mb|gb))",
+            message,
+            re.I,
+        ):
+            s, e = match.span(1)
+            if any(a_s <= s and e <= a_e for a_s, a_e in amount_spans):
+                continue
+            window = message[max(0, s - 12):min(len(message), e + 12)].lower()
+            if any(kw in window for kw in ("报错", "错误", "状态码", "异常", "失败", "登录", "接口", "请求", "返回", "页面", "崩溃", "error", "http", "status", "code", "报")):
+                contextual_error_codes.append(match.group(1))
+
         return {
             "order_id": self._unique(re.findall(r"(?:订单号?|order(?:_id)?|#)\s*[:：#]?\s*([A-Za-z0-9_-]{4,32})", message, re.I)),
             "product": [],
             "date": self._unique(re.findall(r"(今天|明天|昨天|本周|这周|下周|\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?)", message)),
-            "amount": amount_mentions(message)[0],
-            "error_code": self._unique(
-                re.findall(r"(?:error(?:_code)?|错误码|状态码|http)\s*[:：#]?\s*([45]\d{2})\b", message, re.I)
-                + re.findall(r"\b([45]\d{2})\b", message)
-            ),
+            "amount": amounts,
+            "error_code": self._unique(explicit_error_codes + contextual_error_codes),
         }
 
     # ── 辅助 ──────────────────────────────────────────────────────────────────

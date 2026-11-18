@@ -10,6 +10,11 @@ export default defineConfig({
         target: process.env.VITE_PYTHON_API_URL || 'http://localhost:8000',
         changeOrigin: true
       },
+      '/api/servicepilot': {
+        target: process.env.VITE_PYTHON_API_URL || 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/servicepilot/, '')
+      },
       '/api/zhiying': {
         target: process.env.VITE_PYTHON_API_URL || 'http://localhost:8000',
         changeOrigin: true,

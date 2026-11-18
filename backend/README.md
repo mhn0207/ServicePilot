@@ -12,7 +12,7 @@ Python 3.12 / FastAPI / Redis / ChromaDB / Anthropic SDK / MCP。
 docker compose -p servicepilot-local -f docker-compose.yml -f docker-compose.web.yml up -d --build --wait --wait-timeout 180
 ```
 
-示例配置的 `ZHIYING_ENV=development` 用于本机演示，并允许空库导入 `data/demo_docs/sample_knowledge.json`。production 必须设置 `ZHIYING_API_TOKENS`；ChromaDB 连接失败时中止，禁止回退到本地库。外部 MCP 由示例配置中的 `MCP_EXTERNAL_ENABLED=false` 关闭；直接使用进程环境启动时也应显式设置此值。
+示例配置的 `SERVICEPILOT_ENV=development`（兼容 `ZHIYING_ENV`）用于本机演示，并允许空库导入 `data/demo_docs/sample_knowledge.json`。production 必须设置 `SERVICEPILOT_API_TOKENS`（或 `ZHIYING_API_TOKENS`）；ChromaDB 连接失败时中止，禁止回退到本地库。外部 MCP 由示例配置中的 `MCP_EXTERNAL_ENABLED=false` 关闭；直接使用进程环境启动时也应显式设置此值。
 
 若容器调用模型需要宿主机代理，须单独配置容器可访问的代理地址。容器中的 `127.0.0.1` 指向容器自身，不能直接复用宿主机回环代理。不要为排查连接问题关闭证书校验。
 
@@ -57,7 +57,7 @@ docker compose -p servicepilot-local -f docker-compose.yml -f docker-compose.web
 python -c "from pathlib import Path; import secrets; Path('config/prometheus.token').open('x', encoding='utf-8').write(secrets.token_urlsafe(32) + '\n')"
 ```
 
-在本机 `.env` 设置 `ZHIYING_METRICS_TOKEN_PATH=./config/prometheus.token`，再使用相同 Compose 命令更新服务。Compose 将该文件作为 secret 同时提供给应用和 Prometheus；应用读取 `ZHIYING_METRICS_TOKEN_FILE=/run/secrets/metrics_token`，Prometheus 使用 `authorization.credentials_file`。非 Compose 启动时，直接设置应用的 `ZHIYING_METRICS_TOKEN_FILE` 为本机文件路径。
+在本机 `.env` 设置 `SERVICEPILOT_METRICS_TOKEN_PATH=./config/prometheus.token`（或 `ZHIYING_METRICS_TOKEN_PATH`），再使用相同 Compose 命令更新服务。Compose 将该文件作为 secret 同时提供给应用和 Prometheus；应用读取 `SERVICEPILOT_METRICS_TOKEN_FILE` / `ZHIYING_METRICS_TOKEN_FILE=/run/secrets/metrics_token`，Prometheus 使用 `authorization.credentials_file`。非 Compose 启动时，直接设置应用的 `SERVICEPILOT_METRICS_TOKEN_FILE`（或 `ZHIYING_METRICS_TOKEN_FILE`）为本机文件路径。
 
 令牌至少 24 字符、不可含空白，只授权 `GET /metrics`，不能作为聊天、轨迹或管理身份。管理员 API Token 仍可读取指标，普通用户无此权限。凭据文件缺失或格式错误会拒绝采集；空文件不在启用 API 鉴权时提供访问能力。真实 `*.token` 同时被 Git 和后端镜像构建排除，不将凭据提交或写入前端。
 
@@ -113,7 +113,7 @@ python -X utf8 scripts/evaluate_retrieval_evidence.py
 
 两个证据组只覆盖一个时，Hit=1、Recall=0.5。重复片段不增加覆盖，也不删除排名后补足 K；fallback 不算证据。错误保留在主指标分母，并另报错误率和成功子集；无答案题不进入正向召回分母。
 
-旧 `scripts/evaluate_retrieval.py` 的 12 条标题级冒烟保留原含义。证据级在线入口需显式 `--online --base-url ...`，只从进程环境读取 `ZHIYING_EVAL_TOKEN`；它调用业务 `/search`，可能消耗改写和重排额度，不是纯向量基线。
+旧 `scripts/evaluate_retrieval.py` 的 12 条标题级冒烟保留原含义。证据级在线入口需显式 `--online --base-url ...`，只从进程环境读取 `SERVICEPILOT_EVAL_TOKEN`（兼容 `ZHIYING_EVAL_TOKEN`）；它调用业务 `/search`，可能消耗改写和重排额度，不是纯向量基线。
 
 ### 独立策略对比
 

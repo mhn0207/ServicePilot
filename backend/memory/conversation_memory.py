@@ -126,7 +126,8 @@ class MemoryManager:
             remote_chroma = True
             logger.info(f"ChromaDB 已连接: {chroma_host}:{chroma_port}")
         except Exception as ex:
-            if os.getenv("ZHIYING_ENV", "development").lower() == "production":
+            env = (os.getenv("SERVICEPILOT_ENV") or os.getenv("ZHIYING_ENV", "development")).lower()
+            if env == "production":
                 raise RuntimeError("生产环境记忆 ChromaDB 不可用，禁止切换到本地库") from ex
             logger.info(f"ChromaDB 服务不可用，使用本地嵌入式模式: {chroma_path}")
             chroma = chromadb.PersistentClient(
@@ -135,9 +136,15 @@ class MemoryManager:
             )
 
         # 情景记忆：存储历史对话片段
-        self._episodic = chroma.get_or_create_collection("episodic")
+        self._episodic = chroma.get_or_create_collection(
+            "episodic",
+            metadata={"hnsw:space": "cosine"},
+        )
         # 用户画像：存储提炼出的偏好和实体
-        self._profile  = chroma.get_or_create_collection("user_profile")
+        self._profile = chroma.get_or_create_collection(
+            "user_profile",
+            metadata={"hnsw:space": "cosine"},
+        )
         api_path = chroma.get_settings().chroma_server_api_default_path if remote_chroma else '/api/v2'
         self._health_probe = ChromaHealthProbe(
             self._episodic, host=chroma_host if remote_chroma else None, port=chroma_port,
@@ -461,10 +468,12 @@ class MemoryManager:
             conv_id = self._safe_text(conv_id)
             text = self._safe_text(text)
             summary = self._safe_text(summary)
-            doc_id = hashlib.md5(f"{user_id}{conv_id}{time.time()}".encode()).hexdigest()
+            digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+            doc_id = hashlib.md5(f"{user_id}:{conv_id}:{digest}".encode("utf-8")).hexdigest()
+            write_fn = getattr(self._episodic, "upsert", None) or self._episodic.add
             # 直接传 documents，ChromaDB 内置模型自动生成 embedding
             await asyncio.to_thread(
-                self._episodic.add,
+                write_fn,
                 ids=[doc_id],
                 documents=[summary],
                 metadatas=[{"user_id": user_id, "conv_id": conv_id,

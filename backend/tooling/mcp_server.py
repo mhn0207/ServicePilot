@@ -9,7 +9,7 @@ from pydantic import Field, BaseModel
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
-hosts = os.getenv("MCP_ALLOWED_HOSTS", "localhost,localhost:*,127.0.0.1,127.0.0.1:*,zhiying,zhiying:*,zhiying-python,zhiying-python:*")
+hosts = os.getenv("MCP_ALLOWED_HOSTS", "localhost,localhost:*,127.0.0.1,127.0.0.1:*,servicepilot,servicepilot:*,zhiying,zhiying:*,zhiying-python,zhiying-python:*")
 origins = os.getenv("MCP_ALLOWED_ORIGINS", "http://localhost,http://localhost:*,http://127.0.0.1,http://127.0.0.1:*")
 server = FastMCP("ServicePilot Knowledge", stateless_http=True, json_response=True, streamable_http_path="/",
                 transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=True,
@@ -46,6 +46,7 @@ async def search_local_knowledge(query: Annotated[str, Field(min_length=1, max_l
 
 
 @server.resource("zhiying://knowledge/stats")
+@server.resource("servicepilot://knowledge/stats")
 async def knowledge_stats() -> str:
     """读取知识库片段数量。"""
     if knowledge_base is None:

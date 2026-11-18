@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-开发地址 http://localhost:5173；`/api/zhiying` 代理到本机 8000 端口并去除前缀。模型 Key 只放后端。连接设置中的访问 Token 用于 ServicePilot 身份验证，不是模型供应商 Key。
+开发地址 http://localhost:5173；`/api/servicepilot`（及兼容的 `/api/zhiying`）代理到本机 8000 端口并去除前缀。模型 Key 只放后端。连接设置中的访问 Token 用于 ServicePilot 身份验证，不是模型供应商 Key。
 
 ## 构建与验证
 
@@ -26,7 +26,7 @@ npm run build
 
 推荐从 `../backend/` 使用 `docker-compose.yml` 与 `docker-compose.web.yml` 统一启动，命令见 [根 README](../README.md)。本目录 Compose 是独立方案，与统一方案端口重叠，选择一种即可。
 
-运行时 API 地址由 `PYTHON_API_URL` 注入，默认 `/api/zhiying`。不要把模型凭据写入 Vite 环境变量、`runtime-config.js` 或前端构建产物。
+运行时 API 地址由 `PYTHON_API_URL` 注入，同时支持 `/api/servicepilot` 与默认兼容路径 `/api/zhiying`。不要把模型凭据写入 Vite 环境变量、`runtime-config.js` 或前端构建产物。
 
 入口 Shell 脚本使用 LF 换行，镜像构建也会清除 CRLF，避免 Windows 工作区构建后出现 `exec /entrypoint.sh: no such file or directory`。前端镜像用页面 HTTP 探测确认 Nginx 可用；它不替代后端 `/health` 或模型连接检查。
 

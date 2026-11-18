@@ -7,14 +7,15 @@ from pathlib import Path
 
 
 def identity(authorization):
-    raw = os.getenv('ZHIYING_API_TOKENS', '').strip()
+    raw = (os.getenv('SERVICEPILOT_API_TOKENS') or os.getenv('ZHIYING_API_TOKENS', '')).strip()
     if not raw:
-        if os.getenv('ZHIYING_ENV', 'development') == 'production':
-            raise ValueError('production 模式必须设置 ZHIYING_API_TOKENS')
+        env = os.getenv('SERVICEPILOT_ENV') or os.getenv('ZHIYING_ENV', 'development')
+        if env == 'production':
+            raise ValueError('production 模式必须设置 SERVICEPILOT_API_TOKENS / ZHIYING_API_TOKENS')
         return None
     entries = json.loads(raw)
     if not isinstance(entries, dict) or not entries:
-        raise ValueError('ZHIYING_API_TOKENS 必须为非空对象')
+        raise ValueError('SERVICEPILOT_API_TOKENS / ZHIYING_API_TOKENS 必须为非空对象')
     for token, account in entries.items():
         if len(token) < 24 or not isinstance(account, dict) or not isinstance(account.get('user_id'), str) or not account.get('user_id') or account.get('role') not in ('user', 'admin'):
             raise ValueError('API Token 配置无效')
@@ -28,7 +29,7 @@ def identity(authorization):
 
 def metrics_authorized(authorization: str) -> bool:
     """A separate file-backed scrape credential never grants an API identity."""
-    path = os.getenv('ZHIYING_METRICS_TOKEN_FILE', '').strip()
+    path = (os.getenv('SERVICEPILOT_METRICS_TOKEN_FILE') or os.getenv('ZHIYING_METRICS_TOKEN_FILE', '')).strip()
     if not path:
         return False
     try:
