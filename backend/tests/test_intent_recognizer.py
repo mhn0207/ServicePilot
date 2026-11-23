@@ -174,3 +174,27 @@ async def test_shortcut_is_cached_by_history(fast_recognizer):
     with_history = await fast_recognizer.recognize("我要申请退款", [{"role": "user", "content": "修改金额"}])
     assert with_history.source_scores["llm"] == .95
     fast_recognizer._llm_recognize.assert_awaited_once()
+
+
+def test_learn_isolates_templates_per_recognizer_instance():
+    from core.intent_recognizer import _TEMPLATES
+    first = IntentRecognizer(api_key="test")
+    second = IntentRecognizer(api_key="test")
+    sample = "测试专用样本_企业对公账户开票"
+    first.learn(sample, IntentCategory.INVOICE)
+    assert sample in first._templates_map()[IntentCategory.INVOICE]
+    assert sample not in second._templates_map()[IntentCategory.INVOICE]
+    assert sample not in _TEMPLATES[IntentCategory.INVOICE]
+
+
+def test_cors_origins_restricts_production_by_default(monkeypatch):
+    from api.main import _cors_origins
+    monkeypatch.delenv("SERVICEPILOT_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("ZHIYING_CORS_ORIGINS", raising=False)
+    monkeypatch.setenv("SERVICEPILOT_ENV", "production")
+    assert _cors_origins() == []
+    monkeypatch.setenv("SERVICEPILOT_CORS_ORIGINS", "https://console.example.com, https://admin.example.com")
+    assert _cors_origins() == ["https://console.example.com", "https://admin.example.com"]
+    monkeypatch.delenv("SERVICEPILOT_CORS_ORIGINS", raising=False)
+    monkeypatch.setenv("SERVICEPILOT_ENV", "development")
+    assert _cors_origins() == ["*"]

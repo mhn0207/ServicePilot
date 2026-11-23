@@ -2,7 +2,7 @@
   <div class="app-shell" :class="`view-${activeView}`">
     <aside class="navigation-rail" aria-label="主导航">
       <a class="brand" href="#" @click.prevent="activeView = 'chat'" aria-label="ServicePilot 首页">
-        <span class="brand-mark">知</span>
+        <span class="brand-mark">SP</span>
         <span class="brand-name">ServicePilot</span>
       </a>
       <button class="new-chat-button" @click="activeView = 'chat'; clearConversation()">
@@ -48,7 +48,7 @@
           <strong>{{ currentView.label }}</strong>
         </div>
         <a class="mobile-brand" href="#" @click.prevent="activeView = 'chat'" aria-label="ServicePilot 首页">
-          <span class="brand-mark">知</span>
+          <span class="brand-mark">SP</span>
           <span>ServicePilot</span>
         </a>
         <div class="topbar-tools">

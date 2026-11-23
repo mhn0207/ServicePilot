@@ -209,6 +209,7 @@ class IntentRecognizer:
         self._embedding_enabled = embedding_enabled in {'true', '1', 'yes', 'on'}
         fast_path = os.getenv("SERVICEPILOT_INTENT_FAST_PATH") or os.getenv("ZHIYING_INTENT_FAST_PATH", "false")
         self._fast_path_enabled = fast_path.strip().lower() in {"true", "1", "yes", "on"}
+        self._templates: Dict[IntentCategory, List[str]] = {cat: list(tpls) for cat, tpls in _TEMPLATES.items()}
         self._cache: Dict[str, IntentResult] = {}
         self._cache_expiries: Dict[str, float] = {}
         self.cache_hits   = 0
@@ -299,9 +300,14 @@ class IntentRecognizer:
             'status': self._embedding.status(),
         }
 
+    def _templates_map(self) -> Dict[IntentCategory, List[str]]:
+        if not hasattr(self, "_templates"):
+            self._templates = {cat: list(tpls) for cat, tpls in _TEMPLATES.items()}
+        return self._templates
+
     def learn(self, message: str, correct: IntentCategory) -> None:
-        """在线学习：将纠正样本加入模板，清除对应 Embedding 缓存。"""
-        tpls = _TEMPLATES.setdefault(correct, [])
+        """在线学习：将纠正样本加入当前实例模板，清除对应 Embedding 缓存。"""
+        tpls = self._templates_map().setdefault(correct, [])
         if message not in tpls:
             tpls.append(message)
             self._embedding.remote_templates.clear()
@@ -322,7 +328,7 @@ class IntentRecognizer:
         # 构建 Few-shot 示例
         examples = "\n".join(
             f'  消息: "{t}" → 意图: {cat.value}'
-            for cat, tpls in _TEMPLATES.items()
+            for cat, tpls in self._templates_map().items()
             for t in tpls[:1]  # 每类取 1 条，控制 prompt 长度
         )
         # 最近 3 轮对话上下文
@@ -377,7 +383,7 @@ class IntentRecognizer:
         """策略 2：Embedding 向量相似度匹配。"""
         try:
             templates, msg_vec, source = await self._embedding.vectors(
-                self._clean_text(message), _TEMPLATES, self._local_embedding)
+                self._clean_text(message), self._templates_map(), self._local_embedding)
 
             best_cat, best_score = IntentCategory.OTHER, 0.0
             for cat, vecs in templates.items():

@@ -80,7 +80,7 @@ pre { margin: 10px 0 0; padding: 12px; background: var(--soft); border: 1px soli
 .app-shell { display: grid; grid-template-columns: 224px minmax(0, 1fr); height: 100dvh; min-height: 400px; overflow: hidden; }
 .navigation-rail { display: flex; flex-direction: column; min-width: 0; padding: 26px 16px 16px; border-right: 1px solid var(--line); background: var(--sidebar); }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px; }
-.brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: #222225; color: white; font-size: 22px; font-weight: 500; line-height: 1; flex-shrink: 0; }
+.brand-mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: #222225; color: white; font-size: 14px; font-weight: 600; letter-spacing: -.03em; line-height: 1; flex-shrink: 0; }
 .brand-name { font-size: 20px; font-weight: 600; letter-spacing: -.04em; }
 .new-chat-button { display: flex; justify-content: flex-start; margin: 30px 4px 26px; height: 40px; gap: 11px; padding: 0 12px; border-color: var(--line-strong); background: white; color: var(--ink); box-shadow: 0 1px 2px #18181b03; }
 .new-chat-button:hover:not(:disabled) { background: #fdfdfd; border-color: #bdbdc4; }
@@ -369,7 +369,7 @@ summary::-webkit-details-marker { display: none; }
   .topbar { min-height: 59px; padding: 0 22px; gap: 12px; }
   .page-breadcrumb { display: none; }
   .mobile-brand { display: flex; align-items: center; gap: 9px; font-size: 19px; font-weight: 600; letter-spacing: -.05em; }
-  .mobile-brand .brand-mark { width: 26px; height: 26px; font-size: 19px; border-radius: 7px; }
+  .mobile-brand .brand-mark { width: 26px; height: 26px; font-size: 12px; border-radius: 7px; }
   .topbar-tools { gap: 9px; }
   .connection-status { display: none; }
   .settings-button { width: 28px; min-height: 30px; }

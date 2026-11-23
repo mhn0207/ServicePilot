@@ -278,9 +278,17 @@ app = FastAPI(
     docs_url="/docs",
 )
 
+def _cors_origins() -> List[str]:
+    raw = (os.getenv("SERVICEPILOT_CORS_ORIGINS") or os.getenv("ZHIYING_CORS_ORIGINS", "")).strip()
+    if raw:
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+    env = (os.getenv("SERVICEPILOT_ENV") or os.getenv("ZHIYING_ENV", "development")).strip().lower()
+    return [] if env == "production" else ["*"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

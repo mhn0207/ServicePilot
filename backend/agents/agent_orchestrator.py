@@ -47,6 +47,7 @@ from core.chat_progress import emit_chat_stage
 from core.intent_recognizer import IntentCategory, IntentRecognizer, UrgencyLevel, extract_error_codes
 from core.llm_utils import create_message, extract_text_content
 from core.request_budget import POLICY, phase_budget, can_start, limit_timeout, observe, remaining
+from tooling.retrieval_ranking import RetrievalRanking
 
 logger = logging.getLogger(__name__)
 
@@ -866,7 +867,7 @@ class ResponseComposer:
             ), timeout=max(1, _env_float("ZHIYING_COMPOSER_TIMEOUT_S", POLICY.composer_timeout_default_s)))
             content = extract_text_content(response.content).strip()
             if (content and getattr(response, "stop_reason", None) != "max_tokens"
-                    and all(branch.content.strip() in content for branch in successful)):
+                    and self._covers_all_branches(content, successful)):
                 return AgentCallResult(content, status=status)
         except Exception as ex:
             logger.warning("Response Composer 失败，使用确定性合并: %s", ex)
@@ -876,6 +877,35 @@ class ResponseComposer:
             f"{response.content}" if index == 0 else f"补充说明：\n{response.content}"
             for index, response in enumerate(successful)
         ), status=status)
+
+    @staticmethod
+    def _covers_all_branches(content: str, successful: List[AgentResponse]) -> bool:
+        """校验汇总结果是否保留了各成功分支的关键事实，允许合理改写与去重。"""
+        content_upper = content.upper()
+        content_tokens = set(RetrievalRanking._search_terms(content))
+        branch_token_sets = [set(RetrievalRanking._search_terms(b.content)) for b in successful]
+
+        for idx, branch in enumerate(successful):
+            branch_text = branch.content.strip()
+            if branch_text in content:
+                continue
+            for code in extract_error_codes(branch_text):
+                if code not in content:
+                    return False
+            for identifier in re.findall(r"ORD-[0-9]{8}|RFD-[0-9A-F]{32}", branch_text.upper()):
+                if identifier not in content_upper:
+                    return False
+
+            branch_tokens = branch_token_sets[idx]
+            if not branch_tokens:
+                continue
+            other_tokens = set().union(*(s for i, s in enumerate(branch_token_sets) if i != idx))
+            target_tokens = (branch_tokens - other_tokens) or branch_tokens
+            matched = len(target_tokens & content_tokens)
+            min_required = 2 if len(target_tokens) >= 2 else 1
+            if matched < min_required or (matched / len(target_tokens)) < 0.45:
+                return False
+        return True
 
 
 # ── 编排器 ────────────────────────────────────────────────────────────────────

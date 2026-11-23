@@ -135,6 +135,19 @@ def test_composer_rejects_successful_model_response_that_drops_a_branch():
     assert all(response.content in result.content for response in responses)
 
 
+def test_composer_accepts_paraphrased_merge_that_preserves_branch_facts():
+    merged = "请先排查 Token 是否过期并核对 401 认证方式；同时核对两笔扣款流水的交易时间。"
+    draft = SimpleNamespace(content=[{"type": "text", "text": merged}], stop_reason="end_turn")
+    composer = ResponseComposer(FakeClient(response=draft), "test-model")
+    responses = [
+        AgentResponse(AgentType.TECHNICAL, "先检查 Token 是否过期以及 401 认证配置。", True),
+        AgentResponse(AgentType.BILLING, "请核对两笔扣款流水的交易时间。", True),
+    ]
+    result = asyncio.run(composer.compose_result(make_request(), responses))
+    assert result.status == "success"
+    assert result.content == merged
+
+
 def test_declining_billing_keeps_payment_page_case_in_technical_domain():
     client = FakeClient()
     orchestrator = AgentOrchestrator(api_key="fixture", client=client)
