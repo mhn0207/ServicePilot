@@ -155,6 +155,8 @@ async def lifespan(app: FastAPI):
         api_key=cfg["api_key"],
         base_url=cfg.get("base_url"),
         model=cfg["model"],
+        shared_cache=_memory._redis,
+        cache_namespace="prod",
     )
     kb = KnowledgeBase(
         chroma_host=os.getenv("CHROMA_HOST", "chromadb"),

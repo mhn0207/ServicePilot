@@ -24,6 +24,7 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from anthropic import AsyncAnthropic
+from redis.exceptions import RedisError
 
 from core.llm_utils import create_message, extract_text_content
 from core.request_budget import POLICY, can_start, limit_timeout, remaining, budget_degraded, observe
@@ -153,7 +154,15 @@ class MCPToolManager:
       用户查询 → 查询改写（多角度子查询）→ 并行召回 → 结果重排 → 返回 Top-K
     """
 
-    def __init__(self, api_key: str, base_url: Optional[str] = None, model: str = "claude-3-5-sonnet-20241022"):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: Optional[str] = None,
+        model: str = "claude-3-5-sonnet-20241022",
+        shared_cache: Optional[Any] = None,
+        cache_namespace: str = "prod",
+        shared_cache_timeout_s: float = 0.25,
+    ):
         kwargs: Dict[str, Any] = {"api_key": api_key}
         if base_url:
             kwargs["base_url"] = base_url
@@ -163,6 +172,9 @@ class MCPToolManager:
         self._cache_versions: Dict[str, int] = {}
         self._cache: Dict[str, tuple] = {}   # key → (result, expire_at, reranked)
         self._search_locks = KeyedLocks()
+        self._shared_cache = shared_cache
+        self._cache_namespace = cache_namespace
+        self._shared_cache_timeout_s = shared_cache_timeout_s
 
     def fork(self):
         """共享只读依赖和 HTTP 客户端，隔离工具统计、熔断和缓存。"""
@@ -170,6 +182,9 @@ class MCPToolManager:
         other._client, other._model = self._client, self._model
         other._cache, other._cache_versions = {}, {}
         other._search_locks = KeyedLocks()
+        other._shared_cache = None
+        other._cache_namespace = None
+        other._shared_cache_timeout_s = getattr(self, "_shared_cache_timeout_s", 0.25)
         other._tools = {name: replace(tool) for name, tool in self._tools.items()}
         return other
 
@@ -216,10 +231,18 @@ class MCPToolManager:
             epoch = await tool.cache_epoch()
             cache_enabled = epoch is not None
             cache_context = {**(context or {}), "_knowledge_epoch": epoch}
+        shared_cache_enabled = cache_enabled and tool.cache_epoch is not None and self._has_shared_cache()
 
         # 缓存命中
         if cache_enabled:
             cached = self._get_cache(name, params, cache_rerank_top_k, cache_context)
+            if cached is None and shared_cache_enabled:
+                cached = await self._get_shared_cache(
+                    name, params, tool.cache_ttl, cache_rerank_top_k, cache_context,
+                    local_version_key=name, local_version=cache_version,
+                )
+                if cached is not None:
+                    record_event("tool_l2_cache_hit")
             if cached is not None:
                 cached_data, cached_reranked = cached
                 tool.stats.total += 1
@@ -264,6 +287,10 @@ class MCPToolManager:
             # 写缓存：缓存最终返回结果，避免下次命中未重排的原始结果。
             if cache_enabled and cache_version == self._cache_versions.get(name, 0) and not budget_degraded():
                 self._set_cache(name, params, data, tool.cache_ttl, cache_rerank_top_k, reranked, cache_context)
+                if shared_cache_enabled:
+                    await self._set_shared_cache(
+                        name, params, data, tool.cache_ttl, cache_rerank_top_k, reranked, cache_context,
+                    )
 
             return ToolResult(success=True, data=data, tool_name=name,
                               latency_ms=latency, reranked=reranked)
@@ -389,6 +416,8 @@ class MCPToolManager:
         version = self._cache_versions.get(tool_name, 0)
         cache_name = f"{tool_name}:pipeline"
         params = {"query": query, "top_k": top_k, "version": version}
+        # 带 cache_epoch 的工具由共享 epoch 控制跨进程失效，不把本地 version 编入 L2 Key。
+        shared_params = {"query": query, "top_k": top_k} if tool.cache_epoch is not None else params
         # TTL=0 保留禁用缓存的语义，也不合并可能具有副作用的调用。
         epoch = await tool.cache_epoch() if tool.cache_ttl > 0 and tool.cache_epoch is not None else None
         if tool.cache_ttl <= 0 or (tool.cache_epoch is not None and epoch is None):
@@ -396,6 +425,7 @@ class MCPToolManager:
                 return await self._search_uncached(tool_name, query, top_k, context)
         cache_context = context if tool.cache_epoch is None else {**(context or {}), "_knowledge_epoch": epoch}
         key = self._cache_key(cache_name, params, context=cache_context)
+        shared_cache_enabled = self._has_shared_cache()
         with measure_stage("rag_search"):
             async with self._search_locks.hold(key):
                 cached = self._get_cache(cache_name, params, context=cache_context)
@@ -403,11 +433,26 @@ class MCPToolManager:
                     record_event("rag_pipeline_cache_hit")
                     data, reranked = cached
                     return ToolResult(True, data, tool_name, cached=True, reranked=reranked)
+                if shared_cache_enabled:
+                    cached = await self._get_shared_cache(
+                        cache_name, shared_params, tool.cache_ttl, 0, cache_context,
+                        local_params=params, local_version_key=tool_name, local_version=version,
+                    )
+                    if cached is not None:
+                        record_event("rag_pipeline_cache_hit")
+                        record_event("rag_pipeline_l2_cache_hit")
+                        data, reranked = cached
+                        return ToolResult(True, data, tool_name, cached=True, reranked=reranked)
                 record_event("rag_pipeline_cache_miss")
                 result = await self._search_uncached(tool_name, query, top_k, context)
                 if result.success and version == self._cache_versions.get(tool_name, 0) and not budget_degraded():
                     self._set_cache(cache_name, params, result.data, tool.cache_ttl,
                                     reranked=result.reranked, context=cache_context)
+                    if shared_cache_enabled:
+                        await self._set_shared_cache(
+                            cache_name, shared_params, result.data, tool.cache_ttl,
+                            reranked=result.reranked, context=cache_context,
+                        )
                 return result
 
     async def _search_uncached(self, tool_name, query, top_k, context):
@@ -502,10 +547,36 @@ class MCPToolManager:
 
     # ── 缓存 ──────────────────────────────────────────────────────────────────
 
+    def _has_shared_cache(self) -> bool:
+        return getattr(self, "_shared_cache", None) is not None and bool(getattr(self, "_cache_namespace", None))
+
+    def _shared_cache_op_timeout(self) -> float:
+        return limit_timeout(getattr(self, "_shared_cache_timeout_s", 0.25))
+
     def _cache_key(self, name: str, params: Dict, rerank_top_k: int = 0, context: Optional[Dict] = None) -> str:
         payload = {"params": params, "rerank_top_k": rerank_top_k, "context": context or {},
                    "version": self._cache_versions.get(name, 0)}
-        return f"{name}:{hashlib.md5(json.dumps(payload, sort_keys=True).encode()).hexdigest()}"
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=True).encode("utf-8")).hexdigest()
+        return f"{name}:{digest}"
+
+    def _shared_cache_key(
+        self,
+        name: str,
+        params: Dict[str, Any],
+        rerank_top_k: int = 0,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        namespace = getattr(self, "_cache_namespace", None) or "prod"
+        payload = {
+            "namespace": namespace,
+            "name": name,
+            "params": params,
+            "rerank_top_k": rerank_top_k,
+            "context": context or {},
+            "model": self._model,
+        }
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=True).encode("utf-8")).hexdigest()
+        return f"servicepilot:tool_cache:v1:{namespace}:{name}:{digest}"
 
     def _get_cache(self, name: str, params: Dict, rerank_top_k: int = 0, context: Optional[Dict] = None) -> Optional[Tuple[Any, bool]]:
         key = self._cache_key(name, params, rerank_top_k, context)
@@ -531,6 +602,93 @@ class MCPToolManager:
             for k in list(self._cache)[:1250]:
                 del self._cache[k]
         self._cache[self._cache_key(name, params, rerank_top_k, context)] = (copy.deepcopy(data), time.monotonic() + ttl, reranked)
+
+    async def _get_shared_cache(
+        self,
+        name: str,
+        params: Dict[str, Any],
+        ttl: float,
+        rerank_top_k: int = 0,
+        context: Optional[Dict[str, Any]] = None,
+        *,
+        local_params: Optional[Dict[str, Any]] = None,
+        local_version_key: Optional[str] = None,
+        local_version: Optional[int] = None,
+    ) -> Optional[Tuple[Any, bool]]:
+        redis_client = getattr(self, "_shared_cache", None)
+        if redis_client is None or ttl <= 0:
+            return None
+        timeout = self._shared_cache_op_timeout()
+        if timeout <= 0:
+            return None
+        try:
+            redis_key = self._shared_cache_key(name, params, rerank_top_k, context)
+        except (TypeError, ValueError) as ex:
+            logger.warning("构建共享工具缓存键失败，降级本地执行 (%s): %s", name, type(ex).__name__)
+            record_event("rag_l2_cache_error")
+            return None
+        try:
+            async with asyncio.timeout(timeout):
+                raw = await redis_client.get(redis_key)
+                if raw is None:
+                    return None
+                if isinstance(raw, bytes):
+                    raw = raw.decode("utf-8")
+                payload = json.loads(raw)
+                if not isinstance(payload, dict) or "data" not in payload:
+                    raise ValueError("invalid cached payload")
+                data = payload["data"]
+                reranked = bool(payload.get("reranked", False))
+                raw_ttl = payload.get("ttl", ttl)
+                raw_ts = payload.get("ts")
+                if isinstance(raw_ttl, (int, float)) and isinstance(raw_ts, (int, float)):
+                    age = max(0.0, time.time() - float(raw_ts))
+                    remaining_ttl = min(float(ttl), max(1.0, float(raw_ttl) - age))
+                else:
+                    remaining_ttl = float(ttl)
+        except (RedisError, TimeoutError, OSError, ValueError, TypeError) as ex:
+            logger.warning("读取共享工具缓存失败，降级本地执行 (%s): %s", name, type(ex).__name__)
+            record_event("rag_l2_cache_error")
+            return None
+        if local_version_key is None or local_version is None or local_version == self._cache_versions.get(local_version_key, 0):
+            self._set_cache(
+                name,
+                local_params if local_params is not None else params,
+                data,
+                remaining_ttl,
+                rerank_top_k,
+                reranked,
+                context,
+            )
+        return copy.deepcopy(data), reranked
+
+    async def _set_shared_cache(
+        self,
+        name: str,
+        params: Dict[str, Any],
+        data: Any,
+        ttl: float,
+        rerank_top_k: int = 0,
+        reranked: bool = False,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        redis_client = getattr(self, "_shared_cache", None)
+        if redis_client is None or ttl <= 0:
+            return
+        timeout = self._shared_cache_op_timeout()
+        if timeout <= 0:
+            return
+        try:
+            redis_key = self._shared_cache_key(name, params, rerank_top_k, context)
+            payload = json.dumps(
+                {"data": data, "reranked": bool(reranked), "ttl": float(ttl), "ts": time.time()},
+                ensure_ascii=False,
+            )
+            async with asyncio.timeout(timeout):
+                await redis_client.set(redis_key, payload, ex=max(1, int(ttl)))
+        except (RedisError, TimeoutError, OSError, TypeError, ValueError) as ex:
+            logger.warning("写入共享工具缓存失败，已忽略 (%s): %s", name, type(ex).__name__)
+            record_event("rag_l2_cache_error")
 
     def invalidate_cache(self, name: str) -> None:
         """失效工具缓存；版本号阻止更新前的在途请求重新写入旧结果。"""

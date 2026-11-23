@@ -342,3 +342,196 @@ async def test_conversation_migrates_legacy_keys_once_per_lease():
     finally:
         await memory._redis.aclose()
 
+
+@pytest.mark.asyncio
+async def test_shared_l2_redis_cache_shares_across_workers_and_isolates_fork():
+    async with fakeredis.aioredis.FakeRedis(decode_responses=True) as redis:
+        rev_a = KnowledgeRevision(redis)
+        rev_b = KnowledgeRevision(redis)
+        calls = 0
+
+        async def retrieve(params, context):
+            nonlocal calls
+            calls += 1
+            return [{"content": f"退款规则-{calls}", "document_id": "refund"}]
+
+        worker_a = MCPToolManager("test", shared_cache=redis, cache_namespace="prod")
+        worker_b = MCPToolManager("test", shared_cache=redis, cache_namespace="prod")
+        for mgr, rev in ((worker_a, rev_a), (worker_b, rev_b)):
+            mgr.register(Tool("knowledge_search", "", retrieve, {"type": "object"},
+                              cache_ttl=60, cache_epoch=rev.current))
+            mgr.rewrite_query = AsyncMock(return_value=["退款"])
+
+        eval_mgr = worker_a.fork()
+        eval_mgr.rewrite_query = AsyncMock(return_value=["退款"])
+
+        try:
+            # 1. Worker A 冷启动执行一次 search_with_rewrite，写入 L1 + L2
+            first = await worker_a.search_with_rewrite("knowledge_search", "退款", top_k=3)
+            assert first.success and not first.cached and calls == 1
+            assert worker_a.rewrite_query.await_count == 1
+
+            # 2. Worker B 进程内 L1 为空，命中 L2 Redis 并回填 L1，跳过 rewrite 与 handler
+            with collect_performance():
+                second = await worker_b.search_with_rewrite("knowledge_search", "退款", top_k=3)
+                snap = performance_snapshot()
+            assert second.success and second.cached
+            assert second.data[0]["content"] == "退款规则-1"
+            assert worker_b.rewrite_query.await_count == 0
+            assert calls == 1
+            assert snap["events"]["rag_pipeline_cache_hit"] == 1
+            assert snap["events"]["rag_pipeline_l2_cache_hit"] == 1
+
+            # 验证返回防御性拷贝，且第三次命中 B 的 L1（不再读取 L2 tool_cache）
+            second.data[0]["content"] = "mutated"
+            original_get = redis.get
+            tool_cache_gets = []
+
+            async def tracked_get(key, *args, **kwargs):
+                if str(key).startswith("servicepilot:tool_cache:"):
+                    tool_cache_gets.append(key)
+                return await original_get(key, *args, **kwargs)
+
+            redis.get = tracked_get
+            with collect_performance():
+                third = await worker_b.search_with_rewrite("knowledge_search", "退款", top_k=3)
+                third_snap = performance_snapshot()
+            redis.get = original_get
+            assert not tool_cache_gets
+            assert third_snap["events"].get("rag_pipeline_l2_cache_hit", 0) == 0
+            assert third.cached and third.data[0]["content"] == "退款规则-1"
+
+            # 3. fork 出的评测管理器不共享线上 L2 缓存
+            eval_res = await eval_mgr.search_with_rewrite("knowledge_search", "退款", top_k=3)
+            assert eval_res.success and not eval_res.cached and calls == 2
+
+            # 4. 带 cache_epoch 的只读 call() 也共享 L2，但不带 cache_epoch 的工具不共享 L2
+            raw_a = await worker_a.call("knowledge_search", {"query": "直查", "top_k": 2})
+            assert not raw_a.cached and calls == 3
+            with collect_performance():
+                raw_b = await worker_b.call("knowledge_search", {"query": "直查", "top_k": 2})
+                raw_snap = performance_snapshot()
+            assert raw_b.cached and raw_b.data == raw_a.data and calls == 3
+            assert raw_snap["events"]["tool_l2_cache_hit"] == 1
+
+            worker_a.register(Tool("ephemeral", "", retrieve, {"type": "object"}, cache_ttl=60))
+            worker_b.register(Tool("ephemeral", "", retrieve, {"type": "object"}, cache_ttl=60))
+            await worker_a.call("ephemeral", {"q": "1"})
+            ephem_b = await worker_b.call("ephemeral", {"q": "1"})
+            assert not ephem_b.cached and calls == 5
+        finally:
+            await worker_a._client.close()
+            await worker_b._client.close()
+
+
+@pytest.mark.asyncio
+async def test_shared_l2_cache_invalidates_across_workers_and_ignores_local_version():
+    async with fakeredis.aioredis.FakeRedis(decode_responses=True) as redis:
+        writer = KnowledgeRevision(redis)
+        reader_a = KnowledgeRevision(redis)
+        reader_b = KnowledgeRevision(redis)
+        body = "v1"
+
+        async def retrieve(params, context):
+            return [{"content": body, "document_id": "doc"}]
+
+        worker_a = MCPToolManager("test", shared_cache=redis, cache_namespace="prod")
+        worker_b = MCPToolManager("test", shared_cache=redis, cache_namespace="prod")
+        for mgr, rev in ((worker_a, reader_a), (worker_b, reader_b)):
+            mgr.register(Tool("knowledge_search", "", retrieve, {"type": "object"},
+                              cache_ttl=60, cache_epoch=rev.current))
+            mgr.rewrite_query = AsyncMock(return_value=["q"])
+
+        try:
+            assert (await worker_a.search_with_rewrite("knowledge_search", "q")).data[0]["content"] == "v1"
+            assert (await worker_b.search_with_rewrite("knowledge_search", "q")).cached
+
+            async with writer.mutation():
+                body = "v2"
+                # dirty: 期间绕过缓存
+                during = await worker_b.search_with_rewrite("knowledge_search", "q")
+                assert not during.cached and during.data[0]["content"] == "v2"
+
+            # 模拟 api/main.py 在写入后仅对当前 worker_a 调用 invalidate_cache
+            before_ver_a = worker_a._cache_versions["knowledge_search"]
+            worker_a.invalidate_cache("knowledge_search")
+            assert worker_a._cache_versions["knowledge_search"] == before_ver_a + 1
+            assert worker_b._cache_versions["knowledge_search"] == before_ver_a
+
+            # 新 epoch 下 worker_a 写入 L2，worker_b 仍可跨进程命中（不受本地 version 差异影响）
+            after_a = await worker_a.search_with_rewrite("knowledge_search", "q")
+            assert not after_a.cached and after_a.data[0]["content"] == "v2"
+            after_b = await worker_b.search_with_rewrite("knowledge_search", "q")
+            assert after_b.cached and after_b.data[0]["content"] == "v2"
+        finally:
+            await worker_a._client.close()
+            await worker_b._client.close()
+
+
+@pytest.mark.asyncio
+async def test_shared_l2_cache_model_isolation_budget_guard_and_silent_degradation():
+    from redis.exceptions import ConnectionError as RedisConnectionError
+    from core.request_budget import mark_degraded, request_budget
+
+    async with fakeredis.aioredis.FakeRedis(decode_responses=True) as redis:
+        rev = KnowledgeRevision(redis)
+        calls = 0
+
+        async def retrieve(params, context):
+            nonlocal calls
+            calls += 1
+            return [{"content": f"ans-{calls}", "document_id": "doc"}]
+
+        mgr_m1 = MCPToolManager("test", model="model-1", shared_cache=redis, cache_namespace="prod")
+        mgr_m2 = MCPToolManager("test", model="model-2", shared_cache=redis, cache_namespace="prod")
+        for mgr in (mgr_m1, mgr_m2):
+            mgr.register(Tool("knowledge_search", "", retrieve, {"type": "object"},
+                              cache_ttl=60, cache_epoch=rev.current))
+            mgr.rewrite_query = AsyncMock(return_value=["q"])
+
+        try:
+            # 1. 切换模型配置不会复用旧模型 L2 缓存
+            r1 = await mgr_m1.search_with_rewrite("knowledge_search", "q")
+            r2 = await mgr_m2.search_with_rewrite("knowledge_search", "q")
+            assert not r1.cached and not r2.cached and calls == 2
+
+            # 2. 请求预算已降级时不写 L2 缓存
+            with request_budget(45):
+                mark_degraded("rag.rewrite")
+                degraded = await mgr_m1.search_with_rewrite("knowledge_search", "q_degraded")
+                assert not degraded.cached
+            assert len(await redis.keys("servicepilot:tool_cache:v1:*")) == 4  # 仅 r1/r2 的 raw+pipeline
+
+            # 3. 坏 JSON 不影响正常执行并降级
+            bad_mgr = MCPToolManager("test", model="model-bad", shared_cache=redis, cache_namespace="prod")
+            bad_mgr.register(Tool("knowledge_search", "", retrieve, {"type": "object"},
+                                  cache_ttl=60, cache_epoch=rev.current))
+            bad_mgr.rewrite_query = AsyncMock(return_value=["q"])
+            epoch = await rev.current()
+            bad_key = bad_mgr._shared_cache_key(
+                "knowledge_search:pipeline", {"query": "q_corrupt", "top_k": 5}, 0, {"_knowledge_epoch": epoch}
+            )
+            await redis.set(bad_key, "{not-valid-json")
+            with collect_performance():
+                corrupt_res = await bad_mgr.search_with_rewrite("knowledge_search", "q_corrupt")
+                assert performance_snapshot()["events"]["rag_l2_cache_error"] >= 1
+            assert corrupt_res.success and not corrupt_res.cached
+
+            # 4. Redis 超时与连接异常静默降级
+            broken_redis = SimpleNamespace(
+                get=AsyncMock(side_effect=TimeoutError("redis slow")),
+                set=AsyncMock(side_effect=RedisConnectionError("redis down")),
+            )
+            broken_mgr = MCPToolManager("test", shared_cache=broken_redis, cache_namespace="prod")
+            broken_mgr.register(Tool("knowledge_search", "", retrieve, {"type": "object"}, cache_ttl=60))
+            broken_mgr.rewrite_query = AsyncMock(return_value=["q"])
+            with collect_performance():
+                ok = await broken_mgr.search_with_rewrite("knowledge_search", "q_err")
+                snap = performance_snapshot()
+            assert ok.success and not ok.cached
+            assert snap["events"]["rag_l2_cache_error"] == 2
+        finally:
+            await mgr_m1._client.close()
+            await mgr_m2._client.close()
+            await bad_mgr._client.close()
+            await broken_mgr._client.close()
