@@ -4,7 +4,7 @@ import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-_current = ContextVar("zhiying_performance", default=None)
+_current = ContextVar("servicepilot_performance", default=None)
 _totals = {}
 _token_fields = ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
 

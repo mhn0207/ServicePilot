@@ -23,6 +23,7 @@ from pydantic import ValidationError
 from evaluation.retrieval import (
     Dataset, Execution, Fixture, ReturnedChunk, build_snapshot, make_report,
 )
+from core.env import env_value
 from evaluation.provenance import source_identity, write_source_bundle
 
 OUTPUT_ROOT = ROOT / "data" / "eval" / "rag"
@@ -52,7 +53,7 @@ async def request_executions(base_url: str, dataset: Dataset, top_k: int) -> lis
     parsed = urlsplit(base_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError("base-url 必须为不含凭据、查询参数或 fragment 的 HTTP(S) 地址")
-    token = os.getenv("SERVICEPILOT_EVAL_TOKEN") or os.getenv("ZHIYING_EVAL_TOKEN", "")
+    token = env_value("SERVICEPILOT_EVAL_TOKEN", "") or ""
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     rows = []
     async with httpx.AsyncClient(base_url=base_url.rstrip("/") + "/", headers=headers,

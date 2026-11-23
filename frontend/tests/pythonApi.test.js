@@ -61,11 +61,12 @@ test('migrates the Python endpoint without reusing a legacy non-Python conversat
   const migrated = createInitialSettings()
   assert.deepEqual(migrated, { endpoint: '/python-service', userId: 'alice', conversationId: '', pythonToken: '' })
   saveSettings({ ...migrated, pythonToken: 'secret' })
-  assert.deepEqual(JSON.parse(local.getItem('zhiying.frontend.settings')), {
+  assert.deepEqual(JSON.parse(local.getItem('servicepilot.frontend.settings')), {
     endpoint: '/python-service', userId: 'alice', conversationId: ''
   })
+  local.setItem('servicepilot.frontend.settings', 'null')
   local.setItem('zhiying.frontend.settings', 'null')
-  assert.equal(createInitialSettings().endpoint, '/api/zhiying')
+  assert.equal(createInitialSettings().endpoint, '/api/servicepilot')
 })
 
 test('Python chat retry reuses its request ID, maps snake_case fields and sends access token', async t => {

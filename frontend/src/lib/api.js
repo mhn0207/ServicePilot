@@ -1,5 +1,7 @@
 import { pollEvaluation } from './evaluationJobs.js'
-const DEFAULT_API_URL = runtimeConfig().servicepilotApiUrl || runtimeConfig().zhiyingApiUrl || import.meta.env?.VITE_PYTHON_API_URL || '/api/zhiying'
+const DEFAULT_API_URL = runtimeConfig().servicepilotApiUrl || runtimeConfig().zhiyingApiUrl || import.meta.env?.VITE_PYTHON_API_URL || '/api/servicepilot'
+const SETTINGS_KEY = 'servicepilot.frontend.settings'
+const LEGACY_SETTINGS_KEY = 'zhiying.frontend.settings'
 
 export function createInitialSettings() {
   const saved = readSettings()
@@ -13,7 +15,7 @@ export function createInitialSettings() {
 
 export function saveSettings(settings) {
   const { endpoint, userId, conversationId } = settings
-  localStorage.setItem('zhiying.frontend.settings', JSON.stringify({ endpoint, userId, conversationId }))
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ endpoint, userId, conversationId }))
 }
 
 export function apiBaseUrl(settings) {
@@ -334,7 +336,8 @@ function normalizeBaseUrl(value) {
 
 function readSettings() {
   try {
-    const saved = JSON.parse(localStorage.getItem('zhiying.frontend.settings') || '{}')
+    const raw = localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(LEGACY_SETTINGS_KEY) || '{}'
+    const saved = JSON.parse(raw)
     return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {}
   } catch {
     return {}

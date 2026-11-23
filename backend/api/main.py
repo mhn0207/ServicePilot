@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field, model_validator
 from redis.exceptions import RedisError
 from agents.sandbox_tools import COMMANDS, build_sandbox_tools, run_sandbox_command
 from core.chat_progress import collect_chat_progress, emit_chat_stage
+from core.env import env_bool, env_value
 from core.performance import collect_performance, measure_stage, performance_snapshot
 from core.request_budget import POLICY, chat_budget
 from core.concurrency import ConversationBusyError, LeaseLostError
@@ -93,7 +94,7 @@ async def lifespan(app: FastAPI):
     from core.access import identity
     auth_configured = identity("") is not None  # 同时验证生产鉴权配置
     _sandbox_store = None
-    if os.getenv("SERVICEPILOT_SANDBOX_ENABLED", "").strip().lower() in {"1", "true", "yes"}:
+    if env_bool("SERVICEPILOT_SANDBOX_ENABLED"):
         if not auth_configured:
             raise RuntimeError("启用业务沙盒需要配置 SERVICEPILOT_API_TOKENS 或 ZHIYING_API_TOKENS")
         sandbox_store = SandboxStore(pathlib.Path(_ROOT) / "data" / "sandbox" / "business.sqlite3")
@@ -121,8 +122,8 @@ async def lifespan(app: FastAPI):
     )
 
     # Skills：启动时从目录加载业务能力说明，并在 Agent 调用 LLM 时动态注入。
-    skills_dir = os.getenv("SERVICEPILOT_SKILLS_DIR") or os.getenv("ZHIYING_SKILLS_DIR", str(pathlib.Path(_ROOT) / "skills"))
-    max_prompt_chars = os.getenv("SERVICEPILOT_SKILLS_MAX_PROMPT_CHARS") or os.getenv("ZHIYING_SKILLS_MAX_PROMPT_CHARS", "5000")
+    skills_dir = env_value("SERVICEPILOT_SKILLS_DIR", str(pathlib.Path(_ROOT) / "skills"))
+    max_prompt_chars = env_value("SERVICEPILOT_SKILLS_MAX_PROMPT_CHARS", "5000")
     _skill_manager = SkillManager(
         root_dir=skills_dir,
         max_prompt_chars=int(max_prompt_chars),
@@ -279,10 +280,10 @@ app = FastAPI(
 )
 
 def _cors_origins() -> List[str]:
-    raw = (os.getenv("SERVICEPILOT_CORS_ORIGINS") or os.getenv("ZHIYING_CORS_ORIGINS", "")).strip()
+    raw = (env_value("SERVICEPILOT_CORS_ORIGINS", "") or "").strip()
     if raw:
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
-    env = (os.getenv("SERVICEPILOT_ENV") or os.getenv("ZHIYING_ENV", "development")).strip().lower()
+    env = (env_value("SERVICEPILOT_ENV", "development") or "development").strip().lower()
     return [] if env == "production" else ["*"]
 
 
@@ -384,7 +385,7 @@ async def health():
             raise ValueError('storage unavailable')
     except Exception:
         raise HTTPException(503, '存储依赖未就绪') from None
-    return {"status": "ok", "agents": {} if (os.getenv("SERVICEPILOT_API_TOKENS") or os.getenv("ZHIYING_API_TOKENS")) else _orchestrator.get_stats()}
+    return {"status": "ok", "agents": {} if env_value("SERVICEPILOT_API_TOKENS") else _orchestrator.get_stats()}
 
 
 @app.get("/skills", tags=["Skills"])
@@ -1074,8 +1075,8 @@ async def _cli():
 
     cfg = _anthropic_cfg()
     skill_manager = SkillManager(
-        root_dir=os.getenv("ZHIYING_SKILLS_DIR", str(pathlib.Path(_ROOT) / "skills")),
-        max_prompt_chars=int(os.getenv("ZHIYING_SKILLS_MAX_PROMPT_CHARS", "5000")),
+        root_dir=env_value("SERVICEPILOT_SKILLS_DIR", str(pathlib.Path(_ROOT) / "skills")),
+        max_prompt_chars=int(env_value("SERVICEPILOT_SKILLS_MAX_PROMPT_CHARS", "5000")),
     )
     skill_manager.load()
     orch = AgentOrchestrator(

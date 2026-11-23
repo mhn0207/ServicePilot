@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import fakeredis.aioredis
 import pytest
 
+from core.concurrency import KeyedLocks
 from core.llm_utils import create_message
 from core.knowledge_revision import KnowledgeRevision
 from core.performance import collect_performance, performance_snapshot, measure_stage
@@ -243,3 +244,101 @@ async def test_profile_failure_does_not_suppress_retry():
         assert memory._update_profile.await_count == 2
     finally:
         await memory._redis.aclose()
+
+
+@pytest.mark.asyncio
+async def test_get_context_runs_storage_reads_concurrently_and_preserves_data():
+    memory = MemoryManager.__new__(MemoryManager)
+    memory._redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    try:
+        await memory._redis.lpush(
+            memory._wm_key("u1", "c1"),
+            json.dumps({"role": "user", "content": "发票抬头怎么改", "ts": "2026-11-24T00:00:00", "metadata": {}}),
+        )
+        await memory._redis.set(memory._summary_key("u1", "c1"), "历史摘要")
+        await memory._redis.set(memory._state_key("u1", "c1"), json.dumps({"entities": {"order_id": ["ORD-1"]}}))
+
+        active = 0
+        all_entered = asyncio.Event()
+
+        async def barrier():
+            nonlocal active
+            active += 1
+            if active == 3:
+                all_entered.set()
+            await asyncio.wait_for(all_entered.wait(), timeout=1.0)
+
+        original_read_session = memory._read_session_state
+
+        async def read_session(user_id, conv_id):
+            await barrier()
+            return await original_read_session(user_id, conv_id)
+
+        async def search_episodic(user_id, conv_id, query):
+            await barrier()
+            return ["相关历史片段"]
+
+        async def get_profile(user_id):
+            await barrier()
+            return {"preferences": ["简短回答"]}
+
+        memory._read_session_state = read_session
+        memory._search_episodic = search_episodic
+        memory._get_profile = get_profile
+
+        ctx = await memory.get_context("u1", "c1", query="发票")
+        assert [m.content for m in ctx.recent_messages] == ["发票抬头怎么改"]
+        assert ctx.summary == "历史摘要"
+        assert ctx.state == {"entities": {"order_id": ["ORD-1"]}}
+        assert ctx.relevant_history == ["相关历史片段"]
+        assert ctx.user_profile == {"preferences": ["简短回答"]}
+    finally:
+        await memory._redis.aclose()
+
+
+@pytest.mark.asyncio
+async def test_conversation_migrates_legacy_keys_once_per_lease():
+    memory = MemoryManager.__new__(MemoryManager)
+    memory._redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    memory._request_locks = KeyedLocks()
+    memory._search_episodic = AsyncMock(return_value=[])
+    memory._get_profile = AsyncMock(return_value={})
+    try:
+        legacy_msg = json.dumps({"role": "user", "content": "旧消息", "ts": "2026-11-24T00:00:00", "metadata": {}})
+        await memory._redis.rpush("wm:u1:c1", legacy_msg)
+        await memory._redis.set("summary:u1:c1", "旧摘要")
+
+        eval_calls = 0
+        original_eval = memory._redis.eval
+
+        async def tracked_eval(*args, **kwargs):
+            nonlocal eval_calls
+            eval_calls += 1
+            return await original_eval(*args, **kwargs)
+
+        memory._redis.eval = tracked_eval
+
+        async with memory.conversation("u1", "c1"):
+            ctx = await memory.get_context("u1", "c1", query="继续")
+            await memory.commit_turn(
+                "u1",
+                "c1",
+                "req-1",
+                "继续",
+                {"request_id": "r-1", "response": "好的"},
+            )
+
+        assert eval_calls == 1
+        assert [m.content for m in ctx.recent_messages] == ["旧消息"]
+        assert ctx.summary == "旧摘要"
+        assert not await memory._redis.exists("wm:u1:c1", "summary:u1:c1")
+
+        # 脱离 conversation() 上下文直接调用，仍正常执行一次原子迁移。
+        await memory._redis.rpush("wm:u1:c2", legacy_msg)
+        await memory._redis.set("summary:u1:c2", "另一段旧摘要")
+        await memory._migrate_legacy_keys("u1", "c2")
+        assert eval_calls == 2
+        assert await memory._redis.get(memory._summary_key("u1", "c2")) == "另一段旧摘要"
+    finally:
+        await memory._redis.aclose()
+

@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: zhiying-web
     environment:
-      PYTHON_API_URL: /api/zhiying
+      PYTHON_API_URL: /api/servicepilot
     ports:
       - "127.0.0.1:5174:80"
     volumes:

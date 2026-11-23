@@ -25,6 +25,7 @@ from anthropic import AsyncAnthropic
 
 from core.llm_utils import create_message, extract_text_content
 from core.amount_entities import AMOUNT, amount_mentions
+from core.env import env_bool, env_value
 from core.request_budget import POLICY
 
 logger = logging.getLogger(__name__)
@@ -207,8 +208,7 @@ class IntentRecognizer:
         if embedding_enabled not in {'true', 'false', '1', '0', 'yes', 'no', 'on', 'off'}:
             raise ValueError('INTENT_EMBEDDING_ENABLED 必须为 true/false')
         self._embedding_enabled = embedding_enabled in {'true', '1', 'yes', 'on'}
-        fast_path = os.getenv("SERVICEPILOT_INTENT_FAST_PATH") or os.getenv("ZHIYING_INTENT_FAST_PATH", "false")
-        self._fast_path_enabled = fast_path.strip().lower() in {"true", "1", "yes", "on"}
+        self._fast_path_enabled = env_bool("SERVICEPILOT_INTENT_FAST_PATH")
         self._templates: Dict[IntentCategory, List[str]] = {cat: list(tpls) for cat, tpls in _TEMPLATES.items()}
         self._cache: Dict[str, IntentResult] = {}
         self._cache_expiries: Dict[str, float] = {}
@@ -356,7 +356,7 @@ class IntentRecognizer:
         prompt = self._clean_text(prompt)
 
         try:
-            timeout_s = os.getenv("SERVICEPILOT_INTENT_TIMEOUT_S") or os.getenv("ZHIYING_INTENT_TIMEOUT_S", str(POLICY.intent_timeout_default_s))
+            timeout_s = env_value("SERVICEPILOT_INTENT_TIMEOUT_S", str(POLICY.intent_timeout_default_s))
             resp = await asyncio.wait_for(create_message(self.client,
                 stage="intent",
                 model=self.model,

@@ -44,6 +44,7 @@ from agents.tools import (
     technical_tools,
 )
 from core.chat_progress import emit_chat_stage
+from core.env import env_bool, env_value
 from core.intent_recognizer import IntentCategory, IntentRecognizer, UrgencyLevel, extract_error_codes
 from core.llm_utils import create_message, extract_text_content
 from core.request_budget import POLICY, phase_budget, can_start, limit_timeout, observe, remaining
@@ -80,12 +81,7 @@ class AgentProfile:
 
 
 def _env_value(name: str) -> Optional[str]:
-    if name.startswith("ZHIYING_"):
-        sp_name = "SERVICEPILOT_" + name[len("ZHIYING_"):]
-        val = os.getenv(sp_name)
-        if val is not None:
-            return val
-    return os.getenv(name)
+    return env_value(name)
 
 
 def _env_float(name: str, default: float) -> float:
@@ -627,8 +623,7 @@ class BaseAgent:
         一个断点。默认关闭，请求内容与原先逐字节一致。
         """
         base_prompt, skill_block = self._system_parts(req)
-        cache_bp = (os.getenv("SERVICEPILOT_PROMPT_CACHE_BREAKPOINTS") or os.getenv("ZHIYING_PROMPT_CACHE_BREAKPOINTS", "")).strip().lower()
-        if cache_bp not in ("1", "true", "yes"):
+        if not env_bool("SERVICEPILOT_PROMPT_CACHE_BREAKPOINTS"):
             return base_prompt + skill_block
         return [
             {"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}
@@ -983,11 +978,7 @@ class AgentOrchestrator:
         """
         profile = agent_cls.profile
         role_upper = agent_cls.agent_type.value.upper()
-        model = (
-            os.getenv(f"SERVICEPILOT_{role_upper}_MODEL", "").strip()
-            or os.getenv(f"ZHIYING_{role_upper}_MODEL", "").strip()
-            or profile.model
-        )
+        model = (env_value(f"SERVICEPILOT_{role_upper}_MODEL", "") or "").strip() or profile.model
         configured_profile = replace(profile, model=model) if model else profile
         return agent_cls(client, default_model, skill_manager, profile=configured_profile)
 

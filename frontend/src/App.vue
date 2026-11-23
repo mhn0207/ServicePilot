@@ -87,13 +87,13 @@
           <section class="conversation" :class="{ 'is-empty': !messages.length }" aria-label="服务协同对话">
             <div class="messages" ref="messageList" role="log" aria-label="对话消息" aria-live="polite" :aria-busy="busy && pendingAction === 'chat'">
               <div v-if="!messages.length" class="welcome">
-                <div class="welcome-mark" aria-hidden="true">知</div>
+                <div class="welcome-mark" aria-hidden="true">SP</div>
                 <h1>今天，需要解决什么？</h1>
                 <p>围绕企业服务请求，让专业 Agent 基于知识与证据协同处理。</p>
               </div>
               <template v-else>
                 <article v-for="item in messages" :key="item.id" :class="['message', item.role, { 'message-error': item.error }]">
-                  <span v-if="item.role === 'assistant'" class="message-avatar">知</span>
+                  <span v-if="item.role === 'assistant'" class="message-avatar">SP</span>
                   <div class="message-content">
                     <div class="message-meta">
                       <strong>{{ item.role === 'user' ? '你' : 'ServicePilot' }}</strong>
@@ -417,7 +417,7 @@
       <form @submit.prevent="saveConnection">
         <label>
           <span>服务地址</span>
-          <input v-model="connectionDraft.endpoint" required placeholder="/api/zhiying 或 http://localhost:8000" />
+          <input v-model="connectionDraft.endpoint" required placeholder="/api/servicepilot 或 http://localhost:8000" />
           <small>使用代理路径或完整的 HTTP / HTTPS 地址。</small>
         </label>
         <label>

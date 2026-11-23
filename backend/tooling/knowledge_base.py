@@ -23,6 +23,7 @@ from tooling.knowledge_chunks import (
     LEGACY_CHUNKING, ChunkStrategy, chunk_text, content_version, document_identity, evidence_id,
 )
 from tooling.retrieval_ranking import RetrievalRanking
+from core.env import env_bool, env_value
 from core.storage_health import ChromaHealthProbe
 from tooling.knowledge_documents import KnowledgeDocuments
 
@@ -60,7 +61,7 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
             self._use_server = True
             logger.info(f"知识库 ChromaDB 已连接: {chroma_host}:{chroma_port}")
         except Exception as ex:
-            env = (os.getenv("SERVICEPILOT_ENV") or os.getenv("ZHIYING_ENV", "development")).lower()
+            env = (env_value("SERVICEPILOT_ENV", "development") or "development").lower()
             if env == "production":
                 raise RuntimeError("生产环境知识库 ChromaDB 不可用，禁止切换到本地库") from ex
             logger.info(f"知识库 ChromaDB 服务不可用，使用本地模式: {chroma_path}")
@@ -81,9 +82,8 @@ class KnowledgeBase(RetrievalRanking, KnowledgeDocuments):
         )
 
         # 如果知识库为空，导入默认文档
-        seed_raw = os.getenv("SERVICEPILOT_SEED_DEMO_DOCS") or os.getenv("ZHIYING_SEED_DEMO_DOCS", "true")
-        seed_demo = seed_raw.lower() in {"1", "true", "yes"}
-        env = (os.getenv("SERVICEPILOT_ENV") or os.getenv("ZHIYING_ENV", "development")).lower()
+        seed_demo = env_bool("SERVICEPILOT_SEED_DEMO_DOCS", True)
+        env = (env_value("SERVICEPILOT_ENV", "development") or "development").lower()
         if env != "production" and seed_demo and self._collection.count() == 0:
             self._load_default_docs()
 

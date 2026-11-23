@@ -5,11 +5,13 @@ import json
 import os
 from pathlib import Path
 
+from core.env import env_value
+
 
 def identity(authorization):
-    raw = (os.getenv('SERVICEPILOT_API_TOKENS') or os.getenv('ZHIYING_API_TOKENS', '')).strip()
+    raw = (env_value('SERVICEPILOT_API_TOKENS', '') or '').strip()
     if not raw:
-        env = os.getenv('SERVICEPILOT_ENV') or os.getenv('ZHIYING_ENV', 'development')
+        env = env_value('SERVICEPILOT_ENV', 'development')
         if env == 'production':
             raise ValueError('production 模式必须设置 SERVICEPILOT_API_TOKENS / ZHIYING_API_TOKENS')
         return None
@@ -29,7 +31,7 @@ def identity(authorization):
 
 def metrics_authorized(authorization: str) -> bool:
     """A separate file-backed scrape credential never grants an API identity."""
-    path = (os.getenv('SERVICEPILOT_METRICS_TOKEN_FILE') or os.getenv('ZHIYING_METRICS_TOKEN_FILE', '')).strip()
+    path = (env_value('SERVICEPILOT_METRICS_TOKEN_FILE', '') or '').strip()
     if not path:
         return False
     try:

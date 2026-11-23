@@ -19,6 +19,7 @@ import os
 import re
 import time
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -33,9 +34,14 @@ from anthropic import AsyncAnthropic
 from core.llm_utils import create_message, extract_text_content
 from core.performance import record_event
 from core.concurrency import ConversationBusyError, KeyedLocks, redis_lease
+from core.env import env_value
 from core.storage_health import ChromaHealthProbe
 
 logger = logging.getLogger(__name__)
+_migrated_conversation: ContextVar[Optional[tuple[str, str]]] = ContextVar(
+    "memory_migrated_conversation",
+    default=None,
+)
 
 
 class MsgRole(Enum):
@@ -127,7 +133,7 @@ class MemoryManager:
             remote_chroma = True
             logger.info(f"ChromaDB 已连接: {chroma_host}:{chroma_port}")
         except Exception as ex:
-            env = (os.getenv("SERVICEPILOT_ENV") or os.getenv("ZHIYING_ENV", "development")).lower()
+            env = (env_value("SERVICEPILOT_ENV", "development") or "development").lower()
             if env == "production":
                 raise RuntimeError("生产环境记忆 ChromaDB 不可用，禁止切换到本地库") from ex
             logger.info(f"ChromaDB 服务不可用，使用本地嵌入式模式: {chroma_path}")
@@ -159,11 +165,16 @@ class MemoryManager:
     @asynccontextmanager
     async def conversation(self, user_id: str, conv_id: str):
         # 哈希避免 user_id/conv_id 中的分隔符引起锁键碰撞。
-        digest = hashlib.sha256(json.dumps([self._safe_text(user_id), self._safe_text(conv_id)]).encode()).hexdigest()
+        safe_user, safe_conv = self._safe_text(user_id), self._safe_text(conv_id)
+        digest = hashlib.sha256(json.dumps([safe_user, safe_conv]).encode()).hexdigest()
         async with self._request_locks.hold(digest):
             async with redis_lease(self._redis, f"lock:conversation:{digest}"):
-                await self._migrate_legacy_keys(user_id, conv_id)
-                yield
+                await self._migrate_legacy_keys(safe_user, safe_conv)
+                token = _migrated_conversation.set((safe_user, safe_conv))
+                try:
+                    yield
+                finally:
+                    _migrated_conversation.reset(token)
 
     # ── 写入 ──────────────────────────────────────────────────────────────────
 
@@ -322,39 +333,50 @@ class MemoryManager:
 
     # ── 读取 ──────────────────────────────────────────────────────────────────
 
+    async def _read_session_state(self, user_id: str, conv_id: str) -> tuple[List[Message], str, Dict[str, Any]]:
+        """单次 pipeline 读取当前会话的工作记忆、摘要和业务状态。"""
+        await self._migrate_legacy_keys(user_id, conv_id)
+        async with self._redis.pipeline(transaction=False) as pipe:
+            pipe.lrange(self._wm_key(user_id, conv_id), 0, self.WORKING_MAX - 1)
+            pipe.get(self._summary_key(user_id, conv_id))
+            pipe.get(self._state_key(user_id, conv_id))
+            raws, summary, state_raw = await pipe.execute()
+        recent = self._messages_from_raw(raws)
+        return recent, summary or "", json.loads(state_raw) if state_raw else {}
+
     async def get_context(self, user_id: str, conv_id: str, query: str = "") -> MemoryContext:
         """
         构建完整的记忆上下文。
 
         query 用于从情景记忆中检索语义相关的历史片段。
         """
-        # 1. 工作记忆（当前会话最近消息）
         user_id = self._safe_text(user_id)
         conv_id = self._safe_text(conv_id)
         query = self._safe_text(query)
 
-        recent = await self._get_working_memory(user_id, conv_id)
-
-        # 2. 情景记忆（跨会话语义检索）
-        history = await self._search_episodic(
-            user_id,
-            conv_id,
-            query or (recent[-1].content if recent else ""),
-        )
-
-        # 3. 用户画像
-        profile = await self._get_profile(user_id)
-
-        # 4. 会话摘要（如果已压缩过）
-        summary = await self._redis.get(self._summary_key(user_id, conv_id)) or ""
-        state_raw = await self._redis.get(self._state_key(user_id, conv_id))
+        if query:
+            (recent, summary, state), history, profile = await asyncio.gather(
+                self._read_session_state(user_id, conv_id),
+                self._search_episodic(user_id, conv_id, query),
+                self._get_profile(user_id),
+            )
+        else:
+            (recent, summary, state), profile = await asyncio.gather(
+                self._read_session_state(user_id, conv_id),
+                self._get_profile(user_id),
+            )
+            history = await self._search_episodic(
+                user_id,
+                conv_id,
+                recent[-1].content,
+            ) if recent else []
 
         return MemoryContext(
             recent_messages=recent,
             relevant_history=history,
             user_profile=profile,
             summary=summary,
-            state=json.loads(state_raw) if state_raw else {},
+            state=state,
         )
 
     # ── 压缩（防止 context 爆炸）─────────────────────────────────────────────
@@ -555,16 +577,27 @@ class MemoryManager:
         user_id, conv_id = self._safe_text(user_id), self._safe_text(conv_id)
         if ":" in user_id or ":" in conv_id:
             return
-        # RENAMENX 原子迁移并保留 TTL；已有新数据时不覆盖。
+        if _migrated_conversation.get() == (user_id, conv_id):
+            return
+        # RENAMENX 原子迁移并保留 TTL；已有新数据时不覆盖，单次 EVAL 同时处理两类旧键。
         script = """
+        local migrated = 0
         if redis.call('EXISTS', KEYS[1]) == 1 and redis.call('EXISTS', KEYS[2]) == 0 then
-            return redis.call('RENAMENX', KEYS[1], KEYS[2])
+            migrated = migrated + redis.call('RENAMENX', KEYS[1], KEYS[2])
         end
-        return 0
+        if redis.call('EXISTS', KEYS[3]) == 1 and redis.call('EXISTS', KEYS[4]) == 0 then
+            migrated = migrated + redis.call('RENAMENX', KEYS[3], KEYS[4])
+        end
+        return migrated
         """
-        for old, new in [(f"wm:{user_id}:{conv_id}", self._wm_key(user_id, conv_id)),
-                         (f"summary:{user_id}:{conv_id}", self._summary_key(user_id, conv_id))]:
-            await self._redis.eval(script, 2, old, new)
+        await self._redis.eval(
+            script,
+            4,
+            f"wm:{user_id}:{conv_id}",
+            self._wm_key(user_id, conv_id),
+            f"summary:{user_id}:{conv_id}",
+            self._summary_key(user_id, conv_id),
+        )
 
     @classmethod
     def _profile_doc_id(cls, user_id: str) -> str:
