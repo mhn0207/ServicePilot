@@ -162,6 +162,7 @@ async def lifespan(app: FastAPI):
         chroma_host=os.getenv("CHROMA_HOST", "chromadb"),
         chroma_port=int(os.getenv("CHROMA_PORT", "8000")),
         chroma_path=os.getenv("CHROMA_PERSIST_DIRECTORY", "/app/data/chroma"),
+        revision_provider=_knowledge_revision.current,
     )
     logger.info(f"知识库已加载: {await kb.doc_count_async()} 个文档片段")
 

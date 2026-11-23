@@ -101,6 +101,9 @@ class KnowledgeDocuments:
             if not current['deletable'] or current['version'] != expected_version:
                 raise DocumentConflict('文档已变化或片段信息不完整，请刷新核验后再删除')
             self._collection.delete(ids=[row[0] for row in rows])
+            invalidate = getattr(self, "_invalidate_lexical_index", None)
+            if invalidate is not None:
+                invalidate()
             if self._document_rows(document_id):
                 raise RuntimeError('文档删除未完成')
             return len(rows)
