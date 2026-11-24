@@ -24,8 +24,8 @@ ServicePilot 用 FastAPI、Vue、Redis 和 ChromaDB 处理技术排障与账单�
 | [成对回答与 Judge](backend/README.md#回答与系统验证) | 40 题英语 dev 固定回放，另取 2 道验证题调用真实模型 | 固定回放的事实覆盖两分支均为 **77/84**。真实复测 **4/4** 个答案生成，**8/8** 次 Judge 调用通过协议校验，**1/4** 个分支仍有断言支持度未决 |
 | [Agent 离线验收](backend/README.md#agent-与工作台) | 9 轮真实编排器，固定模型响应与模拟检索 | 角色覆盖 **9/9**，必需工具调用 **6/7**，返回证据 **4/7** |
 | [意图路由短路](backend/README.md#意图路由基准) | 19 个用例，真实本地向量与固定延迟模型替身 | 启用短路后每轮意图模型调用 **19 → 11**，路由错误保持 **0/19** |
-| [单 Agent 与多 Agent](backend/README.md#中文聊天配对实验) | 两套 Docker 服务走真实 `POST /chat`，各 10 个用例、11 轮 | 原自动评分 **11/11 / 10/11**，以修订规则重评分后均为 **11/11**。两组各满足 **15/15** 项工具调用断言 |
-| [Docker 与服务可靠性](backend/README.md#回答与系统验证) | 真实 Redis、ChromaDB、SQLite 和 Nginx | 8 个相同请求 ID 的并发请求只提交 **1 轮**。两进程知识缓存验证通过，后端换 IP 后网关自动恢复，Prometheus 采集为 `up` |
+| [单 Agent 与多 Agent](backend/README.md#最新-docker-实测) | 2026-11-24，Docker 中用 `deepseek-flash` 调用真实 `POST /chat`，两组各 10 个用例、11 轮 | 自动评分 **7/11 / 10/11**，复核漏判后两组均为 **11/11**，工具断言均为 **15/15**。多 Agent 本次中位延迟略低，供应商报告的输入和输出 Token 均更高 |
+| [Docker 与服务可靠性](backend/README.md#最新-docker-实测) | 真实 Redis、ChromaDB、SQLite 和 Nginx | 相同请求 ID 的 8 个并发请求只提交 **1 轮**，换会话再次确认只保留 **1 张核验单**。跨进程知识缓存 **5/5**，Nginx 上游换 IP 恢复 **5/5** |
 
 结果来自维护者的本地报告。各项使用不同语料和运行方式，分母与边界见[实验明细](backend/README.md#数据与已有实验结论)。原始报告由复跑命令生成到 `backend/data/eval/`。
 
